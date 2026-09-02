@@ -1,0 +1,6 @@
+# Logiciel de service — Réanimation polyvalente
+# Python 3.11 ou plus récent.
+#
+#   python -m pip install -r requirements.txt
+#
+streamlit>=1.36

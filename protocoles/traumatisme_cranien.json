@@ -1,0 +1,36 @@
+{
+  "code": "traumatisme_cranien",
+  "titre": "Traumatisme crânien",
+  "version": "2026-08-12-v2",
+  "date_version": "2026-08-12",
+  "signe_par": null,
+  "valide": false,
+  "declencheur": {
+    "type": "region_traumatique",
+    "valeur": "cranien"
+  },
+  "note": "BROUILLON — non signé par le chef de service. Ne doit pas être proposé aux internes tant que `valide` n'est pas passé à true et `signe_par` renseigné (SPEC §4.5, règle de sécurité 1). Le contenu ci-dessous reprend l'exemple validé dans la présentation du 01/09/2026.",
+  "lignes_prescription": [
+    {
+      "voie": "SOINS",
+      "produit": "Surveillance des ACSOS",
+      "rythme": "x4/j",
+      "note": "toutes les 6 h pendant 48 h"
+    }
+  ],
+  "explorations_proposees": [
+    {
+      "type": "tdm_cerebrale",
+      "delai": "H48",
+      "libelle": "TDM cérébrale de contrôle à H48"
+    },
+    {
+      "type": "dtc",
+      "delai": "quotidien",
+      "libelle": "Doppler transcrânien quotidien"
+    }
+  ],
+  "consignes": [
+    "Pas de Ringer Lactate pendant 48 h"
+  ]
+}

@@ -1,0 +1,21 @@
+# Données du service — ne doivent JAMAIS être versionnées
+donnees/
+data/
+*.db
+*.db-journal
+*.sqlite
+sauvegardes/
+backups/
+exports/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Système
+.DS_Store
+Thumbs.db

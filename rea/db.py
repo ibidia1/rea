@@ -1,0 +1,235 @@
+"""Couche base de données.
+
+Une connexion SQLite unique, un fichier unique (SPEC §2.2). Sauvegardes
+automatiques à l'ouverture, toutes les 15 minutes, et à la fermeture.
+
+Tout ce qui écrit passe par `executer()` ou `inserer()` / `mettre_a_jour()`
+qui journalisent l'action (SPEC §3, §10 — bloc 7).
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import sqlite3
+import threading
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+from . import config
+
+
+def nouvel_id() -> str:
+    return str(uuid.uuid4())
+
+
+def maintenant() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _dict_factory(cursor: sqlite3.Cursor, row: tuple) -> dict:
+    champs = [c[0] for c in cursor.description]
+    return dict(zip(champs, row))
+
+
+class Base:
+    """Enveloppe autour d'une connexion SQLite vers le fichier du service."""
+
+    def __init__(self, chemin: Path | str | None = None):
+        self.chemin = Path(chemin) if chemin else config.FICHIER_BASE
+        self.chemin.parent.mkdir(parents=True, exist_ok=True)
+        self._verrou = threading.Lock()
+        self.connexion = sqlite3.connect(
+            str(self.chemin), check_same_thread=False, isolation_level=None
+        )
+        self.connexion.row_factory = _dict_factory
+        self.connexion.execute("PRAGMA foreign_keys = ON")
+        self.connexion.execute("PRAGMA journal_mode = WAL")
+        self._initialiser_schema()
+        self._minuteur_sauvegarde: threading.Timer | None = None
+
+    # -- schéma -----------------------------------------------------------
+    def _initialiser_schema(self) -> None:
+        sql = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
+        with self._verrou:
+            self.connexion.executescript(sql)
+            existe = self.connexion.execute(
+                "SELECT valeur FROM meta WHERE cle = 'version_schema'"
+            ).fetchone()
+            if not existe:
+                self.connexion.execute(
+                    "INSERT INTO meta(cle, valeur) VALUES ('version_schema', ?)",
+                    (config.__dict__.get("VERSION_SCHEMA", "1"),),
+                )
+
+    # -- requêtes -----------------------------------------------------------
+    def requete(self, sql: str, parametres: tuple = ()) -> list[dict]:
+        with self._verrou:
+            return self.connexion.execute(sql, parametres).fetchall()
+
+    def une_ligne(self, sql: str, parametres: tuple = ()) -> dict | None:
+        lignes = self.requete(sql, parametres)
+        return lignes[0] if lignes else None
+
+    def _colonnes(self, table: str) -> set[str]:
+        return {ligne["name"] for ligne in self.requete(f"PRAGMA table_info({table})")}
+
+    def executer(self, sql: str, parametres: tuple = ()) -> None:
+        with self._verrou:
+            self.connexion.execute(sql, parametres)
+
+    def inserer(
+        self,
+        table: str,
+        valeurs: dict,
+        *,
+        utilisateur_id: str | None = None,
+        action: str = "creation",
+    ) -> str:
+        """Insère une ligne avec horodatage (règle de conception 3) et
+        journalise l'action (règle de conception 8, SPEC bloc 7)."""
+        valeurs = dict(valeurs)
+        valeurs.setdefault("id", nouvel_id())
+        valeurs.setdefault("cree_le", maintenant())
+        if "cree_par" not in valeurs and "cree_par" in self._colonnes(table):
+            valeurs["cree_par"] = utilisateur_id
+        colonnes = ", ".join(valeurs.keys())
+        espaces = ", ".join("?" for _ in valeurs)
+        with self._verrou:
+            self.connexion.execute(
+                f"INSERT INTO {table} ({colonnes}) VALUES ({espaces})",
+                tuple(valeurs.values()),
+            )
+        self._journaliser(table, valeurs["id"], action, utilisateur_id, valeurs)
+        return valeurs["id"]
+
+    def mettre_a_jour(
+        self,
+        table: str,
+        id_ligne: str,
+        valeurs: dict,
+        *,
+        utilisateur_id: str | None = None,
+        action: str = "modification",
+    ) -> None:
+        valeurs = dict(valeurs)
+        colonnes = self._colonnes(table)
+        if "modifie_le" in colonnes:
+            valeurs["modifie_le"] = maintenant()
+        if "modifie_par" in colonnes:
+            valeurs["modifie_par"] = utilisateur_id
+        affectation = ", ".join(f"{cle} = ?" for cle in valeurs)
+        with self._verrou:
+            self.connexion.execute(
+                f"UPDATE {table} SET {affectation} WHERE id = ?",
+                (*valeurs.values(), id_ligne),
+            )
+        self._journaliser(table, id_ligne, action, utilisateur_id, valeurs)
+
+    def supprimer_logiquement(
+        self, table: str, id_ligne: str, *, utilisateur_id: str | None = None
+    ) -> None:
+        """Jamais de DELETE — règle de conception 2."""
+        self.mettre_a_jour(
+            table, id_ligne, {"supprime": 1}, utilisateur_id=utilisateur_id, action="suppression"
+        )
+
+    def _journaliser(
+        self, table: str, ligne_id: str, action: str, utilisateur_id: str | None, details: dict
+    ) -> None:
+        details_serialisables = {
+            k: v for k, v in details.items() if k not in ("id",) and not isinstance(v, (bytes,))
+        }
+        with self._verrou:
+            self.connexion.execute(
+                "INSERT INTO journal(id, date_heure, utilisateur_id, table_cible, ligne_id, "
+                "action, details) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    nouvel_id(),
+                    maintenant(),
+                    utilisateur_id,
+                    table,
+                    ligne_id,
+                    action,
+                    json.dumps(details_serialisables, ensure_ascii=False, default=str),
+                ),
+            )
+
+    # -- sauvegardes (SPEC §2.2) --------------------------------------------
+    def sauvegarder(self, motif: str = "manuelle") -> Path:
+        """Copie le fichier de base vers le dossier de sauvegardes, avec
+        horodatage dans le nom. Utilise la sauvegarde en ligne de SQLite
+        (fonctionne même pendant l'écriture, contrairement à un `cp` brut)."""
+        config.DOSSIER_SAUVEGARDES.mkdir(parents=True, exist_ok=True)
+        horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
+        destination = config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}.db"
+        with self._verrou:
+            sauvegarde_connexion = sqlite3.connect(str(destination))
+            with sauvegarde_connexion:
+                self.connexion.backup(sauvegarde_connexion)
+            sauvegarde_connexion.close()
+            self.connexion.execute(
+                "INSERT INTO sauvegarde(id, date_heure, fichier, taille, motif) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    nouvel_id(),
+                    maintenant(),
+                    str(destination),
+                    destination.stat().st_size,
+                    motif,
+                ),
+            )
+        self._purger_anciennes_sauvegardes()
+        return destination
+
+    def _purger_anciennes_sauvegardes(self) -> None:
+        fichiers = sorted(
+            config.DOSSIER_SAUVEGARDES.glob("rea-*.db"), key=lambda p: p.stat().st_mtime
+        )
+        excedent = len(fichiers) - config.SAUVEGARDES_CONSERVEES
+        for fichier in fichiers[:max(excedent, 0)]:
+            fichier.unlink(missing_ok=True)
+
+    def demarrer_sauvegardes_periodiques(self) -> None:
+        """À appeler une fois à l'ouverture. Programme une sauvegarde toutes
+        les `INTERVALLE_SAUVEGARDE_MINUTES` minutes."""
+        if self._minuteur_sauvegarde is not None:
+            return
+
+        def _boucle() -> None:
+            self.sauvegarder(motif="periodique")
+            self._minuteur_sauvegarde = threading.Timer(
+                config.INTERVALLE_SAUVEGARDE_MINUTES * 60, _boucle
+            )
+            self._minuteur_sauvegarde.daemon = True
+            self._minuteur_sauvegarde.start()
+
+        self._minuteur_sauvegarde = threading.Timer(
+            config.INTERVALLE_SAUVEGARDE_MINUTES * 60, _boucle
+        )
+        self._minuteur_sauvegarde.daemon = True
+        self._minuteur_sauvegarde.start()
+
+    def arreter_sauvegardes_periodiques(self) -> None:
+        if self._minuteur_sauvegarde is not None:
+            self._minuteur_sauvegarde.cancel()
+            self._minuteur_sauvegarde = None
+
+    def fermer(self) -> None:
+        self.arreter_sauvegardes_periodiques()
+        self.sauvegarder(motif="fermeture")
+        self.connexion.close()
+
+
+_BASE: Base | None = None
+
+
+def obtenir_base() -> Base:
+    """Connexion partagée pour tout le processus Streamlit."""
+    global _BASE
+    if _BASE is None:
+        _BASE = Base()
+        _BASE.sauvegarder(motif="ouverture")
+        _BASE.demarrer_sauvegardes_periodiques()
+    return _BASE

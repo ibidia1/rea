@@ -1,0 +1,811 @@
+# SPEC — Logiciel de service, Réanimation polyvalente
+
+**Version 1.3 — 2 septembre 2026**
+
+> **Document de référence du projet.** À renvoyer au début de chaque session de
+> travail, accompagné du code à jour. C'est la mémoire commune du projet.
+>
+> Toute décision prise en session doit être reportée ici avant la fin de la session.
+
+---
+
+# 1. CONTEXTE
+
+## 1.1 Service
+
+Service d'anesthésie-réanimation polyvalente.
+
+- **12 lits**, répartis en 3 chambres de 4 lits (chambre 1 → lits 1-4, chambre 2
+  → lits 5-8, chambre 3 → lits 9-12)
+- Extension possible lors de l'inauguration d'un nouvel hôpital
+- Durée de séjour : 2 à 60 jours
+- Population : polytraumatisés, brûlés, complications postopératoires graves,
+  décompensations de pathologies chirurgicales, défaillances hémodynamiques /
+  neurologiques / respiratoires provenant des services chirurgicaux adjacents
+
+## 1.2 Utilisateurs
+
+| Groupe | Nombre | Droits v1 |
+|---|---|---|
+| Internes | 3 | Saisie complète |
+| Résidents | 10 | Saisie complète |
+| Seniors | variable | Saisie complète |
+
+Pas de gestion de droits différenciés en v1. **Sélecteur d'utilisateur
+obligatoire à l'ouverture**, enregistré sur chaque ligne créée ou modifiée.
+
+## 1.3 Le problème à résoudre
+
+> Aujourd'hui, un interne réécrit **à la main, chaque jour**, l'intégralité du
+> prescrit de chaque patient, alors qu'il est presque identique à celui de la
+> veille.
+
+**C'est LA raison d'être du logiciel.** Le prescrit du lendemain doit apparaître
+pré-rempli : les compteurs de jours ont avancé, les lignes actives sont
+reconduites. L'interne vérifie, ajoute ce qui est nouveau, choisit les bilans du
+lendemain, imprime, met dans la pancarte.
+
+Tout le reste (statistiques, évolution, bilans) est secondaire par rapport à ça.
+
+## 1.4 Continuité de service
+
+Si le logiciel ne démarre pas un matin, le service utilise la pancarte imprimée
+de la veille et continue normalement. **Le logiciel n'est jamais un point de
+passage obligé.**
+
+---
+
+# 2. ENVIRONNEMENT TECHNIQUE
+
+## 2.1 Matériel — validé
+
+- **Un seul poste fixe**, Windows 10 ou 11, droits administrateur disponibles
+- Ce poste héberge le **DMI** (l'EHR de l'hôpital) — c'est pour cela que
+  l'application doit tourner dessus : le copier-coller ne traverse pas les
+  machines
+- Pas d'ordinateur portable en phase 1
+- Pas d'antivirus bloquant, clé USB reconnue, exécution autorisée, écriture
+  locale persistante après redémarrage, `localhost:8501` accessible
+- **Imprimante : A4 uniquement pour le moment.** L'A3 n'est pas encore achetée
+
+## 2.2 Architecture retenue
+
+L'architecture « clé USB comme système » est **abandonnée** : elle n'avait de
+sens qu'avec deux machines. Avec un poste unique :
+
+- Application **installée localement** sur le poste fixe
+- Python 3.11+ installé normalement (droits admin disponibles)
+- Interface **Streamlit**, ouverte dans le navigateur du poste
+- Base **SQLite**, fichier unique dans `C:\ReaService\data\rea.db`
+- **Sauvegarde automatique** : à l'ouverture, à la fermeture, et toutes les
+  15 minutes. Destination `C:\ReaService\backups\` avec horodatage dans le nom
+- **Clé USB = support de sauvegarde uniquement** (copie manuelle hebdomadaire,
+  clé chiffrée BitLocker To Go)
+- Chiffrement du disque du poste (BitLocker) recommandé
+- Dossier de travail **jamais** synchronisé avec un cloud
+
+**Impression :** génération HTML + CSS d'impression. `@page { size: A4 }`
+aujourd'hui, basculement vers `A3 landscape` par changement d'une seule ligne
+quand l'imprimante arrivera. La mise en page est conçue dès maintenant pour
+supporter les deux.
+
+## 2.3 Point à trancher
+
+Le poste du chef de service ne doit **pas** recevoir une base modifiable.
+Deux options, à décider : soit copie en lecture seule pour consultation, soit
+rien du tout et consultation sur le poste du service. Une base modifiable en
+deux endroits produit deux vérités.
+
+---
+
+# 3. RÈGLES DE CONCEPTION
+
+1. **UUID** comme identifiants, jamais de numéros séquentiels
+2. **Aucune suppression physique** — champ `supprime` marqué à vrai
+3. **Horodatage systématique** — `cree_le`, `modifie_le`, `modifie_par`
+4. **Séries temporelles en format long** — une ligne par mesure, jamais une
+   colonne par jour
+5. **Le texte est calculé, pas stocké** — sauf exception ci-dessous
+6. **Table d'identité séparée** des données cliniques
+7. **Trois états explicites** partout où l'absence d'information est possible :
+   *présent* / *absent* / *non renseigné* (jamais de valeur par défaut
+   silencieuse)
+8. **Export recherche pseudonymisé automatiquement**, sans option
+
+**Exception à la règle 5 :** chaque pancarte imprimée est enregistrée comme
+*snapshot immuable* (contenu HTML + date/heure + numéro de version +
+utilisateur). Une pancarte imprimée est un document physique qui a circulé dans
+le service ; il faut pouvoir la reconstituer à l'identique.
+
+## 3.1 Ce que le logiciel calcule et ne calcule pas
+
+| Calcul | v1 |
+|---|---|
+| Compteur de jours (J2 → J3) | ✅ automatique |
+| Dernier jour d'antibiothérapie (J7/7) | ✅ automatique |
+| Horaires d'administration selon le rythme | ✅ automatique |
+| Volume des **entrées** sur 24 h | ✅ automatique |
+| Âge à partir de la date de naissance | ✅ automatique |
+| Statut « polytraumatisé » | ✅ automatique |
+| **Dose en mg/kg ou en γ/kg/min** | ❌ jamais en v1 |
+| **Adaptation de posologie à la fonction rénale** | ❌ jamais en v1 |
+
+La règle est simple : le logiciel calcule des **dates, des horaires et des
+volumes**. Il ne calcule jamais une **dose**.
+
+---
+
+# 4. MODÈLE DE DONNÉES
+
+## 4.1 Identité et séjour
+
+### `patient`
+
+| Champ | Type | Notes |
+|---|---|---|
+| id | UUID | |
+| matricule | texte | Identifiant hospitalier, stable |
+| nom_affichage | texte | Format `K. Abdelaziz` (initiale du nom + prénom) |
+| date_naissance | date | Complète — permet l'âge et l'analyse par tranche |
+| sexe | liste | M / F / non renseigné |
+
+### `sejour`
+
+| Champ | Type | Notes |
+|---|---|---|
+| id | UUID | |
+| patient_id | UUID | |
+| numero_sejour | entier | 1er, 2e… séjour de ce patient |
+| date_admission | datetime | |
+| lit_admission | entier | 1-12, figé |
+| provenance_type | liste | Urgences / Service (préciser) / Bloc opératoire / Consultation externe A-R / Autre hôpital / Domicile |
+| provenance_detail | texte | Nom du service si applicable |
+| est_readmission | booléen | |
+| motif_readmission | texte | Si réadmission |
+| traumatique | booléen | **Question filtre — conditionne toute la suite** |
+| mecanisme | liste | Voir §4.3 |
+| date_sortie | datetime | |
+| mode_sortie | liste | Voir §4.7 |
+
+### `sejour_lit` — historique des changements de lit
+
+`sejour_id`, `lit`, `date_debut`, `date_fin`
+
+Le lit d'admission reste dans `sejour`. L'historique est secondaire mais coûte
+peu à enregistrer.
+
+### Patient non identifié
+
+Génération d'un matricule provisoire `XXX-{date}-{n}`, `nom_affichage` =
+« Non identifié 1 ». Fonction de fusion avec le vrai dossier quand l'identité
+est connue. **À détailler ultérieurement.**
+
+## 4.2 Antécédents
+
+Attachés au **patient** (persistants d'un séjour à l'autre), avec horodatage de
+mise à jour.
+
+### `antecedent`
+
+| Champ | Type | Notes |
+|---|---|---|
+| patient_id | UUID | |
+| categorie | liste | Personnel / Familial / Chirurgical / Allergie / Habitude de vie |
+| libelle | texte | |
+| code_icd10 | texte | Optionnel |
+| precision | texte | Ex. « stenté en 2019 », « type 2 sous insuline » |
+| quantification | nombre + unité | Ex. 30 paquets-années |
+| statut | liste | Présent / Absent / Non renseigné |
+
+**Saisie :** liste courte des 10 pathologies les plus fréquentes en accès
+direct, plus un champ de recherche ICD-10 (par nom ou par code) pour tout le
+reste. Case **« Sans antécédent connu »** disponible.
+
+**Allergies :** catégorie à part, affichée en **alerte rouge en haut de la
+pancarte et de toutes les fiches**.
+
+**Traitement habituel :** texte libre, un seul champ.
+
+### Liste courte de départ (à valider par un senior)
+
+HTA · Diabète type 2 · Diabète type 1 · Cardiopathie ischémique · Insuffisance
+cardiaque · BPCO · Asthme · Insuffisance rénale chronique · Cirrhose · AVC ·
+Tabagisme · Éthylisme · Anticoagulant au long cours · Antiagrégant
+
+## 4.3 Motif d'admission — traumatique
+
+**Multi-sélection** des régions atteintes (`traumatisme_region`) :
+
+- Traumatisme crânien
+- Traumatisme thoracique
+- Traumatisme abdominal
+- Traumatisme pelvien
+- Traumatisme périphérique *(englobe massif facial, membres, rachis)*
+
+> **Statut « polytraumatisé » calculé automatiquement** si ≥ 2 régions cochées.
+
+L'objectif n'est pas la description exhaustive de la lésion, mais la
+**catégorisation** : pouvoir extraire plus tard la cohorte complète des
+traumatismes crâniens.
+
+### Mécanisme (liste unique)
+
+AVP deux-roues · AVP quatre-roues · AVP piéton · Chute de sa hauteur · Chute
+d'un lieu élevé (préciser hauteur) · Agression par arme blanche · Agression par
+arme à feu · Agression contondante · Accident de travail · Accident domestique ·
+Sport · Écrasement / ensevelissement · Blast / explosion · Autre · Non renseigné
+
+## 4.4 Motif d'admission — non traumatique
+
+Un **motif principal** obligatoire + motifs associés en multi-sélection.
+
+**Défaillance circulatoire** — Choc septique *(+ porte d'entrée : pulmonaire /
+digestive / urinaire / cutanée-parties molles / cathéter / méningée /
+indéterminée)* · Choc hémorragique non traumatique · Choc cardiogénique ·
+Choc anaphylactique · Choc obstructif
+
+**Défaillance respiratoire** — SDRA · Pneumopathie grave · Décompensation de
+BPCO · OAP cardiogénique · Embolie pulmonaire · Inhalation · Obstruction des
+voies aériennes
+
+**Défaillance neurologique** — AVC ischémique · AVC hémorragique · Hémorragie
+méningée · État de mal épileptique · Méningo-encéphalite · Coma métabolique ·
+Coma toxique
+
+**Postopératoire** — Surveillance postopératoire lourde programmée ·
+Complication postopératoire non programmée *(préciser)*
+
+**Brûlures** — *(+ surface cutanée brûlée en %, profondeur, agent thermique /
+électrique / chimique, lésion d'inhalation associée oui/non)*
+
+**Métabolique et rénal** — Acidocétose diabétique · Coma hyperosmolaire ·
+Dysnatrémie sévère · Dyskaliémie sévère · Insuffisance rénale aiguë avec
+indication d'épuration
+
+**Intoxications et envenimations** — Médicamenteuse · Organophosphorés ·
+Monoxyde de carbone · Caustique · Envenimation scorpionique · Envenimation
+ophidienne
+
+**Obstétrical** — Prééclampsie sévère · Éclampsie · HELLP syndrome · Hémorragie
+du post-partum · Embolie amniotique
+
+**Autre** — Post-arrêt cardiaque · Tétanos · Autre *(préciser)*
+
+## 4.5 Protocoles de pré-remplissage
+
+Le diagnostic déclenche une **proposition** de lignes de prescription et de
+surveillance. Exemple validé :
+
+> **Traumatisme crânien** → TDM cérébrale de contrôle à H48 · Surveillance des
+> ACSOS toutes les 6 h pendant 48 h · Pas de Ringer Lactate pendant 48 h
+
+### Règles de sécurité — non négociables
+
+1. Chaque protocole est **écrit et signé par le chef de service**, pas par
+   l'auteur du logiciel
+2. Le fichier des protocoles porte une **date de version**, affichée sur la
+   pancarte imprimée
+3. Le pré-remplissage est **proposé, jamais appliqué** — une liste de cases
+   s'affiche, le médecin coche ce qu'il retient
+4. Toute ligne issue d'un protocole reste **modifiable et supprimable** sans
+   exception
+
+## 4.6 Interventions chirurgicales
+
+`sejour_id` · `date_acte` · `geste` (liste) · `est_reprise` (booléen) ·
+`complication_statut` (**Aucune / Présente / Non renseigné** — défaut : *Non
+renseigné*) · `complication_texte`
+
+> ⚠️ La demande initiale était « sans complication par défaut ». **Refusé** :
+> impossible de distinguer ensuite un patient réellement sans complication d'un
+> patient dont personne n'a rempli la case. Les taux calculés seraient faux et
+> un relecteur le verrait. Trois états explicites, défaut *Non renseigné*.
+
+## 4.7 Sortie — écran dédié
+
+L'écran de sortie clôture le séjour et libère le lit sur l'écran d'accueil.
+
+| Champ | Valeurs |
+|---|---|
+| `mode_sortie` | Domicile · Transfert vers un service *(préciser)* · Transfert vers un autre hôpital · Rééducation · Sortie contre avis médical · **Décès** |
+| `destination` | Nom du service et de l'établissement, avec mention « même établissement » ou non |
+| `date_heure_sortie` | |
+| `complication_statut` | **Aucune / Présente / Non renseigné** — défaut : *Non renseigné* |
+| `complication_texte` | Ex. « PAVM à J5 — *Pseudomonas aeruginosa* » |
+| `ordonnance_sortie` | Texte libre — ex. « Enoxaparine 0,4 mL/j pendant 15 jours » |
+| `consultation_externe` | Délai, service, examens à apporter |
+
+**Compte rendu de sortie généré** à partir des données du séjour : identité,
+dates et durée, provenance, motif d'admission, durée de ventilation,
+complications, destination, traitement de sortie et rendez-vous de suivi.
+Bouton « copier » pour collage dans le DMI.
+
+# 5. PRESCRIPTION — cœur du logiciel
+
+## 5.1 Structure d'une ligne
+
+| Champ | Notes |
+|---|---|
+| categorie | Voir §5.2 |
+| produit | Nom du médicament |
+| dose + unite | Ex. 1 g |
+| rythme | Ex. ×3/j, ×4/j, continu, conditionnel |
+| horaires | **Calculés** à partir du rythme — voir §5.3 |
+| condition | Ex. « si T ≥ 38,5 °C » |
+| dilution | PSE — ex. 0,5 mg/cc |
+| vitesse | PSE et perfusions — cc/h |
+| nb_ampoules | Affiché entre parenthèses pour les infirmiers |
+| additifs | Ex. « + 3 KCl + 2 NaCl » |
+| date_debut | Détermine le compteur de jours |
+| duree_prevue_jours | **Nécessaire pour afficher « J7/7 »** |
+| date_arret | Si arrêtée |
+| statut | Active / Arrêtée |
+| prescripteur | Utilisateur ayant créé la ligne |
+
+**Arrêt d'un traitement :** la ligne reste visible, **barrée**. Jamais supprimée.
+
+## 5.2 Composition par voie d'administration
+
+La pancarte est **organisée par voie**, et le formulaire de saisie change de
+champs selon la voie choisie. C'est ce qui permet de ne demander que ce qui a
+un sens.
+
+| Voie | Champs spécifiques demandés |
+|---|---|
+| `PO` | dose, unité, rythme |
+| `IV` | dose, unité, rythme, condition éventuelle |
+| `PSE` | produit, **dilution** (mg/cc), **nombre d'ampoules**, **vitesse** (cc/h) |
+| `S/C` | dose, rythme |
+| `Aérosol` | produit, dose, rythme |
+| `Soins locaux` | libellé, rythme *(ex. soins oculaires x4/j)* |
+| `Kinésithérapie` | libellé, rythme |
+| `Entrées` | soluté, vitesse (cc/h), additifs *(ex. + 3 KCl + 2 NaCl)*, ou volume/24 h pour la nutrition |
+
+Le **nombre d'ampoules** est affiché entre parenthèses sur la pancarte
+imprimée, à destination des infirmiers.
+
+## 5.2 bis Bilans à demander pour le lendemain
+
+Section à part entière de la pancarte, remplie chaque soir par l'interne :
+liste d'examens à cocher, avec l'heure de prélèvement *(par défaut 6 h)*.
+
+Liste de départ à valider : NFS · Ionogramme · Créatinine · Urée · CRP ·
+Procalcitonine · Gaz du sang · TP/INR · Bilan hépatique · Hémoculture · ECBU ·
+PDP. Un examen coché apparaît sur la pancarte imprimée pour que les infirmiers
+le voient.
+
+## 5.3 Calcul automatique des horaires
+
+| Rythme | Horaires générés |
+|---|---|
+| ×1/j | 8 h |
+| ×2/j | 8 h — 20 h |
+| ×3/j | 8 h — 16 h — 24 h |
+| ×4/j | toutes les 6 h |
+| ×6/j | toutes les 4 h |
+| Continu | pas d'horaire, débit affiché |
+| Conditionnel | pas d'horaire, condition affichée |
+
+Horaires modifiables ligne par ligne.
+
+✅ *Tranché en v1.3 : ×4/j → 6 h — 12 h — 18 h — 24 h, ×6/j → 4 h — 8 h — 12 h —
+16 h — 20 h — 24 h. Valeur par défaut modifiable dans `rea/config.py`
+(`HORAIRES_PAR_RYTHME`) et ligne par ligne dans l'écran Prescrit. À
+contre-valider par un senior.*
+
+## 5.4 Compteurs de jours
+
+Comportement attendu, tel que décrit :
+
+```
+Jour d'introduction :  Introduction de Targocid 400 mg ×2/j
+Lendemain :            J2 Targocid 400 mg ×2/j
+Antibiotique en cours : J2 Tienam 1 g ×3/j
+Dernier jour prévu :   J7/7 Tazobactam 1 g ×4/j
+```
+
+L'affichage `J{n}/{durée}` n'apparaît que si une durée prévue a été saisie.
+
+## 5.5 Génération de la fiche du lendemain
+
+**La fonction la plus importante du logiciel.**
+
+Un bouton « Préparer la pancarte de demain » produit une copie où :
+
+- tous les compteurs de jours ont avancé d'un cran
+- les lignes actives sont reconduites à l'identique
+- les lignes arrivées à échéance sont signalées visuellement
+- les lignes arrêtées disparaissent
+- une zone vide attend les bilans à demander pour le lendemain
+
+L'interne vérifie, modifie, ajoute, imprime.
+
+## 5.6 Bilan hydrique — entrées
+
+Calcul automatique du **volume total des entrées sur 24 h** :
+
+```
+Σ (perfusions : vitesse cc/h × 24)
++ Σ (PSE : vitesse cc/h × 24)
++ Σ (médicaments IV : volume de dilution × nombre de prises)
++ nutrition entérale (volume/j)
++ nutrition parentérale (volume/j)
+```
+
+Les **sorties** restent manuscrites sur la pancarte par les infirmiers. Le
+logiciel fournit donc les entrées, pas le bilan complet. C'est déjà l'essentiel
+du travail de calcul évité.
+
+## 5.7 Surveillance infirmière
+
+**Pas de saisie numérique.** Les infirmiers écrivent à la main sur la pancarte
+imprimée. La pancarte doit donc réserver des zones manuscrites suffisantes :
+constantes horaires, diurèse, drains, observations.
+
+Cette décision simplifie considérablement le projet et supprime toute la
+phase 3 initialement prévue.
+
+---
+
+# 6. EXPLORATIONS
+
+Écran dédié, distinct des bilans biologiques. Il enregistre les explorations
+**avec leurs valeurs chiffrées**, pas seulement un compte rendu textuel.
+
+## 6.0.1 Table `exploration`
+
+`sejour_id` · `date_heure` · `type` · `valeurs` *(paires clé-valeur selon le
+type)* · `conclusion` *(texte court)* · `operateur`
+
+## 6.0.2 Types et valeurs à saisir
+
+| Exploration | Valeurs chiffrées |
+|---|---|
+| **DTC** (Doppler transcrânien) | IP droit, IP gauche, Vm droite, Vm gauche, conclusion |
+| **TDM cérébrale** | date, conclusion, présence de lésion(s) codée |
+| **ETT** | FEVG, diamètre de la VCI, PAPS, épanchement |
+| **Échographie pleuro-pulmonaire** | épanchement D/G, condensation, lignes B |
+| **Radiographie thoracique** | conclusion, foyer codé |
+| **EEG** | conclusion |
+| **Fibroscopie bronchique** | indication, résultat, prélèvement associé |
+
+Liste à compléter et valider avec un senior.
+
+## 6.0.3 Deux principes
+
+Les explorations sont **proposées par le protocole du diagnostic** — un
+traumatisme crânien programme la TDM de contrôle à H48 et le DTC quotidien.
+
+Les valeurs saisies sont **reprises automatiquement dans l'évolution du jour**
+sous une rubrique « Explorations », sans aucune ressaisie, et restent
+exploitables en recherche (cinétique de l'IP, évolution de la FEVG).
+
+# 7. BILANS
+
+## 7.1 Import
+
+L'utilisateur dispose déjà d'un **fichier HTML de saisie des bilans** produisant
+un format de sortie spécifique — à intégrer directement dans l'application.
+
+📎 **À fournir : ce fichier HTML.** *(toujours attendu au 02/09/2026 — le
+bloc 4 reste bloqué)*
+
+## 7.2 Affichage
+
+- Tableau par date
+- **Courbes de cinétique** par analyte — c'est ce qui manque le plus dans un
+  EHR classique
+- Signalement des valeurs hors bornes *(bornes à définir)*
+
+## 7.3 Gaz du sang
+
+Structure particulière, toujours groupée avec les paramètres ventilatoires :
+`pH` · `PaO₂` · `PaCO₂` · `HCO₃⁻` · `mode ventilatoire` · `FiO₂` · `PEP` · `FR`
+· **rapport P/F** *(calculé automatiquement : PaO₂ / FiO₂)*
+
+## 7.4 Microbiologie
+
+Table séparée. Prélèvements : hémoculture · ECBU · ponction lombaire · PDP ·
+prélèvement de cathéter · autre.
+
+Champs : date, type de prélèvement, résultat *(stérile / positif / en cours)*,
+germe identifié, antibiogramme *(texte libre en v1, structuré plus tard)*.
+
+---
+
+# 8. ÉVOLUTION QUOTIDIENNE
+
+## 8.1 Format cible — validé
+
+```
+01/09/2026, J{n} d'hospitalisation :
+Sur le plan Neurologique :
+Sur le plan respiratoire :
+Sur le plan hémodynamique :
+Sur le plan Infectieux :
+Explorations :
+- DTC (08h) : IP 1.35 D / 1.28 G ; Vm 42 D / 45 G
+Bilan du jour :
+Hématologie :
+Biochimie :
+Gaz du sang : pH = 7.4 ; PaO₂ = 80 mmHg ; PaCO₂ = 40 mmHg ; HCO₃⁻ = 24 mmol/L ;
+sous le mode VAC ; FiO2 = 50% ; PEP = 6 ; FR = 18 ; Rapport = 160
+Sous le traitement :
+J2 Tienam 1g*3/j
+J2 Coli 3MUI*3/j
+Introduction de Targocid 400mg*2/j
+J7/7 Tazobactam 1g*4/j
+Conduite :
+==>
+==>
+==>
+```
+
+## 8.2 Répartition génération / saisie
+
+| Section | Origine |
+|---|---|
+| En-tête, date, jour d'hospitalisation | **Généré** |
+| Les quatre plans | **Saisie manuelle** |
+| Explorations du jour | **Généré** depuis l'écran Explorations |
+| Bilan du jour, gaz du sang | **Généré** depuis les bilans du jour |
+| Sous le traitement | **Généré** depuis les lignes de prescription actives |
+| Conduite | **Vide**, à compléter par l'interne |
+
+Bouton « Copier » qui place le texte dans le presse-papier pour collage dans le
+DMI.
+
+⚠️ **Test à faire tôt :** coller un texte avec accents, symboles (`HCO₃⁻`,
+`PaO₂`) et retours à la ligne dans le DMI et vérifier qu'il n'est pas déformé.
+Si le DMI abîme les indices Unicode, il faudra basculer sur `HCO3-` et `PaO2`.
+
+*v1.3 : le basculement est prêt — `rea/config.py`, drapeau `SYMBOLES_UNICODE`.
+Mis à `False`, tout le texte généré sort en `HCO3-`, `PaO2`, `PaCO2`. Le test
+dans le DMI reste à faire.*
+
+---
+
+# 9. STATISTIQUES ET RECHERCHE
+
+## 9.1 Demande exprimée
+
+Pas de question de recherche précise pour le moment. Objectif : une interface
+d'exploration permettant de visualiser l'activité du service, de chercher des
+relations, et surtout de **faciliter le recueil de données**.
+
+## 9.2 Le problème à signaler
+
+Un recueil sans variables de jugement ne produit rien de publiable. En
+réanimation, presque toute publication repose sur un socle standard. Sans lui,
+la base sera volumineuse et inexploitable.
+
+### Socle minimal proposé — ❓ à valider
+
+| Variable | Pourquoi |
+|---|---|
+| **IGS II à l'admission** | Score de gravité, exigé par tout relecteur pour comparer des groupes |
+| **SOFA quotidien** | Évolution des défaillances, critère de jugement fréquent |
+| **Dates d'intubation et d'extubation** | Durée de ventilation, jours vivants sans ventilateur |
+| **Épuration extra-rénale** oui/non + durée | Défaillance rénale |
+| **Mortalité en réanimation** | Critère de jugement principal quasi universel |
+| **Mortalité à J28** | Standard international |
+| **Durée de séjour** | Calculée automatiquement |
+| **Infections nosocomiales** (PAVM, ILC) | Axe de publication très accessible dans ce service |
+| **Durée d'antibiothérapie, désescalade** | Idem — déjà à moitié capturé par le prescrit |
+
+Ces variables coûtent quelques secondes de saisie par jour et déterminent la
+totalité de la valeur scientifique du projet.
+
+*v1.3 : le schéma SQL porte déjà ces variables (tables `ventilation_episode`,
+`epuration_episode`, `infection_nosocomiale`, `score_quotidien`,
+`evaluation_admission`, champs `deces_reanimation` et `statut_j28` du séjour).
+Tant que la validation n'est pas faite, aucun de ces écrans de saisie n'est
+imposé : les tables existent, vides, et ne coûtent rien.*
+
+## 9.3 Fonctions de l'interface statistique
+
+- Tableau de bord d'activité : occupation, durées de séjour, répartition des
+  motifs, mortalité
+- Constructeur de cohorte : filtres croisés *(ex. « tous les traumatismes
+  crâniens de 2026 avec IGS II > 40 »)*
+- Export CSV **pseudonymisé automatiquement** — identifiant d'étude stable,
+  ni nom, ni matricule, ni date de naissance complète (âge uniquement)
+- Diagramme de flux type STROBE
+
+## 9.4 Quatre usages au-delà de la cohorte
+
+1. **Écologie bactérienne du service** — germes, résistances, prélèvements,
+   durée moyenne d'antibiothérapie, taux de désescalade. Les données viennent
+   du prescrit et de la microbiologie, déjà saisis : c'est le sujet le plus
+   accessible pour une première publication.
+2. **Indicateurs de qualité et de sécurité** — PAVM pour 1 000 jours de
+   ventilation, délai admission-bloc, durée de séjour, taux d'occupation,
+   mortalité, suivis mois par mois.
+3. **Comparaison de deux périodes ou de deux pratiques** — un avant-après
+   devient possible dès qu'on dispose de deux années comparables.
+4. **Préparation d'une publication** — export anonymisé pour R ou SPSS,
+   diagramme de flux STROBE, tableau descriptif de la population.
+
+## 9.5 Alignement sur le standard ANZICS
+
+Le registre australo-néo-zélandais publie un dictionnaire de 109 variables, en
+usage depuis 1992, ainsi qu'un dictionnaire pour programmeurs et un guide de
+validation destiné aux systèmes développés hors de leur logiciel.
+
+**Principe retenu : on adopte leurs définitions, on ne rejoint pas leur
+registre.** L'alignement des définitions rend les chiffres comparables à la
+littérature internationale, sans démarche ni coût.
+
+### Ce qui est repris
+
+| Bloc | Origine dans le logiciel | Coût de saisie |
+|---|---|---|
+| Identité, dates, provenance, destination, devenir | Écrans Admission et Sortie | nul |
+| Conditions chroniques — respiratoire, cardiovasculaire, rénale, hépatique, immunosuppression, cancer, diabète, + « aucune » | Écran Admission, listes à aligner | nul |
+| Biologie des premières 24 h — Na, K, bicarbonates, créatinine, urée, hématocrite, leucocytes, bilirubine, pH, PaO₂, PaCO₂, FiO₂ | Fichier de bilans existant | nul |
+| **Albumine et glycémie** | **Deux champs à ajouter au fichier de bilans** | nul |
+| Ventilation invasive à J1, dates d'intubation et d'extubation | Écran Explorations | 10 s |
+| Insuffisance rénale aiguë | **Calculée** : créatinine > 133 µmol/L + diurèse 24 h < 410 mL + absence d'IRC | nul |
+| Score de gravité | **Calculé** à partir des variables ci-dessus | nul |
+| Constantes extrêmes 24 h — T°, FC, PAS, PAM, FR | Recopiées une fois depuis la pancarte manuscrite | 3 min |
+| Diurèse des 24 h | Recopiée depuis la pancarte | 10 s |
+| Glasgow (œil, verbal, moteur) et score de fragilité | Jugement clinique à l'admission | 30 s |
+
+**Total : environ 4 minutes par patient, une seule fois à l'admission.**
+
+### Simplification retenue
+
+Les valeurs **d'admission** sont saisies plutôt que les pires valeurs des
+24 heures. Une étude sur 11 107 admissions montre une capacité de
+discrimination équivalente pour APACHE II entre les deux méthodes. À mentionner
+explicitement dans toute publication.
+
+### Ce qui est écarté
+
+- **Codage diagnostique APACHE III** — plusieurs centaines de catégories avec
+  règles de hiérarchie. Trop lourd pour démarrer ; on garde la liste maison,
+  le rapprochement se fera plus tard si nécessaire.
+- **Score ANZROD** — calibré sur la population australienne. On utilise
+  **l'IGS II**, standard francophone, qui partage l'essentiel des variables.
+- Clé de liaison statistique SLK-581 et statut indigène — hors contexte.
+
+### Champs qui pèsent le plus
+
+ANZICS signale explicitement les champs déterminants pour l'ajustement au
+risque : **diagnostic, physiologie, devenir hospitalier, Glasgow, objectifs
+thérapeutiques et conditions chroniques**. Ce sont ceux à saisir avec le plus
+de soin.
+
+---
+
+# 10. QUESTIONS OUVERTES
+
+| # | Question | Bloque | État |
+|---|---|---|---|
+| 1 | Le socle de variables de recherche (§9.2) est-il validé ? | Modèle de données | ouverte — tables créées, saisie non imposée |
+| 2 | Scores IGS II et SOFA : saisis systématiquement ou optionnels ? | Modèle de données | ouverte |
+| 3 | Ventilation : suivi des dates d'intubation/extubation ? | Modèle de données | ouverte — table prête |
+| 4 | Infections nosocomiales : à tracer ? | Modèle de données | ouverte — table prête |
+| 5 | Mortalité : réanimation seule, ou aussi J28 ? | Modèle de données | ouverte — les deux champs existent |
+| 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** — 6-12-18-24, modifiable |
+| 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | ouverte — bloque le bloc 4 |
+| 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte |
+| 9 | Poste du chef de service : copie lecture seule ou rien ? | Architecture | ouverte |
+| 10 | Liste des gestes chirurgicaux les plus fréquents | Interventions | ouverte — liste provisoire dans `listes.py` |
+| 11 | Qui maintient le programme en cas d'absence de l'auteur | Continuité | ouverte |
+| 12 | Les protocoles de pré-remplissage doivent être **signés** avant usage | Protocoles | ouverte — le brouillon TC est marqué non validé |
+
+## Documents attendus
+
+- 📎 **PDF du prescrit (version bêta)** — conditionne toute la partie 5
+- 📎 **Fichier HTML de saisie des bilans** — conditionne la partie 7
+
+---
+
+# 11. FEUILLE DE ROUTE
+
+Estimation en **heures de travail effectif** (session de travail commune :
+je code, tu testes et tu décides). Hors délais d'attente extérieurs.
+
+| Bloc | Contenu | Heures | État |
+|---|---|---|---|
+| **0** | Modèle de données complet, listes codées, schéma SQL | 4-6 | ✅ fait (v1.3) |
+| **1** | Socle : base, sauvegardes, sélecteur d'utilisateur, tableau des 12 lits, création/sortie de séjour, identité | 8-10 | ◐ en cours — base/sauvegardes/journal/lits/admission/sortie en service, sélecteur d'utilisateur et interface Streamlit pas encore faits |
+| **2** | **Prescription** : lignes, catégories, horaires, compteurs de jours, duplication J+1, bilan hydrique des entrées, impression A4 | 18-22 | ◐ en cours — calcul des horaires/compteurs/bilan hydrique fait, service d'ajout de ligne/reconduction J+1/impression pas encore faits |
+| **3** | Évolution quotidienne générée + bouton copier | 6-8 | ○ à faire |
+| **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ⏸ bloqué — fichier HTML de saisie non fourni |
+| **5** | Motifs, régions traumatiques, antécédents + recherche ICD-10, protocoles de pré-remplissage, sortie | 12-15 | ◐ en cours — motifs, régions, antécédents (liste courte), interventions, sortie et chargeur de protocoles faits en service ; recherche ICD-10 et interface non faites |
+| **6** | Statistiques, constructeur de cohorte, export pseudonymisé | 8-10 | ○ à faire |
+| **7** | Robustesse, journal des modifications, finitions, documentation | 6-8 | ◐ partiel — journal et sauvegardes faits |
+| | **Total** | **75-95 h** | |
+
+## Ordre d'exécution
+
+Blocs **0 → 1 → 2** en priorité absolue. À la fin du bloc 2, le logiciel résout
+déjà le problème principal du service et peut être utilisé quotidiennement.
+
+Ce sous-ensemble représente **environ 30 heures**. C'est le seuil qui compte :
+au-delà, chaque bloc est une amélioration facultative, et une interruption du
+projet ne laisse jamais un chantier inutilisable.
+
+## Règle de déploiement
+
+Usage en solo pendant **au moins deux semaines complètes** avant ouverture aux
+13 utilisateurs. Une première impression ratée dans un service ne se rattrape
+pas.
+
+---
+
+# 12. PROTOCOLE DE SESSION
+
+Au début de chaque session de travail :
+
+1. Renvoyer **ce document** (version à jour)
+2. Renvoyer le **code actuel** (dossier compressé ou fichiers)
+3. Indiquer le **bloc en cours** et ce qui a été testé depuis la dernière fois
+
+En fin de session :
+
+4. Reporter dans ce document les **décisions prises** et les questions résolues
+5. Incrémenter le numéro de version en en-tête
+6. Conserver la version précédente du code — jamais d'écrasement
+
+---
+
+# JOURNAL DES VERSIONS
+
+**v1.3 — 2 septembre 2026**
+
+- **Dépôt dédié créé** : `github.com/ibidia1/rea` — ce projet ne vit plus dans
+  le dépôt `stat-serie` (sans rapport, application de révision du résidanat)
+- **Première tranche de code, bloc 0 fait, bloc 1 en cours.** Schéma SQL
+  complet (28 tables), listes codées, module de configuration du poste,
+  couche base SQLite avec sauvegardes automatiques et journal des
+  modifications, calculs de dates/âges/compteurs de jours, calcul des
+  horaires par rythme et du bilan hydrique des entrées, chargement des
+  protocoles JSON, services Admission/Sortie/Lits. **Pas encore fait à ce
+  stade** : service de prescription (ajout de ligne, arrêt, reconduction
+  J+1), génération de la pancarte imprimable, écran Explorations, évolution
+  du jour, et surtout **l'interface Streamlit elle-même** — rien n'est encore
+  utilisable par un interne. Suite de la session à venir
+- Question 6 **tranchée** : ×4/j → 6-12-18-24, ×6/j → 4-8-12-16-20-24,
+  modifiable dans la configuration et ligne par ligne
+- Décision de modèle : **une ligne de prescription n'est jamais dupliquée** pour
+  le lendemain. Elle porte `date_debut` / `date_arret` ; la pancarte d'un jour
+  donné sera *calculée* par intersection avec cette période. C'est ce qui rend
+  les compteurs de jours exacts sans aucune recopie, et ce qui empêche deux
+  versions divergentes d'une même prescription (règle de conception 5)
+- Décision : le **drapeau `SYMBOLES_UNICODE`** permettra de basculer tout le
+  texte généré en ASCII (`HCO3-`, `PaO2`) le jour où le test de collage dans
+  le DMI échoue
+- Protocoles : format **JSON versionné et signé** dans `protocoles/`. Le
+  protocole « traumatisme crânien » est livré en **brouillon non validé** et
+  le chargeur (`rea/protocoles.py`) l'exclut tant qu'il n'est pas signé — donc
+  tant que le chef de service ne l'a pas validé
+- Bloc 4 (bilans) **explicitement non commencé** : le fichier HTML de saisie
+  existant n'a pas été fourni, et le réécrire produirait un format incompatible
+  avec celui déjà utilisé dans le service
+
+**v1.2 — 1er septembre 2026**
+
+- Alignement du socle de variables sur le **dictionnaire ANZICS** (§9.5)
+- Deux champs à ajouter au fichier de bilans : **albumine et glycémie**
+- Insuffisance rénale aiguë et score de gravité passent en **calcul automatique**
+- Décision : valeurs **d'admission** plutôt que pires valeurs sur 24 h
+- Score retenu : **IGS II**, pas ANZROD
+
+**v1.1 — 1er septembre 2026**
+
+- Ajout de l'écran **Explorations** (§6) : DTC, TDM, ETT et autres, avec valeurs
+  chiffrées, proposées par protocole et reprises dans l'évolution
+- Ajout de l'écran **Sortie** (§4.7) : destination codée, complications à trois
+  états, ordonnance, consultation de suivi, compte rendu généré
+- Prescription **par voie d'administration** (§5.2) : les champs de saisie
+  changent selon PO / IV / PSE / S/C / Aérosol / Soins / Kiné / Entrées
+- Ajout de la section **Bilans à demander pour le lendemain** (§5.2 bis)
+- Ajout de **quatre usages** de la base au-delà de la cohorte (§9.4)
+- Le programme compte désormais **8 écrans**
+
+**v1.0 — août 2026**
+
+- Version initiale du document de référence
