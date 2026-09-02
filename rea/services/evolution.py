@@ -1,9 +1,8 @@
 """Écran 6 — Évolution quotidienne (SPEC §8).
 
 Seuls les quatre plans et la conduite sont saisis à la main ; le reste est
-généré. En v1, le générateur ne reprend que l'en-tête et le prescrit — les
-sections Explorations et Bilan du jour restent vides tant que ces écrans ne
-sont pas construits (voir SPEC §8.2, blocs 4 et 5).
+généré. Bilan du jour repris depuis l'écran Bilans (bloc 4, SPEC §7).
+Explorations reste vide tant que cet écran n'est pas construit (SPEC §6).
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ from .. import config
 from ..db import Base
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
+from . import bilans as bilans_service
 from . import prescriptions as prescriptions_service
 from . import sejours as sejours_service
 
@@ -55,19 +55,20 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
     ) or {}
     jour_hosp = jour_hospitalisation(sejour["date_admission"], date_jour)
 
-    hco3 = "HCO₃⁻" if config.SYMBOLES_UNICODE else "HCO3-"
-    pao2 = "PaO₂" if config.SYMBOLES_UNICODE else "PaO2"
-
     lignes = [f"{format_date_fr(date_jour)}, J{jour_hosp} d'hospitalisation :"]
     for cle in PLANS:
         lignes.append(f"{LIBELLES_PLANS[cle]} :")
         if entree.get(cle):
             lignes.append(entree[cle])
 
-    # Explorations et Bilan du jour : sections prévues, non alimentées tant
-    # que les écrans Explorations et Bilans ne sont pas construits.
+    # Explorations : section prévue, non alimentée tant que cet écran n'est
+    # pas construit.
     lignes.append("Explorations :")
+
     lignes.append("Bilan du jour :")
+    bilan_texte = bilans_service.texte_genere(base, sejour_id, date_jour)
+    if bilan_texte:
+        lignes.append(bilan_texte)
 
     lignes.append("Sous le traitement :")
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)

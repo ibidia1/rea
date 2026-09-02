@@ -1,6 +1,6 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.4 — 2 septembre 2026**
+**Version 1.5 — 2 septembre 2026**
 
 > **Document de référence du projet.** À renvoyer au début de chaque session de
 > travail, accompagné du code à jour. C'est la mémoire commune du projet.
@@ -487,8 +487,18 @@ exploitables en recherche (cinétique de l'IP, évolution de la FEVG).
 L'utilisateur dispose déjà d'un **fichier HTML de saisie des bilans** produisant
 un format de sortie spécifique — à intégrer directement dans l'application.
 
-📎 **À fournir : ce fichier HTML.** *(toujours attendu au 02/09/2026 — le
-bloc 4 reste bloqué)*
+✅ **Fichier reçu le 2 septembre 2026** (`bilan_rea.html`) et intégré : mêmes
+analytes, mêmes groupes, même texte généré (`rea/analytes.py`,
+`rea/services/bilans.py`). Contrairement au fichier d'origine (autonome,
+JS pur, valeurs non conservées), les valeurs saisies sont maintenant
+**stockées en base** — nécessaire pour les courbes de cinétique (§7.2) et
+l'export recherche, qui étaient hors de portée du fichier HTML seul.
+
+⚠️ **Aperçu, appelé à évoluer** (indiqué par l'utilisateur à la remise du
+fichier) : calcul automatique de la clairance de la créatinine à ajouter,
+au moins un champ à retirer — à préciser en session. Le socle de bilans
+ci-dessous est bâti pour absorber ces changements sans refonte : un
+analyte s'ajoute ou se retire par une ligne dans `rea/analytes.py`.
 
 ## 7.2 Affichage
 
@@ -688,7 +698,7 @@ de soin.
 | 4 | Infections nosocomiales : à tracer ? | Modèle de données | ouverte — table prête |
 | 5 | Mortalité : réanimation seule, ou aussi J28 ? | Modèle de données | ouverte — les deux champs existent |
 | 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** — 6-12-18-24, modifiable |
-| 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | ouverte — bloque le bloc 4 |
+| 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | **résolue v1.5** — fichier HTML reçu et intégré |
 | 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte |
 | 9 | Poste du chef de service : copie lecture seule ou rien ? | Architecture | ouverte |
 | 10 | Liste des gestes chirurgicaux les plus fréquents | Interventions | ouverte — liste provisoire dans `listes.py` |
@@ -698,7 +708,9 @@ de soin.
 ## Documents attendus
 
 - 📎 **PDF du prescrit (version bêta)** — conditionne toute la partie 5
-- 📎 **Fichier HTML de saisie des bilans** — conditionne la partie 7
+- ✅ **Fichier HTML de saisie des bilans** — reçu et intégré (v1.5). Une
+  version plus détaillée est annoncée (clairance automatique, un champ en
+  moins) : à recevoir et à répercuter dans `rea/analytes.py`
 
 ---
 
@@ -713,7 +725,7 @@ je code, tu testes et tu décides). Hors délais d'attente extérieurs.
 | **1** | Socle : base, sauvegardes, sélecteur d'utilisateur, tableau des 12 lits, création/sortie de séjour, identité | 8-10 | ✅ fait (v1.4) |
 | **2** | **Prescription** : lignes, catégories, horaires, compteurs de jours, duplication J+1, bilan hydrique des entrées, impression A4 | 18-22 | ✅ fait (v1.4) — impression en mise en page provisoire, à reprendre sur le PDF réel |
 | **3** | Évolution quotidienne générée + bouton copier | 6-8 | ◐ en cours — génération et écran faits ; ne reprend pas encore Explorations ni Bilan du jour (blocs 4/6 non commencés) |
-| **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ⏸ bloqué — fichier HTML de saisie non fourni |
+| **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ◐ en cours (v1.5) — saisie, stockage structuré, texte généré, courbe de cinétique et reprise dans l'évolution faits ; tableau récapitulatif par date, bornes de normalité et microbiologie non faits |
 | **5** | Motifs, régions traumatiques, antécédents + recherche ICD-10, protocoles de pré-remplissage, sortie | 12-15 | ◐ en cours — motifs, régions, antécédents (liste courte), interventions, sortie et compte rendu généré faits, écrans Admission/Sortie construits ; recherche ICD-10, interventions en UI et application effective des protocoles non faites |
 | **6** | Statistiques, constructeur de cohorte, export pseudonymisé | 8-10 | ○ à faire |
 | **7** | Robustesse, journal des modifications, finitions, documentation | 6-8 | ◐ partiel — journal et sauvegardes faits |
@@ -753,6 +765,33 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.5 — 2 septembre 2026**
+
+- **Fichier HTML de saisie des bilans reçu** (`bilan_rea.html`) — débloque le
+  bloc 4. Question ouverte 7 résolue
+- **Écran Bilans construit**, intégrant directement ce fichier : mêmes
+  analytes, mêmes groupes (NFS, Hémostase, Ionogramme & rénale, Gaz du sang
+  & ventilation, Bilan hépatique, Bilan lipidique), même texte généré —
+  seule différence volontaire : les valeurs sont **stockées en base**
+  (format long, règle de conception 4) plutôt que perdues à la fermeture de
+  la page, ce qui donne les courbes de cinétique (§7.2) sans travail
+  supplémentaire
+- Calculs automatiques repris à l'identique : rapport PaO₂/FiO₂, bilirubine
+  indirecte, conversion mmol/L ↔ g/L pour le bilan lipidique
+- Catalogue des analytes extrait dans `rea/analytes.py` — ajouter ou retirer
+  un analyte est une ligne à changer, pas une refonte. Prévu : l'utilisateur
+  a annoncé une version plus détaillée du fichier à venir (calcul de
+  clairance de la créatinine automatique, au moins un champ à retirer)
+- Table `gaz_du_sang` complétée avec `spo2` et `debit_o2` (débit d'oxygène
+  pour masque/lunette), absents du schéma initial
+- **Évolution quotidienne** : la section « Bilan du jour », vide depuis la
+  v1.3, est maintenant remplie automatiquement depuis l'écran Bilans
+- Testé de bout en bout en navigateur réel (Playwright) : saisie complète,
+  bascule d'unité des lipides, enregistrement, texte généré, courbe de
+  cinétique, reprise dans l'évolution — aucune anomalie, un seul ajustement
+  cosmétique (hauteur de la zone de texte de l'évolution augmentée)
+- 65 tests (pytest)
 
 **v1.4 — 2 septembre 2026**
 
