@@ -335,7 +335,8 @@ CREATE TABLE IF NOT EXISTS exploration_valeur (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_expl_valeur ON exploration_valeur(exploration_id, cle);
 
 -- -------------------------------------------------------------------------
--- BILANS (SPEC §7) — bloc 4, tables prêtes, import en attente du fichier HTML
+-- BILANS (SPEC §7) — bloc 4. Fichier HTML de saisie reçu (v1.5), intégré
+-- directement : mêmes analytes, même format de texte généré.
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bilan_resultat (
     id           TEXT PRIMARY KEY,
@@ -365,9 +366,11 @@ CREATE TABLE IF NOT EXISTS gaz_du_sang (
     hco3              REAL,
     lactate           REAL,
     mode_ventilatoire TEXT,
+    debit_o2          REAL,          -- L/min — Masque / Lunette seulement
     fio2              REAL,          -- en %
     pep               REAL,
     fr                REAL,
+    spo2              REAL,          -- en %
     cree_le           TEXT NOT NULL,
     cree_par          TEXT REFERENCES utilisateur(id),
     supprime          INTEGER NOT NULL DEFAULT 0

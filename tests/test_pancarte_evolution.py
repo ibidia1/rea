@@ -1,4 +1,4 @@
-from rea.services import evolution, pancarte, prescriptions as pr, sejours
+from rea.services import bilans, evolution, pancarte, prescriptions as pr, sejours
 
 
 def _sejour_type(base):
@@ -64,6 +64,27 @@ def test_evolution_conserve_les_plans_saisis(base):
     evolution.enregistrer(base, sid, "2026-09-01", {"plan_neurologique": "RASS -4"})
     texte = evolution.texte_genere(base, sid, "2026-09-01")
     assert "RASS -4" in texte
+
+
+def test_evolution_reprend_le_bilan_du_jour(base):
+    pid, sid = _sejour_type(base)
+    bilans.enregistrer_resultats(base, sid, "2026-09-01T08:00", {"hb": 9.2, "plq": 145})
+    bilans.enregistrer_gaz_du_sang(
+        base, sid, "2026-09-01T08:15", ph=7.32, pao2=80, fio2=50, mode_ventilatoire="VAC",
+    )
+    texte = evolution.texte_genere(base, sid, "2026-09-01")
+    assert "- NFS : Hb = 9.2 g/dL ; PLQ = 145 10³/µL" in texte
+    assert "- Gaz du sang :" in texte
+    assert "PaO₂/FiO₂ = 160" in texte
+
+
+def test_evolution_bilan_du_jour_ignore_un_autre_jour(base):
+    pid, sid = _sejour_type(base)
+    bilans.enregistrer_resultats(base, sid, "2026-08-31T08:00", {"hb": 9.2})
+    texte = evolution.texte_genere(base, sid, "2026-09-01")
+    lignes = texte.split("\n")
+    idx = lignes.index("Bilan du jour :")
+    assert lignes[idx + 1] == "Sous le traitement :"
 
 
 def test_inserer_sur_table_sans_cree_le_ne_leve_pas(base):

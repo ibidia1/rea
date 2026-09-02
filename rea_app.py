@@ -13,10 +13,11 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from rea import config, listes
+from rea import analytes as cat, config, listes
 from rea.db import obtenir_base
 from rea.domaine import prescription as dom
 from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation
+from rea.services import bilans as bilans_service
 from rea.services import evolution as evolution_service
 from rea.services import lits as lits_service
 from rea.services import pancarte as pancarte_service
@@ -399,7 +400,7 @@ def onglet_evolution(sejour: dict) -> None:
 
     st.subheader("Texte généré")
     texte = evolution_service.texte_genere(base, sejour["id"], date_jour_str)
-    st.text_area("Prêt à copier dans le DMI", value=texte, height=300)
+    st.text_area("Prêt à copier dans le DMI", value=texte, height=450)
 
 
 def onglet_sortie(sejour: dict) -> None:
@@ -432,6 +433,121 @@ def onglet_sortie(sejour: dict) -> None:
             st.rerun()
 
 
+def onglet_bilans(sejour: dict) -> None:
+    unite_lipides = st.radio(
+        "Saisie des lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
+    )
+
+    with st.form("bilans_form"):
+        date_heure = st.text_input(
+            "Date / heure du prélèvement", value=datetime.now().isoformat(timespec="minutes")
+        )
+
+        valeurs: dict[str, float | None] = {}
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**NFS**")
+            for a in [a for g in cat.GROUPES if g.code == "nfs" for a in g.analytes]:
+                valeurs[a.id] = st.number_input(
+                    f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
+                    min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
+                )
+        with col2:
+            st.markdown("**Hémostase**")
+            for a in [a for g in cat.GROUPES if g.code == "hemostase" for a in g.analytes]:
+                valeurs[a.id] = st.number_input(
+                    f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
+                    min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
+                )
+
+        st.markdown("**Ionogramme & rénale**")
+        cols = st.columns(4)
+        for i, a in enumerate(
+            [a for code in ("ionogramme", "renale", "inflammation") for g in cat.GROUPES if g.code == code for a in g.analytes]
+        ):
+            with cols[i % 4]:
+                valeurs[a.id] = st.number_input(
+                    f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
+                    min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
+                )
+
+        st.markdown("**Gaz du sang & ventilation**")
+        c1, c2, c3 = st.columns(3)
+        mode_vent = c1.selectbox("Mode ventilatoire", ["—", *cat.MODES_VENTILATOIRES])
+        debit_o2 = c2.number_input("Débit O₂ (L/min, si masque/lunette)", min_value=0.0, step=0.5, value=0.0)
+        fio2 = c3.number_input("FiO₂ (%)", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
+        c4, c5, c6 = st.columns(3)
+        pep = c4.number_input("PEP (cmH₂O)", min_value=0.0, step=1.0, value=0.0)
+        fr = c5.number_input("FR (/min)", min_value=0.0, step=1.0, value=0.0)
+        spo2 = c6.number_input("SpO₂ (%)", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
+        c7, c8, c9, c10 = st.columns(4)
+        ph = c7.number_input("pH", min_value=0.0, step=0.01, value=0.0, format="%.2f")
+        pao2 = c8.number_input("PaO₂ (mmHg)", min_value=0.0, step=1.0, value=0.0)
+        paco2 = c9.number_input("PaCO₂ (mmHg)", min_value=0.0, step=1.0, value=0.0)
+        hco3 = c10.number_input("HCO₃⁻ (mmol/L)", min_value=0.0, step=0.1, value=0.0)
+        lactate = st.number_input("Lactates (mmol/L)", min_value=0.0, step=0.1, value=0.0)
+
+        st.markdown("**Bilan hépatique**")
+        cols = st.columns(4)
+        for i, a in enumerate([a for g in cat.GROUPES if g.code == "hepatique" for a in g.analytes if not a.calcule]):
+            with cols[i % 4]:
+                valeurs[a.id] = st.number_input(
+                    f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
+                    min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
+                )
+
+        st.markdown(f"**Bilan lipidique** (saisi en {unite_lipides})")
+        cols = st.columns(4)
+        lipides_saisis: dict[str, float | None] = {}
+        for i, a in enumerate([a for g in cat.GROUPES if g.code == "lipidique" for a in g.analytes]):
+            with cols[i % 4]:
+                lipides_saisis[a.id] = st.number_input(
+                    a.libelle, min_value=0.0, step=0.01, value=0.0, key=f"bilan_{a.id}",
+                )
+
+        if st.form_submit_button("Enregistrer les bilans"):
+            valeurs_non_nulles = {k: (v or None) for k, v in valeurs.items()}
+            for id_lipide, v in lipides_saisis.items():
+                if not v:
+                    continue
+                valeurs_non_nulles[id_lipide] = (
+                    v if unite_lipides == "mmol/L" else bilans_service.gl_vers_mmol(id_lipide, v)
+                )
+            bilans_service.enregistrer_resultats(
+                base, sejour["id"], date_heure, valeurs_non_nulles, utilisateur_id=utilisateur_id
+            )
+            if mode_vent != "—" or any([fio2, pep, fr, spo2, ph, pao2, paco2, hco3, lactate]):
+                bilans_service.enregistrer_gaz_du_sang(
+                    base, sejour["id"], date_heure,
+                    ph=ph or None, pao2=pao2 or None, paco2=paco2 or None, hco3=hco3 or None,
+                    lactate=lactate or None, mode_ventilatoire=None if mode_vent == "—" else mode_vent,
+                    debit_o2=debit_o2 or None, fio2=fio2 or None, pep=pep or None, fr=fr or None,
+                    spo2=spo2 or None, utilisateur_id=utilisateur_id,
+                )
+            st.success("Bilan enregistré.")
+            st.rerun()
+
+    st.subheader("Texte généré")
+    date_affichee = st.date_input("Jour", value=date.today(), key="date_bilan_texte")
+    texte = bilans_service.texte_genere(base, sejour["id"], str(date_affichee))
+    st.text_area("Prêt à coller dans l'évolution", value=texte or "(aucun bilan ce jour-là)", height=200)
+
+    resultats = bilans_service.resultats_du_sejour(base, sejour["id"])
+    if resultats:
+        with st.expander("📈 Courbe de cinétique"):
+            ids_disponibles = sorted({r["analyte"] for r in resultats})
+            choix = st.selectbox(
+                "Analyte", ids_disponibles, format_func=lambda i: cat.analyte(i).libelle
+            )
+            historique = bilans_service.historique_analyte(base, sejour["id"], choix)
+            if len(historique) >= 1:
+                import pandas as pd
+
+                df = pd.DataFrame(historique).set_index("date_heure")
+                st.line_chart(df["valeur_num"])
+
+
 def ecran_fiche(sejour_id: str) -> None:
     sejour = sejours_service.sejour_avec_patient(base, sejour_id)
     if sejour is None:
@@ -440,14 +556,16 @@ def ecran_fiche(sejour_id: str) -> None:
         return
 
     st.title(f"Lit {sejour['lit_admission']} — {sejour['nom_affichage']}")
-    onglets = st.tabs(["Identité", "Prescrit", "Évolution", "Sortie"])
+    onglets = st.tabs(["Identité", "Prescrit", "Bilans", "Évolution", "Sortie"])
     with onglets[0]:
         onglet_identite(sejour)
     with onglets[1]:
         onglet_prescrit(sejour)
     with onglets[2]:
-        onglet_evolution(sejour)
+        onglet_bilans(sejour)
     with onglets[3]:
+        onglet_evolution(sejour)
+    with onglets[4]:
         onglet_sortie(sejour)
 
 
