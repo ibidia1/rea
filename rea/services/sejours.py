@@ -322,3 +322,71 @@ def cloturer_sejour(
         utilisateur_id=utilisateur_id,
         action="sortie",
     )
+
+
+# --------------------------------------------------------------------------
+# Compte rendu de sortie (SPEC §4.7) — généré, bouton « copier »
+# --------------------------------------------------------------------------
+
+def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
+    from .. import config, listes
+    from ..domaine.dates import duree_sejour_jours, format_date_fr
+
+    sejour = sejour_avec_patient(base, sejour_id)
+    duree = duree_sejour_jours(sejour["date_admission"], sejour["date_sortie"])
+
+    lignes = [f"{sejour['nom_affichage']} — matricule {sejour['matricule']}"]
+
+    date_admission_fr = format_date_fr(sejour["date_admission"])
+    date_sortie_fr = format_date_fr(sejour["date_sortie"]) if sejour["date_sortie"] else "en cours"
+    lignes.append(f"Séjour du {date_admission_fr} au {date_sortie_fr} — {duree} jours")
+
+    provenance = listes.libelle(listes.PROVENANCES, sejour["provenance_type"], "non renseignée")
+    if sejour["provenance_detail"]:
+        provenance += f" ({sejour['provenance_detail']})"
+    lignes.append(f"Admis de {provenance}")
+
+    if sejour["traumatique"]:
+        regions = regions_traumatiques(base, sejour_id)
+        libelles_regions = [listes.libelle(listes.REGIONS_TRAUMATIQUES, r) for r in regions]
+        mecanisme = listes.libelle(listes.MECANISMES, sejour["mecanisme"], "")
+        motif = f"polytraumatisme ({mecanisme})" if est_polytraumatise(base, sejour_id) else " / ".join(libelles_regions)
+        lignes.append(f"Motif : {motif or 'traumatique — région non précisée'}")
+    else:
+        motifs = motifs_du_sejour(base, sejour_id)
+        principal = next((m for m in motifs if m["principal"]), None)
+        if principal:
+            lignes.append(f"Motif : {listes.libelle_motif(principal['code'])}")
+
+    ventilations = base.requete(
+        "SELECT * FROM ventilation_episode WHERE sejour_id = ? AND supprime = 0 ORDER BY date_intubation",
+        (sejour_id,),
+    )
+    if ventilations:
+        for v in ventilations:
+            fin = format_date_fr(v["date_extubation"]) if v["date_extubation"] else "en cours"
+            lignes.append(
+                f"Ventilation du {format_date_fr(v['date_intubation'])} au {fin}"
+            )
+
+    if sejour["complication_statut"] == "presente" and sejour["complication_texte"]:
+        lignes.append(f"Compliqué de : {sejour['complication_texte']}")
+    elif sejour["complication_statut"] == "aucune":
+        lignes.append("Sans complication rapportée")
+
+    mode = listes.libelle(listes.MODES_SORTIE, sejour["mode_sortie"], "")
+    destination = sejour["destination"] or ""
+    meme_etab = " (même établissement)" if sejour["meme_etablissement"] else ""
+    if sejour["mode_sortie"] == "deces":
+        lignes.append("Décès en réanimation")
+    elif destination:
+        lignes.append(f"Sortie vers {destination}{meme_etab} le {date_sortie_fr}")
+    else:
+        lignes.append(f"Sortie — {mode} le {date_sortie_fr}")
+
+    if sejour["ordonnance_sortie"]:
+        lignes.append(f"Traitement : {sejour['ordonnance_sortie']}")
+    if sejour["consultation_externe"]:
+        lignes.append(f"Consultation : {sejour['consultation_externe']}")
+
+    return "\n".join(lignes)

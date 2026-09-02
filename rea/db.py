@@ -90,9 +90,11 @@ class Base:
         """Insère une ligne avec horodatage (règle de conception 3) et
         journalise l'action (règle de conception 8, SPEC bloc 7)."""
         valeurs = dict(valeurs)
+        colonnes_table = self._colonnes(table)
         valeurs.setdefault("id", nouvel_id())
-        valeurs.setdefault("cree_le", maintenant())
-        if "cree_par" not in valeurs and "cree_par" in self._colonnes(table):
+        if "cree_le" not in valeurs and "cree_le" in colonnes_table:
+            valeurs["cree_le"] = maintenant()
+        if "cree_par" not in valeurs and "cree_par" in colonnes_table:
             valeurs["cree_par"] = utilisateur_id
         colonnes = ", ".join(valeurs.keys())
         espaces = ", ".join("?" for _ in valeurs)
