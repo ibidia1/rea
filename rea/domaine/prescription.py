@@ -112,20 +112,40 @@ def etiquette_jour(ligne: dict, a_la_date: str | date) -> EtiquetteJour:
 
 def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
     """Texte complet d'une ligne tel qu'affiché sur la pancarte, ex.
-    « J2 Targocid 400mg x2/j » ou « Introduction de Targocid 400mg x2/j »."""
+    « J2 Targocid 400mg x2/j » ou « Introduction de Targocid 400mg x2/j ».
+    Le corps de la description suit la voie (SPEC §5.2) : un PSE ne montre
+    jamais de rythme, un PO ne montre jamais de vitesse."""
     etiquette = etiquette_jour(ligne, a_la_date)
     morceaux = [etiquette.texte, ligne["produit"]]
-    if ligne.get("dose") is not None:
-        morceaux.append(f"{_nombre(ligne['dose'])}{ligne.get('unite') or ''}")
-    if ligne.get("rythme") and ligne["rythme"] not in ("continu", "conditionnel"):
-        rythme_affiche = ligne["rythme"].replace("x", "x")
-        horaires = horaires_affiches(ligne["rythme"], ligne.get("horaires_override"))
-        suffixe = f" ({horaires})" if horaires else ""
-        morceaux.append(f"{rythme_affiche}{suffixe}")
-    elif ligne.get("rythme") == "conditionnel" and ligne.get("condition_texte"):
-        morceaux.append(f"si {ligne['condition_texte']}")
-    elif ligne.get("rythme") == "continu" and ligne.get("vitesse") is not None:
-        morceaux.append(f"— vitesse {_nombre(ligne['vitesse'])}")
+    voie = ligne.get("voie")
+
+    if voie == "PSE":
+        if ligne.get("dilution"):
+            morceaux.append(str(ligne["dilution"]))
+        if ligne.get("vitesse") is not None:
+            morceaux.append(f"— vitesse {_nombre(ligne['vitesse'])}")
+    elif voie == "ENTREES":
+        if ligne.get("vitesse") is not None:
+            morceaux.append(f"v{_nombre(ligne['vitesse'])}")
+        if ligne.get("volume_24h") is not None:
+            morceaux.append(f"{_nombre(ligne['volume_24h'])} mL/24 h")
+        if ligne.get("additifs"):
+            morceaux.append(str(ligne["additifs"]))
+    elif voie in ("SOINS", "KINE"):
+        if ligne.get("rythme"):
+            morceaux.append(ligne["rythme"])
+    else:
+        if ligne.get("dose") is not None:
+            morceaux.append(f"{_nombre(ligne['dose'])}{ligne.get('unite') or ''}")
+        if ligne.get("rythme") and ligne["rythme"] not in ("continu", "conditionnel"):
+            horaires = horaires_affiches(ligne["rythme"], ligne.get("horaires_override"))
+            suffixe = f" ({horaires})" if horaires else ""
+            morceaux.append(f"{ligne['rythme']}{suffixe}")
+        elif ligne.get("rythme") == "conditionnel" and ligne.get("condition_texte"):
+            morceaux.append(f"si {ligne['condition_texte']}")
+        elif ligne.get("rythme") == "continu" and ligne.get("vitesse") is not None:
+            morceaux.append(f"— vitesse {_nombre(ligne['vitesse'])}")
+
     if ligne.get("nb_ampoules"):
         morceaux.append(f"({_nombre(ligne['nb_ampoules'])} amp)")
     texte = " ".join(str(m) for m in morceaux if m)

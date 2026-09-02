@@ -1,6 +1,6 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.3 — 2 septembre 2026**
+**Version 1.4 — 2 septembre 2026**
 
 > **Document de référence du projet.** À renvoyer au début de chaque session de
 > travail, accompagné du code à jour. C'est la mémoire commune du projet.
@@ -710,11 +710,11 @@ je code, tu testes et tu décides). Hors délais d'attente extérieurs.
 | Bloc | Contenu | Heures | État |
 |---|---|---|---|
 | **0** | Modèle de données complet, listes codées, schéma SQL | 4-6 | ✅ fait (v1.3) |
-| **1** | Socle : base, sauvegardes, sélecteur d'utilisateur, tableau des 12 lits, création/sortie de séjour, identité | 8-10 | ◐ en cours — base/sauvegardes/journal/lits/admission/sortie en service, sélecteur d'utilisateur et interface Streamlit pas encore faits |
-| **2** | **Prescription** : lignes, catégories, horaires, compteurs de jours, duplication J+1, bilan hydrique des entrées, impression A4 | 18-22 | ◐ en cours — calcul des horaires/compteurs/bilan hydrique fait, service d'ajout de ligne/reconduction J+1/impression pas encore faits |
-| **3** | Évolution quotidienne générée + bouton copier | 6-8 | ○ à faire |
+| **1** | Socle : base, sauvegardes, sélecteur d'utilisateur, tableau des 12 lits, création/sortie de séjour, identité | 8-10 | ✅ fait (v1.4) |
+| **2** | **Prescription** : lignes, catégories, horaires, compteurs de jours, duplication J+1, bilan hydrique des entrées, impression A4 | 18-22 | ✅ fait (v1.4) — impression en mise en page provisoire, à reprendre sur le PDF réel |
+| **3** | Évolution quotidienne générée + bouton copier | 6-8 | ◐ en cours — génération et écran faits ; ne reprend pas encore Explorations ni Bilan du jour (blocs 4/6 non commencés) |
 | **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ⏸ bloqué — fichier HTML de saisie non fourni |
-| **5** | Motifs, régions traumatiques, antécédents + recherche ICD-10, protocoles de pré-remplissage, sortie | 12-15 | ◐ en cours — motifs, régions, antécédents (liste courte), interventions, sortie et chargeur de protocoles faits en service ; recherche ICD-10 et interface non faites |
+| **5** | Motifs, régions traumatiques, antécédents + recherche ICD-10, protocoles de pré-remplissage, sortie | 12-15 | ◐ en cours — motifs, régions, antécédents (liste courte), interventions, sortie et compte rendu généré faits, écrans Admission/Sortie construits ; recherche ICD-10, interventions en UI et application effective des protocoles non faites |
 | **6** | Statistiques, constructeur de cohorte, export pseudonymisé | 8-10 | ○ à faire |
 | **7** | Robustesse, journal des modifications, finitions, documentation | 6-8 | ◐ partiel — journal et sauvegardes faits |
 | | **Total** | **75-95 h** | |
@@ -753,6 +753,31 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.4 — 2 septembre 2026**
+
+- **v1 utilisable de bout en bout.** Interface Streamlit (`rea_app.py`) avec
+  les quatre écrans du seuil de la feuille de route : Lits (accueil),
+  Admission (identité, motif traumatique/non traumatique, antécédents),
+  Prescrit (ajout de ligne par voie, arrêt, bilan hydrique, bilans à
+  demander, « préparer demain », impression), Sortie (clôture + compte
+  rendu généré). Évolution quotidienne ajoutée en plus (bloc 3, en avance
+  sur le seuil). Testé de bout en bout par un navigateur piloté
+  automatiquement (Playwright) contre l'application réellement lancée —
+  admission → prescription (10 lignes, toutes voies) → impression →
+  évolution → sortie → lit libéré — captures d'écran envoyées à la session
+- Deux bugs réels trouvés par ce test et corrigés : (1) `db.inserer()`
+  tentait d'écrire `cree_le` même sur les tables qui n'ont pas cette colonne
+  (`pancarte_snapshot`, `journal`, `sauvegarde`), (2) créer un utilisateur
+  avec un nom déjà pris faisait planter l'application sur la contrainte
+  UNIQUE au lieu de reconnecter la personne à son compte existant
+- Pancarte imprimée : mise en page **provisoire**, clairement annoncée comme
+  telle sur la pancarte elle-même (bandeau) et dans le code. Le PDF réel du
+  prescrit du service n'a toujours pas été fourni (question ouverte 7/§7.1) ;
+  cette mise en page sera reprise trait pour trait dessus
+- 52 tests (pytest), domaine + base + schéma + services + pancarte/évolution
+- Toujours pas commencé : Explorations (écran + reprise dans l'évolution),
+  Bilans (bloc 4, bloqué), Statistiques (bloc 6), recherche ICD-10
 
 **v1.3 — 2 septembre 2026**
 
