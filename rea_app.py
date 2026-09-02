@@ -342,7 +342,7 @@ def onglet_prescrit(sejour: dict) -> None:
                         nb_ampoules=nb_ampoules or None, vitesse=vitesse or None,
                         volume_dilution=volume_dilution or None, volume_24h=volume_24h or None,
                         additifs=additifs or None, sous_type=sous_type,
-                        duree_prevue_jours=int(duree_prevue) or None,
+                        duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
                         utilisateur_id=utilisateur_id,
                     )
                     st.rerun()
