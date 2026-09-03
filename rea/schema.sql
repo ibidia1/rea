@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS sejour (
     provenance_type     TEXT,
     provenance_detail   TEXT,
     est_readmission     INTEGER NOT NULL DEFAULT 0,
+    -- Poids et taille à l'admission. Le poids est ce qui rend la clairance de
+    -- la créatinine calculable (Cockcroft-Gault) ; sans lui, aucune formule
+    -- pondérale n'est possible a posteriori.
+    poids_kg            REAL,
+    taille_cm           REAL,
     -- Créatinine antérieure connue, en µmol/L. Sans elle, la définition KDIGO
     -- de l'insuffisance rénale aiguë est incalculable a posteriori
     -- (feuille de route §5, exploitée au bloc 15).
@@ -430,6 +435,44 @@ CREATE TABLE IF NOT EXISTS evolution_jour (
     supprime             INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evolution_unique ON evolution_jour(sejour_id, date_jour);
+
+-- Éléments fixes des quatre plans (FC, TA, diurèse, température, RASS…).
+-- Format long (règle 4) : ajouter un élément ne demande aucune migration, et
+-- chaque élément devient exploitable en cinétique comme un analyte.
+CREATE TABLE IF NOT EXISTS evolution_element (
+    id           TEXT PRIMARY KEY,
+    sejour_id    TEXT NOT NULL REFERENCES sejour(id),
+    date_jour    TEXT NOT NULL,
+    plan         TEXT NOT NULL,   -- neurologique / respiratoire / hemodynamique / infectieux
+    cle          TEXT NOT NULL,   -- fc, pas, temperature, rass…
+    valeur_num   REAL,
+    valeur_texte TEXT,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_evolution_element_unique
+    ON evolution_element(sejour_id, date_jour, cle);
+
+-- Escarres : une lésion suivie dans le temps, pas une case à cocher du jour.
+-- Même logique que les dispositifs — constatée, puis guérie ou non.
+CREATE TABLE IF NOT EXISTS escarre (
+    id            TEXT PRIMARY KEY,
+    sejour_id     TEXT NOT NULL REFERENCES sejour(id),
+    localisation  TEXT NOT NULL,
+    grade         INTEGER,          -- 1 à 4 (NPUAP/EPUAP)
+    date_constat  TEXT NOT NULL,
+    date_guerison TEXT,
+    commentaire   TEXT,
+    cree_le       TEXT NOT NULL,
+    cree_par      TEXT REFERENCES utilisateur(id),
+    modifie_le    TEXT,
+    modifie_par   TEXT REFERENCES utilisateur(id),
+    supprime      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_escarre_sejour ON escarre(sejour_id, supprime);
 
 -- -------------------------------------------------------------------------
 -- SOCLE DE RECHERCHE (SPEC §9.2, §9.5)

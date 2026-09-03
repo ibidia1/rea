@@ -7,7 +7,7 @@ jour (SPEC §6), bilan du jour (SPEC §7) et prescrit actif.
 
 from __future__ import annotations
 
-from .. import config
+from .. import config, listes
 from ..db import Base
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
@@ -59,14 +59,31 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
 
     lignes = [f"{format_date_fr(date_jour)}, J{jour_hosp} d'hospitalisation :"]
 
-    # Dispositifs en place, avec leur compteur : « Intubé J3 · SNG J3 ».
-    # C'est la première chose qu'on écrit dans une observation de réanimation.
-    dispositifs_texte = dispositifs_service.resume(base, sejour_id, date_jour)
-    if dispositifs_texte:
-        lignes.append(dispositifs_texte)
+    # Les dispositifs qui ne relèvent d'aucun plan (SNG, cathéters, sondes)
+    # restent en tête ; l'intubation, la sédation et l'épuration sont reprises
+    # dans le plan qui les concerne, pour ne pas les écrire deux fois.
+    ailleurs = ("intubation", "sedation", "tracheotomie", "eer")
+    autres = [
+        e.texte for e in dispositifs_service.etats(base, sejour_id, date_jour)
+        if e.en_place and e.type not in ailleurs
+    ]
+    if autres:
+        lignes.append(" · ".join(autres))
 
+    elements = elements_du_jour(base, sejour_id, date_jour)
     for cle in PLANS:
+        plan = cle.replace("plan_", "")
         lignes.append(f"{LIBELLES_PLANS[cle]} :")
+        # 1. Ce que le logiciel sait déjà — « Sédaté J4 », « Intubé J5 »,
+        #    les amines en cours, les antibiotiques, les escarres.
+        automatique = _elements_automatiques(base, sejour_id, plan, date_jour)
+        if automatique:
+            lignes.append(automatique)
+        # 2. Les éléments fixes saisis en un geste — FC, TA, diurèse, T°.
+        mesures = _texte_elements(plan, elements)
+        if mesures:
+            lignes.append(mesures)
+        # 3. Ce que le médecin écrit lui-même.
         if entree.get(cle):
             lignes.append(entree[cle])
 
@@ -98,3 +115,219 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
     if not config.SYMBOLES_UNICODE:
         texte = texte.replace("HCO₃⁻", "HCO3-").replace("PaO₂", "PaO2").replace("PaCO₂", "PaCO2")
     return texte
+
+# --------------------------------------------------------------------------
+# Éléments fixes des quatre plans (FC, TA, diurèse, température, RASS…)
+# --------------------------------------------------------------------------
+
+def enregistrer_elements(
+    base: Base,
+    sejour_id: str,
+    date_jour: str,
+    elements: dict[str, float | str | None],
+    *,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Un élément par clé. Une valeur vide efface l'élément du jour plutôt que
+    d'enregistrer un zéro qui serait lu comme une mesure."""
+    for cle, valeur in elements.items():
+        plan = _plan_de(cle)
+        if plan is None:
+            continue
+        existant = base.une_ligne(
+            "SELECT id FROM evolution_element WHERE sejour_id = ? AND date_jour = ? "
+            "AND cle = ?",
+            (sejour_id, date_jour, cle),
+        )
+        est_vide = valeur is None or valeur == "" or valeur == "non_renseigne"
+        champs = {
+            "valeur_num": float(valeur) if isinstance(valeur, (int, float)) else None,
+            "valeur_texte": valeur if isinstance(valeur, str) else None,
+            "supprime": int(est_vide),
+        }
+        if existant:
+            base.mettre_a_jour(
+                "evolution_element", existant["id"], champs, utilisateur_id=utilisateur_id
+            )
+        elif not est_vide:
+            base.inserer(
+                "evolution_element",
+                {"sejour_id": sejour_id, "date_jour": date_jour, "plan": plan,
+                 "cle": cle, **champs},
+                utilisateur_id=utilisateur_id,
+            )
+
+
+def _plan_de(cle: str) -> str | None:
+    for plan, elements in listes.ELEMENTS_PLAN.items():
+        if any(c == cle for c, *_reste in elements):
+            return plan
+    return None
+
+
+def elements_du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[str, float | str]:
+    lignes = base.requete(
+        "SELECT cle, valeur_num, valeur_texte FROM evolution_element "
+        "WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
+        (sejour_id, date_jour),
+    )
+    return {
+        l["cle"]: (l["valeur_num"] if l["valeur_num"] is not None else l["valeur_texte"])
+        for l in lignes
+    }
+
+
+def historique_element(base: Base, sejour_id: str, cle: str) -> list[dict]:
+    """Cinétique d'un élément — la température ou la diurèse sur le séjour."""
+    return base.requete(
+        "SELECT date_jour, valeur_num FROM evolution_element "
+        "WHERE sejour_id = ? AND cle = ? AND supprime = 0 AND valeur_num IS NOT NULL "
+        "ORDER BY date_jour",
+        (sejour_id, cle),
+    )
+
+
+# --------------------------------------------------------------------------
+# Escarres — suivies dans le temps, comme un dispositif
+# --------------------------------------------------------------------------
+
+def ajouter_escarre(
+    base: Base,
+    *,
+    sejour_id: str,
+    localisation: str,
+    grade: int | None,
+    date_constat: str,
+    commentaire: str | None = None,
+    utilisateur_id: str | None = None,
+) -> str:
+    return base.inserer(
+        "escarre",
+        {"sejour_id": sejour_id, "localisation": localisation, "grade": grade,
+         "date_constat": date_constat, "commentaire": commentaire},
+        utilisateur_id=utilisateur_id,
+    )
+
+
+def modifier_escarre(
+    base: Base, escarre_id: str, valeurs: dict, *, utilisateur_id: str | None = None
+) -> None:
+    base.mettre_a_jour("escarre", escarre_id, valeurs, utilisateur_id=utilisateur_id)
+
+
+def escarres(base: Base, sejour_id: str, actives_seulement: bool = False) -> list[dict]:
+    lignes = base.requete(
+        "SELECT * FROM escarre WHERE sejour_id = ? AND supprime = 0 ORDER BY date_constat",
+        (sejour_id,),
+    )
+    return [e for e in lignes if not e["date_guerison"]] if actives_seulement else lignes
+
+
+def _texte_escarres(base: Base, sejour_id: str) -> str:
+    actives = escarres(base, sejour_id, actives_seulement=True)
+    if not actives:
+        return ""
+    morceaux = []
+    for e in actives:
+        grade = f" grade {e['grade']}" if e["grade"] else ""
+        morceaux.append(f"{e['localisation'].lower()}{grade}")
+    return "Escarres : " + ", ".join(morceaux)
+
+
+# --------------------------------------------------------------------------
+# Rendu des plans : éléments fixes + ce qui se calcule tout seul
+# --------------------------------------------------------------------------
+
+def _texte_elements(plan: str, elements: dict) -> str:
+    """« FC 92/min · PA 105/58 mmHg · diurèse 1400 mL » — l'ordre du fichier de
+    listes, seuls les éléments renseignés."""
+    morceaux = []
+    for cle, libelle, unite, type_, _plage in listes.ELEMENTS_PLAN.get(plan, ()):
+        if cle not in elements:
+            continue
+        valeur = elements[cle]
+        if type_ == "nombre":
+            morceaux.append(f"{_libelle_court(libelle)} {_nombre_fr(valeur)}{_unite_collee(unite)}")
+        elif type_ == "liste_pupilles":
+            morceaux.append(listes.libelle(listes.PUPILLES, valeur))
+        elif type_ == "oui_non":
+            morceaux.append(f"{libelle} : {listes.libelle(listes.OUI_NON, valeur).lower()}")
+        else:
+            etat = listes.libelle(listes.TROIS_ETATS_PRESENCE, valeur).lower()
+            morceaux.append(f"{libelle} : {etat}")
+    # Une pression artérielle se lit « 105/58 », jamais en deux morceaux.
+    pas, pad = elements.get("pas"), elements.get("pad")
+    if pas is not None and pad is not None:
+        morceaux = [
+            m for m in morceaux
+            if not m.startswith(("PA systolique", "PA diastolique"))
+        ]
+        position = next(
+            (i for i, m in enumerate(morceaux) if m.startswith("PAM")), len(morceaux)
+        )
+        morceaux.insert(position, f"PA {_nombre_fr(pas)}/{_nombre_fr(pad)} mmHg")
+    return " · ".join(morceaux)
+
+
+def _libelle_court(libelle: str) -> str:
+    """« Diurèse /24 h » se dit « Diurèse » dans une phrase."""
+    return libelle.replace(" /24 h", "").replace(" clinique", "")
+
+
+def _nombre_fr(valeur: float) -> str:
+    """38.6 s'écrit 38,6 dans une observation française."""
+    if float(valeur) == int(valeur):
+        return str(int(valeur))
+    return f"{valeur}".replace(".", ",")
+
+
+def _unite_collee(unite: str) -> str:
+    """« 92/min » et « 15 % » ne s'espacent pas pareil."""
+    if not unite:
+        return ""
+    return unite if unite.startswith("/") else f" {unite}"
+
+
+def _elements_automatiques(base: Base, sejour_id: str, plan: str, date_jour: str) -> str:
+    """Ce que le logiciel sait déjà et que personne ne devrait retaper :
+    « Sédaté J4 », « Extubé J2 », le mode ventilatoire du dernier gaz du sang,
+    les antibiotiques en cours."""
+    etats = dispositifs_service.etats(base, sejour_id, date_jour)
+    morceaux: list[str] = []
+
+    if plan == "neurologique":
+        morceaux += [e.texte for e in etats if e.type == "sedation"]
+    elif plan == "respiratoire":
+        morceaux += [e.texte for e in etats if e.type in ("intubation", "tracheotomie")]
+        gds = bilans_service.dernier_gaz_du_sang(base, sejour_id, date_jour)
+        if gds and gds["mode_ventilatoire"]:
+            vent = gds["mode_ventilatoire"]
+            if gds["fio2"]:
+                vent += f", FiO₂ {int(gds['fio2'])} %"
+            if gds["pep"]:
+                vent += f", PEP {int(gds['pep'])}"
+            morceaux.append(vent)
+    elif plan == "hemodynamique":
+        amines = [
+            l for l in prescriptions_service.lignes_actives_le(base, sejour_id, date_jour)
+            if l["voie"] == "PSE" and l["statut"] == "active"
+        ]
+        morceaux += [
+            f"{l['produit']} {dom._nombre(l['vitesse'])} cc/h" if l["vitesse"] else l["produit"]
+            for l in amines
+        ]
+        morceaux += [e.texte for e in etats if e.type == "eer"]
+    elif plan == "infectieux":
+        antibiotiques = [
+            l for l in prescriptions_service.lignes_actives_le(base, sejour_id, date_jour)
+            if l["statut"] == "active" and l["duree_prevue_jours"]
+        ]
+        morceaux += [
+            f"{dom.etiquette_jour(l, date_jour).texte} {l['produit']}"
+            for l in antibiotiques
+        ]
+        escarres_texte = _texte_escarres(base, sejour_id)
+        if escarres_texte:
+            morceaux.append(escarres_texte)
+
+    return " · ".join(m for m in morceaux if m)
