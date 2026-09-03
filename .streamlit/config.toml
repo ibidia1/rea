@@ -1,0 +1,16 @@
+# Thème de l'application (SPEC §2.2 — poste unique du service).
+# Rouge Streamlit pour les actions, fond clair : l'écran est lu de loin,
+# souvent debout, dans une pièce éclairée. Contraste avant esthétique.
+
+[theme]
+primaryColor = "#E63946"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F4F9"
+textColor = "#1A1D27"
+font = "sans serif"
+
+[server]
+headless = true
+# L'application ne sort jamais du poste : aucune télémétrie.
+[browser]
+gatherUsageStats = false

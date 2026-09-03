@@ -6,12 +6,16 @@ dans `bilan_resultat`, jamais une colonne par jour — c'est ce qui permet les
 courbes de cinétique (SPEC §7.2) et l'export recherche sans transformation.
 
 Calculs automatiques, jamais saisis (SPEC pptx écran 5) : rapport PaO₂/FiO₂,
-bilirubine indirecte, conversion mmol/L ↔ g/L. Les bornes de normalité pour
-signaler les valeurs hors norme restent une question ouverte (§10, n°8) —
-non traitées ici.
+bilirubine indirecte, conversion mmol/L ↔ g/L.
+
+Les bornes de normalité ne servent qu'à colorer une valeur dans la vue de
+cinétique ; elles restent une question ouverte (§10, n°8) et aucune décision
+clinique n'en dépend.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from .. import analytes as cat
 from ..db import Base
@@ -242,3 +246,100 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
             lignes.append(gaz)
 
     return "\n".join(lignes)
+
+# --------------------------------------------------------------------------
+# Cinétique — la façon dont un clinicien lit des bilans (SPEC §7.2)
+# --------------------------------------------------------------------------
+# Un médecin ne lit pas une valeur isolée : il lit une ligne d'analyte à
+# travers les jours, et ce qui a bougé depuis la veille. D'où : un tableau
+# analytes × dates, une variation par rapport au prélèvement précédent, et
+# des panneaux par organe plutôt qu'une liste alphabétique.
+
+PANELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("infection", "Infection", ("crp", "gb", "plq")),
+    ("renal", "Rénal", ("creat", "uree", "k", "na")),
+    ("hemato", "Hématologie", ("hb", "hte", "plq", "tp", "inr")),
+    ("hepatique", "Hépatique", ("asat", "alat", "bili", "bili_d", "ggt", "pal")),
+    ("iono", "Ionogramme", ("na", "k", "cl", "ca")),
+)
+
+
+def dates_de_prelevement(base: Base, sejour_id: str) -> list[str]:
+    """Dates-heures distinctes, de la plus ancienne à la plus récente."""
+    lignes = base.requete(
+        "SELECT DISTINCT date_heure FROM bilan_resultat "
+        "WHERE sejour_id = ? AND supprime = 0 ORDER BY date_heure",
+        (sejour_id,),
+    )
+    return [l["date_heure"] for l in lignes]
+
+
+def tableau_par_date(
+    base: Base, sejour_id: str, ids_analytes: list[str] | None = None
+) -> tuple[list[str], dict[str, dict[str, float]]]:
+    """(dates, {analyte: {date: valeur}}) — la matrice que lit le clinicien.
+
+    Une seule valeur par analyte et par prélèvement : si le même analyte a
+    été saisi deux fois pour le même horodatage, la dernière écrase, comme
+    une correction de saisie.
+    """
+    resultats = resultats_du_sejour(base, sejour_id)
+    if ids_analytes:
+        resultats = [r for r in resultats if r["analyte"] in ids_analytes]
+    matrice: dict[str, dict[str, float]] = {}
+    dates: list[str] = []
+    for r in resultats:
+        if r["date_heure"] not in dates:
+            dates.append(r["date_heure"])
+        matrice.setdefault(r["analyte"], {})[r["date_heure"]] = r["valeur_num"]
+    return sorted(dates), matrice
+
+
+@dataclass
+class Variation:
+    """Dernière valeur d'un analyte et ce qui a changé depuis la précédente."""
+
+    analyte: str
+    libelle: str
+    unite: str
+    valeur: float | None
+    precedente: float | None
+    date_heure: str | None
+    alerte: str | None  # 'bas' / 'haut' / None
+
+    @property
+    def delta(self) -> float | None:
+        if self.valeur is None or self.precedente is None:
+            return None
+        return round(self.valeur - self.precedente, 2)
+
+
+def dernieres_variations(base: Base, sejour_id: str, ids_analytes: list[str]) -> list[Variation]:
+    """Pour chaque analyte demandé : dernière valeur, valeur précédente,
+    et signalement hors bornes. C'est ce qui alimente les tuiles de tête."""
+    variations = []
+    for id_analyte in ids_analytes:
+        historique = historique_analyte(base, sejour_id, id_analyte)
+        a = cat.analyte(id_analyte)
+        derniere = historique[-1] if historique else None
+        precedente = historique[-2] if len(historique) >= 2 else None
+        valeur = derniere["valeur_num"] if derniere else None
+        variations.append(
+            Variation(
+                analyte=id_analyte,
+                libelle=a.libelle,
+                unite=a.unite,
+                valeur=valeur,
+                precedente=precedente["valeur_num"] if precedente else None,
+                date_heure=derniere["date_heure"] if derniere else None,
+                alerte=a.hors_bornes(valeur),
+            )
+        )
+    return variations
+
+
+def analytes_renseignes(base: Base, sejour_id: str) -> list[str]:
+    """Analytes réellement saisis pour ce séjour, dans l'ordre du catalogue —
+    inutile de proposer une courbe pour un analyte jamais mesuré."""
+    presents = {r["analyte"] for r in resultats_du_sejour(base, sejour_id)}
+    return [i for i in cat.tous_les_ids() if i in presents]

@@ -1,6 +1,6 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.5 — 2 septembre 2026**
+**Version 1.6 — 3 septembre 2026**
 
 > **Document de référence du projet.** À renvoyer au début de chaque session de
 > travail, accompagné du code à jour. C'est la mémoire commune du projet.
@@ -447,10 +447,37 @@ phase 3 initialement prévue.
 
 ---
 
-# 6. EXPLORATIONS
+# 6. EXPLORATIONS ET ACTES
 
 Écran dédié, distinct des bilans biologiques. Il enregistre les explorations
-**avec leurs valeurs chiffrées**, pas seulement un compte rendu textuel.
+**avec leurs valeurs chiffrées**, pas seulement un compte rendu textuel, et
+depuis la v1.6 **tous les dispositifs invasifs** du patient.
+
+## 6.0.0 Dispositifs et actes (v1.6)
+
+Une seule table `dispositif` couvre tout ce qui se pose et se retire :
+intubation, sédation, trachéotomie, sonde nasogastrique (avec sa fixation en
+cm), gastrostomie, sonde urinaire, cathéter sus-pubien, cathéter veineux
+central (avec son site), PICC, cathéter artériel, voie périphérique, drains,
+DVE, épuration extra-rénale.
+
+**Rien n'est saisi deux fois et aucune durée n'est stockée.** Chaque ligne
+porte `date_pose` et `date_retrait` ; tous les compteurs se calculent :
+
+| Situation | Affichage | Convention |
+|---|---|---|
+| Dispositif en place | « Intubé J3 », « KT central J5 » | J1 = jour de la pose |
+| Dispositif retiré | « Extubé J2 », « Arrêt sédation J1 » | J0 = jour de l'événement |
+| Durée de ventilation | somme des épisodes d'intubation | calculée |
+
+C'est la même règle que les compteurs de prescription (§5.4) : le logiciel
+calcule des dates, jamais une dose.
+
+Ces compteurs alimentent automatiquement le bandeau d'état du patient, le
+tableau des lits, l'évolution du jour et le compte rendu de sortie. Ils
+donnent aussi le dénominateur des taux d'infection nosocomiale — PAVM pour
+1 000 jours de ventilation, ILC pour 1 000 jours de cathéter (§9.4), sans
+aucune saisie supplémentaire.
 
 ## 6.0.1 Table `exploration`
 
@@ -694,12 +721,12 @@ de soin.
 |---|---|---|---|
 | 1 | Le socle de variables de recherche (§9.2) est-il validé ? | Modèle de données | ouverte — tables créées, saisie non imposée |
 | 2 | Scores IGS II et SOFA : saisis systématiquement ou optionnels ? | Modèle de données | ouverte |
-| 3 | Ventilation : suivi des dates d'intubation/extubation ? | Modèle de données | ouverte — table prête |
+| 3 | Ventilation : suivi des dates d'intubation/extubation ? | Modèle de données | **résolue v1.6** — saisi dans l'écran Explorations et actes, durée calculée |
 | 4 | Infections nosocomiales : à tracer ? | Modèle de données | ouverte — table prête |
 | 5 | Mortalité : réanimation seule, ou aussi J28 ? | Modèle de données | ouverte — les deux champs existent |
 | 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** — 6-12-18-24, modifiable |
 | 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | **résolue v1.5** — fichier HTML reçu et intégré |
-| 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte |
+| 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte — bornes usuelles de l'adulte posées en v1.6 pour colorer la cinétique, **à valider par un senior** |
 | 9 | Poste du chef de service : copie lecture seule ou rien ? | Architecture | ouverte |
 | 10 | Liste des gestes chirurgicaux les plus fréquents | Interventions | ouverte — liste provisoire dans `listes.py` |
 | 11 | Qui maintient le programme en cas d'absence de l'auteur | Continuité | ouverte |
@@ -725,7 +752,7 @@ je code, tu testes et tu décides). Hors délais d'attente extérieurs.
 | **1** | Socle : base, sauvegardes, sélecteur d'utilisateur, tableau des 12 lits, création/sortie de séjour, identité | 8-10 | ✅ fait (v1.4) |
 | **2** | **Prescription** : lignes, catégories, horaires, compteurs de jours, duplication J+1, bilan hydrique des entrées, impression A4 | 18-22 | ✅ fait (v1.4) — impression en mise en page provisoire, à reprendre sur le PDF réel |
 | **3** | Évolution quotidienne générée + bouton copier | 6-8 | ◐ en cours — génération et écran faits ; ne reprend pas encore Explorations ni Bilan du jour (blocs 4/6 non commencés) |
-| **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ◐ en cours (v1.5) — saisie, stockage structuré, texte généré, courbe de cinétique et reprise dans l'évolution faits ; tableau récapitulatif par date, bornes de normalité et microbiologie non faits |
+| **4** | Bilans : import, tableau, courbes, gaz du sang, microbiologie | 12-16 | ◐ en cours (v1.6) — saisie, stockage structuré, texte généré, tableau par date, variations, bornes usuelles et courbes faits ; microbiologie non faite |
 | **5** | Motifs, régions traumatiques, antécédents + recherche ICD-10, protocoles de pré-remplissage, sortie | 12-15 | ◐ en cours — motifs, régions, antécédents (liste courte), interventions, sortie et compte rendu généré faits, écrans Admission/Sortie construits ; recherche ICD-10, interventions en UI et application effective des protocoles non faites |
 | **6** | Statistiques, constructeur de cohorte, export pseudonymisé | 8-10 | ○ à faire |
 | **7** | Robustesse, journal des modifications, finitions, documentation | 6-8 | ◐ partiel — journal et sauvegardes faits |
@@ -765,6 +792,41 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.6 — 3 septembre 2026**
+
+- **Écran « Explorations et actes »** (§6) : les explorations chiffrées
+  (DTC, ETT, TDM…) et, nouveauté, **tous les dispositifs invasifs** —
+  intubation, sédation, trachéotomie, SNG avec fixation en cm, gastrostomie,
+  sonde urinaire, KTSP, KT central avec son site, PICC, KTA, VVP, drains,
+  DVE, épuration. Les compteurs de jours sont **calculés** : « Intubé J3 »,
+  « Extubé J2 », « Arrêt sédation J1 », « KT central J5 (jugulaire interne
+  droite, 3 voies) »
+- Décision de modèle : les tables `ventilation_episode` et
+  `epuration_episode` de la v1.3 sont **supprimées** au profit de la table
+  unique `dispositif`. Deux tables auraient donné deux endroits où lire la
+  date d'intubation, donc deux vérités possibles — le même raisonnement que
+  pour le poste du chef de service (§2.3). La durée de ventilation du socle
+  de recherche se calcule désormais depuis les épisodes d'intubation
+- Ces compteurs alimentent sans ressaisie le bandeau d'état du patient, le
+  tableau des lits, l'évolution du jour et le compte rendu de sortie
+- **Vue de cinétique des bilans repensée pour le lit du malade** : panneaux
+  par organe (Infection, Rénal, Hématologie, Ionogramme), dernière valeur
+  avec sa variation depuis le prélèvement précédent, tableau analytes ×
+  dates, puis courbes. L'onglet s'ouvre désormais sur la lecture, la saisie
+  est repliée — on consulte un bilan bien plus souvent qu'on n'en saisit
+- Bornes usuelles de l'adulte ajoutées pour signaler une valeur hors norme
+  (question 8) : elles **colorent seulement**, aucune décision clinique n'en
+  dépend, et restent à valider par un senior
+- **Refonte visuelle** : thème (`.streamlit/config.toml`), feuille de style
+  commune (`rea/ui/theme.py`), tableau des lits en cartes avec métriques
+  d'occupation et pastilles d'état, bandeau d'état en tête de chaque fiche
+  patient. Code couleur constant : rouge = alerte, orange = attention,
+  bleu = valeur calculée par le logiciel, vert = stable
+- L'évolution du jour reprend maintenant les dispositifs et les explorations
+  en plus des bilans et du prescrit — l'observation est quasi complète avant
+  toute frappe
+- 93 tests (pytest, +28)
 
 **v1.5 — 2 septembre 2026**
 

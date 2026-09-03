@@ -463,3 +463,173 @@ def precisions_motif(code: str) -> tuple[str, ...]:
             if c == code:
                 return precisions
     return ()
+
+
+# --------------------------------------------------------------------------
+# Dispositifs et actes invasifs (écran « Explorations et actes »)
+# --------------------------------------------------------------------------
+# Chaque type déclare :
+#   - le libellé affiché
+#   - `sites`   : liste de sites possibles, vide si la notion n'a pas de sens
+#   - `champs`  : champs supplémentaires demandés à la pose
+#   - `en_cours`/`apres` : comment le compteur de jours se lit une fois posé
+#     puis une fois retiré (ex. « Intubé J3 » → « Extubé J2 »)
+#
+# Le compteur est calculé, jamais saisi : c'est tout l'intérêt de la table.
+TYPES_DISPOSITIF: dict[str, dict] = {
+    "intubation": {
+        "libelle": "Intubation",
+        "sites": (),
+        "champs": ("taille_sonde", "reperage_cm"),
+        "en_cours": "Intubé",
+        "apres": "Extubé",
+        "verbe_retrait": "Extubation",
+    },
+    "sedation": {
+        "libelle": "Sédation",
+        "sites": (),
+        "champs": ("molecules",),
+        "en_cours": "Sédaté",
+        "apres": "Arrêt sédation",
+        "verbe_retrait": "Arrêt de la sédation",
+    },
+    "tracheotomie": {
+        "libelle": "Trachéotomie (canule)",
+        "sites": (),
+        "champs": ("taille_sonde",),
+        "en_cours": "Canule de trachéotomie",
+        "apres": "Décanulé",
+        "verbe_retrait": "Décanulation",
+    },
+    "sng": {
+        "libelle": "Sonde nasogastrique",
+        "sites": ("Narine droite", "Narine gauche", "Bouche"),
+        "champs": ("fixation_cm",),
+        "en_cours": "SNG",
+        "apres": "SNG retirée",
+        "verbe_retrait": "Retrait",
+    },
+    "gastrostomie": {
+        "libelle": "Gastrostomie",
+        "sites": (),
+        "champs": (),
+        "en_cours": "Gastrostomie",
+        "apres": "Gastrostomie retirée",
+        "verbe_retrait": "Retrait",
+    },
+    "sonde_urinaire": {
+        "libelle": "Sonde urinaire",
+        "sites": (),
+        "champs": ("taille_sonde",),
+        "en_cours": "Sondé",
+        "apres": "Sonde urinaire retirée",
+        "verbe_retrait": "Ablation",
+    },
+    "ktsp": {
+        "libelle": "Cathéter sus-pubien (KTSP)",
+        "sites": (),
+        "champs": (),
+        "en_cours": "KTSP",
+        "apres": "KTSP retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "kt_central": {
+        "libelle": "Cathéter veineux central (KT)",
+        "sites": (
+            "Jugulaire interne droite", "Jugulaire interne gauche",
+            "Sous-clavière droite", "Sous-clavière gauche",
+            "Fémorale droite", "Fémorale gauche",
+        ),
+        "champs": ("nb_voies",),
+        "en_cours": "KT central",
+        "apres": "KT central retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "picc": {
+        "libelle": "PICC line",
+        "sites": ("Bras droit", "Bras gauche"),
+        "champs": (),
+        "en_cours": "PICC",
+        "apres": "PICC retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "kta": {
+        "libelle": "Cathéter artériel (KTA)",
+        "sites": (
+            "Radiale droite", "Radiale gauche",
+            "Fémorale droite", "Fémorale gauche",
+            "Humérale droite", "Humérale gauche",
+        ),
+        "champs": (),
+        "en_cours": "KTA",
+        "apres": "KTA retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "voie_peripherique": {
+        "libelle": "Voie veineuse périphérique",
+        "sites": ("Membre supérieur droit", "Membre supérieur gauche",
+                  "Membre inférieur droit", "Membre inférieur gauche"),
+        "champs": (),
+        "en_cours": "VVP",
+        "apres": "VVP retirée",
+        "verbe_retrait": "Ablation",
+    },
+    "drain_thoracique": {
+        "libelle": "Drain thoracique",
+        "sites": ("Droit", "Gauche", "Bilatéral"),
+        "champs": (),
+        "en_cours": "Drain thoracique",
+        "apres": "Drain thoracique retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "drain_abdominal": {
+        "libelle": "Drain abdominal",
+        "sites": (),
+        "champs": (),
+        "en_cours": "Drain abdominal",
+        "apres": "Drain abdominal retiré",
+        "verbe_retrait": "Ablation",
+    },
+    "dve": {
+        "libelle": "Dérivation ventriculaire externe",
+        "sites": ("Droite", "Gauche"),
+        "champs": (),
+        "en_cours": "DVE",
+        "apres": "DVE retirée",
+        "verbe_retrait": "Ablation",
+    },
+    "eer": {
+        "libelle": "Épuration extra-rénale (cathéter de dialyse)",
+        "sites": ("Jugulaire interne droite", "Jugulaire interne gauche",
+                  "Fémorale droite", "Fémorale gauche"),
+        "champs": ("technique",),
+        "en_cours": "EER",
+        "apres": "EER arrêtée",
+        "verbe_retrait": "Arrêt",
+    },
+}
+
+ORDRE_DISPOSITIFS = (
+    "intubation", "sedation", "tracheotomie", "sng", "gastrostomie",
+    "kt_central", "picc", "kta", "voie_peripherique",
+    "sonde_urinaire", "ktsp", "drain_thoracique", "drain_abdominal", "dve", "eer",
+)
+
+# Champs supplémentaires : libellé du formulaire, puis préfixe et unité pour
+# l'affichage compact (« repère 22 cm », « 3 voies »). Même logique que les
+# voies de prescription : on ne demande que ce qui a un sens.
+CHAMPS_DISPOSITIF: dict[str, tuple[str, str, str]] = {
+    #   clé            libellé du formulaire          préfixe     unité
+    "taille_sonde": ("Taille / calibre", "n°", ""),
+    "reperage_cm": ("Repère à l'arcade dentaire", "repère", "cm"),
+    "fixation_cm": ("Fixation", "fixée à", "cm"),
+    "molecules": ("Molécules", "", ""),
+    "nb_voies": ("Nombre de voies", "", "voies"),
+    "technique": ("Technique", "", ""),
+}
+
+
+def libelle_dispositif(code: str | None) -> str:
+    if not code:
+        return ""
+    return TYPES_DISPOSITIF.get(code, {}).get("libelle", code)

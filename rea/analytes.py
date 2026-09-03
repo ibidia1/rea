@@ -21,6 +21,22 @@ class Analyte:
     libelle: str
     unite: str
     calcule: bool = False  # dérivé d'autres valeurs, jamais saisi directement
+    # Bornes usuelles de l'adulte, servant UNIQUEMENT à colorer une valeur
+    # hors norme dans la vue de cinétique. Question ouverte 8 : à valider par
+    # un senior avant de s'y fier. Aucune décision clinique n'en dépend.
+    borne_basse: float | None = None
+    borne_haute: float | None = None
+
+    def hors_bornes(self, valeur: float | None) -> str | None:
+        """'bas', 'haut', ou None. None aussi quand aucune borne n'est
+        définie — on ne signale jamais ce qu'on ne sait pas juger."""
+        if valeur is None:
+            return None
+        if self.borne_basse is not None and valeur < self.borne_basse:
+            return "bas"
+        if self.borne_haute is not None and valeur > self.borne_haute:
+            return "haut"
+        return None
 
 
 @dataclass(frozen=True)
@@ -32,36 +48,36 @@ class GroupeAnalytes:
 
 GROUPES: tuple[GroupeAnalytes, ...] = (
     GroupeAnalytes("nfs", "NFS", (
-        Analyte("hb", "Hb", "g/dL"),
-        Analyte("hte", "Hématocrite", "%"),
-        Analyte("plq", "PLQ", "10³/µL"),
-        Analyte("gb", "GB", "10³/µL"),
+        Analyte("hb", "Hb", "g/dL", borne_basse=12, borne_haute=17),
+        Analyte("hte", "Hématocrite", "%", borne_basse=36, borne_haute=50),
+        Analyte("plq", "PLQ", "10³/µL", borne_basse=150, borne_haute=400),
+        Analyte("gb", "GB", "10³/µL", borne_basse=4, borne_haute=10),
     )),
     GroupeAnalytes("hemostase", "Hémostase", (
-        Analyte("tp", "TP", "%"),
-        Analyte("inr", "INR", ""),
-        Analyte("tca", "TCA", "s"),
+        Analyte("tp", "TP", "%", borne_basse=70, borne_haute=100),
+        Analyte("inr", "INR", "", borne_basse=0.8, borne_haute=1.2),
+        Analyte("tca", "TCA", "s", borne_basse=25, borne_haute=38),
     )),
     GroupeAnalytes("ionogramme", "Ionogramme", (
-        Analyte("na", "Na⁺", "mmol/L"),
-        Analyte("k", "K⁺", "mmol/L"),
-        Analyte("cl", "Cl⁻", "mmol/L"),
-        Analyte("ca", "Ca²⁺", "mmol/L"),
+        Analyte("na", "Na⁺", "mmol/L", borne_basse=135, borne_haute=145),
+        Analyte("k", "K⁺", "mmol/L", borne_basse=3.5, borne_haute=5.0),
+        Analyte("cl", "Cl⁻", "mmol/L", borne_basse=98, borne_haute=107),
+        Analyte("ca", "Ca²⁺", "mmol/L", borne_basse=2.2, borne_haute=2.6),
     )),
     GroupeAnalytes("renale", "Fonction rénale", (
-        Analyte("creat", "Créatinine", "µmol/L"),
-        Analyte("uree", "Urée", "mmol/L"),
+        Analyte("creat", "Créatinine", "µmol/L", borne_basse=60, borne_haute=110),
+        Analyte("uree", "Urée", "mmol/L", borne_basse=2.5, borne_haute=7.5),
     )),
     GroupeAnalytes("inflammation", "Inflammation", (
-        Analyte("crp", "CRP", "mg/L"),
+        Analyte("crp", "CRP", "mg/L", borne_haute=5),
     )),
     GroupeAnalytes("hepatique", "Bilan hépatique", (
-        Analyte("asat", "ASAT", "UI/L"),
-        Analyte("alat", "ALAT", "UI/L"),
-        Analyte("ggt", "GGT", "UI/L"),
-        Analyte("pal", "PAL", "UI/L"),
-        Analyte("bili", "Bili totale", "µmol/L"),
-        Analyte("bili_d", "Bili directe", "µmol/L"),
+        Analyte("asat", "ASAT", "UI/L", borne_haute=40),
+        Analyte("alat", "ALAT", "UI/L", borne_haute=40),
+        Analyte("ggt", "GGT", "UI/L", borne_haute=55),
+        Analyte("pal", "PAL", "UI/L", borne_haute=130),
+        Analyte("bili", "Bili totale", "µmol/L", borne_haute=21),
+        Analyte("bili_d", "Bili directe", "µmol/L", borne_haute=5),
         Analyte("bili_i", "Bili indirecte", "µmol/L", calcule=True),
     )),
     GroupeAnalytes("lipidique", "Bilan lipidique", (
