@@ -1,8 +1,8 @@
 """Écran 6 — Évolution quotidienne (SPEC §8).
 
 Seuls les quatre plans et la conduite sont saisis à la main ; le reste est
-généré. Bilan du jour repris depuis l'écran Bilans (bloc 4, SPEC §7).
-Explorations reste vide tant que cet écran n'est pas construit (SPEC §6).
+généré : dispositifs en place avec leur compteur de jours, explorations du
+jour (SPEC §6), bilan du jour (SPEC §7) et prescrit actif.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from ..db import Base
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from . import bilans as bilans_service
+from . import dispositifs as dispositifs_service
+from . import explorations as explorations_service
 from . import prescriptions as prescriptions_service
 from . import sejours as sejours_service
 
@@ -56,14 +58,22 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
     jour_hosp = jour_hospitalisation(sejour["date_admission"], date_jour)
 
     lignes = [f"{format_date_fr(date_jour)}, J{jour_hosp} d'hospitalisation :"]
+
+    # Dispositifs en place, avec leur compteur : « Intubé J3 · SNG J3 ».
+    # C'est la première chose qu'on écrit dans une observation de réanimation.
+    dispositifs_texte = dispositifs_service.resume(base, sejour_id, date_jour)
+    if dispositifs_texte:
+        lignes.append(dispositifs_texte)
+
     for cle in PLANS:
         lignes.append(f"{LIBELLES_PLANS[cle]} :")
         if entree.get(cle):
             lignes.append(entree[cle])
 
-    # Explorations : section prévue, non alimentée tant que cet écran n'est
-    # pas construit.
     lignes.append("Explorations :")
+    explorations_texte = explorations_service.texte_du_jour(base, sejour_id, date_jour)
+    if explorations_texte:
+        lignes.append(explorations_texte)
 
     lignes.append("Bilan du jour :")
     bilan_texte = bilans_service.texte_genere(base, sejour_id, date_jour)

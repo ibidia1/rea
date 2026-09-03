@@ -6,12 +6,15 @@ Voir **[SPEC.md](SPEC.md)** — c'est le document de référence du projet,
 ## État actuel
 
 **v1 utilisable** : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
-impression), Bilans (saisie, courbes de cinétique, texte généré), Évolution
-(reprend le bilan du jour), Sortie. Voir le journal des versions dans
-SPEC.md pour le détail exact de ce qui est fait et ce qui ne l'est pas — en
-particulier la mise en page de la pancarte imprimée est **provisoire** (le
-PDF réel du prescrit n'a pas encore été fourni), et les écrans Explorations
-et Statistiques ne sont pas commencés.
+impression), Explorations et actes (dispositifs invasifs avec compteurs de
+jours calculés), Bilans (saisie, cinétique par panneau, texte généré),
+Évolution (reprend dispositifs, explorations, bilans et prescrit), Sortie.
+
+Voir le journal des versions dans SPEC.md pour le détail exact de ce qui est
+fait et ce qui ne l'est pas — en particulier la mise en page de la pancarte
+imprimée est **provisoire** (le PDF réel du prescrit n'a pas encore été
+fourni), la microbiologie et les statistiques ne sont pas commencées, et les
+bornes de normalité des bilans restent à valider par un senior.
 
 ## Installation (poste de développement)
 

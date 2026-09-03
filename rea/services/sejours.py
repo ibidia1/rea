@@ -358,16 +358,17 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
         if principal:
             lignes.append(f"Motif : {listes.libelle_motif(principal['code'])}")
 
-    ventilations = base.requete(
-        "SELECT * FROM ventilation_episode WHERE sejour_id = ? AND supprime = 0 ORDER BY date_intubation",
-        (sejour_id,),
-    )
-    if ventilations:
-        for v in ventilations:
-            fin = format_date_fr(v["date_extubation"]) if v["date_extubation"] else "en cours"
-            lignes.append(
-                f"Ventilation du {format_date_fr(v['date_intubation'])} au {fin}"
-            )
+    from . import dispositifs as dispositifs_service
+
+    intubations = [
+        d for d in dispositifs_service.du_sejour(base, sejour_id) if d["type"] == "intubation"
+    ]
+    for v in reversed(intubations):
+        fin = format_date_fr(v["date_retrait"]) if v["date_retrait"] else "en cours"
+        lignes.append(f"Ventilation du {format_date_fr(v['date_pose'])} au {fin}")
+    if intubations:
+        total = dispositifs_service.duree_ventilation_jours(base, sejour_id)
+        lignes.append(f"Durée totale de ventilation : {total} jours")
 
     if sejour["complication_statut"] == "presente" and sejour["complication_texte"]:
         lignes.append(f"Compliqué de : {sejour['complication_texte']}")

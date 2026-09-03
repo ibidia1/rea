@@ -420,32 +420,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_evolution_unique ON evolution_jour(sejour_
 -- Tables créées mais aucune saisie imposée tant que le socle n'est pas validé
 -- (questions ouvertes 1 à 5).
 -- -------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS ventilation_episode (
-    id               TEXT PRIMARY KEY,
-    sejour_id        TEXT NOT NULL REFERENCES sejour(id),
-    date_intubation  TEXT NOT NULL,
-    date_extubation  TEXT,
-    mode_initial     TEXT,
-    tracheotomie     INTEGER NOT NULL DEFAULT 0,
-    cree_le          TEXT NOT NULL,
-    cree_par         TEXT REFERENCES utilisateur(id),
-    modifie_le       TEXT,
-    modifie_par      TEXT REFERENCES utilisateur(id),
-    supprime         INTEGER NOT NULL DEFAULT 0
+-- Dispositifs et actes invasifs — écran « Explorations et actes ».
+-- UNE SEULE table pour tout ce qui se pose et se retire : intubation,
+-- sédation, sonde nasogastrique, cathéters, drains, épuration… Les tables
+-- séparées `ventilation_episode` et `epuration_episode` de la v1.3 sont
+-- supprimées : elles auraient donné deux endroits où lire la date
+-- d'intubation, donc deux vérités possibles. La durée de ventilation et la
+-- durée d'épuration se calculent maintenant depuis cette table (SPEC §9.2).
+--
+-- Aucune durée n'est stockée : les compteurs de jours (« Intubé J3 »,
+-- « Extubé J2 ») se calculent à l'affichage depuis date_pose / date_retrait.
+CREATE TABLE IF NOT EXISTS dispositif (
+    id            TEXT PRIMARY KEY,
+    sejour_id     TEXT NOT NULL REFERENCES sejour(id),
+    type          TEXT NOT NULL,   -- voir listes.TYPES_DISPOSITIF
+    date_pose     TEXT NOT NULL,
+    date_retrait  TEXT,            -- NULL = toujours en place / en cours
+    site          TEXT,            -- jugulaire droite, radiale gauche, narine…
+    details       TEXT,            -- JSON : fixation_cm, taille, molécules…
+    motif_retrait TEXT,
+    commentaire   TEXT,
+    cree_le       TEXT NOT NULL,
+    cree_par      TEXT REFERENCES utilisateur(id),
+    modifie_le    TEXT,
+    modifie_par   TEXT REFERENCES utilisateur(id),
+    supprime      INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_ventilation_sejour ON ventilation_episode(sejour_id);
-
-CREATE TABLE IF NOT EXISTS epuration_episode (
-    id          TEXT PRIMARY KEY,
-    sejour_id   TEXT NOT NULL REFERENCES sejour(id),
-    date_debut  TEXT NOT NULL,
-    date_fin    TEXT,
-    technique   TEXT,           -- hemodialyse / hemofiltration / autre
-    cree_le     TEXT NOT NULL,
-    cree_par    TEXT REFERENCES utilisateur(id),
-    supprime    INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_epuration_sejour ON epuration_episode(sejour_id);
+CREATE INDEX IF NOT EXISTS idx_dispositif_sejour ON dispositif(sejour_id, supprime);
+CREATE INDEX IF NOT EXISTS idx_dispositif_type ON dispositif(sejour_id, type, date_pose);
 
 CREATE TABLE IF NOT EXISTS infection_nosocomiale (
     id               TEXT PRIMARY KEY,
