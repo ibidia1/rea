@@ -21,6 +21,16 @@ class Analyte:
     libelle: str
     unite: str
     calcule: bool = False  # dérivé d'autres valeurs, jamais saisi directement
+    # Codes standards (feuille de route §5) : ils ne coûtent rien à stocker et
+    # valent tout à l'analyse. Le LOINC identifie l'examen, l'UCUM normalise
+    # l'unité — c'est lui qui empêche de confondre µmol/L et mg/L.
+    #
+    # ⚠️ Ces correspondances sont une PROPOSITION, pas une source validée
+    # (question ouverte B de la feuille de route : « source des fichiers CIM-10,
+    # LOINC et ATC ? »). Tant que `LOINC_VALIDE` est faux, l'export doit les
+    # marquer comme provisoires plutôt que de les présenter comme sûrs.
+    code_loinc: str | None = None
+    unite_ucum: str | None = None
     # Bornes usuelles de l'adulte, servant UNIQUEMENT à colorer une valeur
     # hors norme dans la vue de cinétique. Question ouverte 8 : à valider par
     # un senior avant de s'y fier. Aucune décision clinique n'en dépend.
@@ -48,47 +58,53 @@ class GroupeAnalytes:
 
 GROUPES: tuple[GroupeAnalytes, ...] = (
     GroupeAnalytes("nfs", "NFS", (
-        Analyte("hb", "Hb", "g/dL", borne_basse=12, borne_haute=17),
-        Analyte("hte", "Hématocrite", "%", borne_basse=36, borne_haute=50),
-        Analyte("plq", "PLQ", "10³/µL", borne_basse=150, borne_haute=400),
-        Analyte("gb", "GB", "10³/µL", borne_basse=4, borne_haute=10),
+        Analyte("hb", "Hb", "g/dL", borne_basse=12, borne_haute=17, code_loinc="718-7", unite_ucum="g/dL"),
+        Analyte("hte", "Hématocrite", "%", borne_basse=36, borne_haute=50, code_loinc="4544-3", unite_ucum="%"),
+        Analyte("plq", "PLQ", "10³/µL", borne_basse=150, borne_haute=400, code_loinc="777-3", unite_ucum="10*3/uL"),
+        Analyte("gb", "GB", "10³/µL", borne_basse=4, borne_haute=10, code_loinc="6690-2", unite_ucum="10*3/uL"),
     )),
     GroupeAnalytes("hemostase", "Hémostase", (
-        Analyte("tp", "TP", "%", borne_basse=70, borne_haute=100),
-        Analyte("inr", "INR", "", borne_basse=0.8, borne_haute=1.2),
-        Analyte("tca", "TCA", "s", borne_basse=25, borne_haute=38),
+        Analyte("tp", "TP", "%", borne_basse=70, borne_haute=100, code_loinc="5894-1", unite_ucum="%"),
+        Analyte("inr", "INR", "", borne_basse=0.8, borne_haute=1.2, code_loinc="6301-6", unite_ucum="1"),
+        Analyte("tca", "TCA", "s", borne_basse=25, borne_haute=38, code_loinc="14979-9", unite_ucum="s"),
     )),
     GroupeAnalytes("ionogramme", "Ionogramme", (
-        Analyte("na", "Na⁺", "mmol/L", borne_basse=135, borne_haute=145),
-        Analyte("k", "K⁺", "mmol/L", borne_basse=3.5, borne_haute=5.0),
-        Analyte("cl", "Cl⁻", "mmol/L", borne_basse=98, borne_haute=107),
-        Analyte("ca", "Ca²⁺", "mmol/L", borne_basse=2.2, borne_haute=2.6),
+        Analyte("na", "Na⁺", "mmol/L", borne_basse=135, borne_haute=145, code_loinc="2951-2", unite_ucum="mmol/L"),
+        Analyte("k", "K⁺", "mmol/L", borne_basse=3.5, borne_haute=5.0, code_loinc="2823-3", unite_ucum="mmol/L"),
+        Analyte("cl", "Cl⁻", "mmol/L", borne_basse=98, borne_haute=107, code_loinc="2075-0", unite_ucum="mmol/L"),
+        Analyte("ca", "Ca²⁺", "mmol/L", borne_basse=2.2, borne_haute=2.6, code_loinc="17861-6", unite_ucum="mmol/L"),
     )),
     GroupeAnalytes("renale", "Fonction rénale", (
-        Analyte("creat", "Créatinine", "µmol/L", borne_basse=60, borne_haute=110),
-        Analyte("uree", "Urée", "mmol/L", borne_basse=2.5, borne_haute=7.5),
+        Analyte("creat", "Créatinine", "µmol/L", borne_basse=60, borne_haute=110, code_loinc="14682-9", unite_ucum="umol/L"),
+        Analyte("uree", "Urée", "mmol/L", borne_basse=2.5, borne_haute=7.5, code_loinc="22664-7", unite_ucum="mmol/L"),
     )),
     GroupeAnalytes("inflammation", "Inflammation", (
-        Analyte("crp", "CRP", "mg/L", borne_haute=5),
+        Analyte("crp", "CRP", "mg/L", borne_haute=5, code_loinc="1988-5", unite_ucum="mg/L"),
     )),
     GroupeAnalytes("hepatique", "Bilan hépatique", (
-        Analyte("asat", "ASAT", "UI/L", borne_haute=40),
-        Analyte("alat", "ALAT", "UI/L", borne_haute=40),
-        Analyte("ggt", "GGT", "UI/L", borne_haute=55),
-        Analyte("pal", "PAL", "UI/L", borne_haute=130),
-        Analyte("bili", "Bili totale", "µmol/L", borne_haute=21),
-        Analyte("bili_d", "Bili directe", "µmol/L", borne_haute=5),
-        Analyte("bili_i", "Bili indirecte", "µmol/L", calcule=True),
+        Analyte("asat", "ASAT", "UI/L", borne_haute=40, code_loinc="1920-8", unite_ucum="U/L"),
+        Analyte("alat", "ALAT", "UI/L", borne_haute=40, code_loinc="1742-6", unite_ucum="U/L"),
+        Analyte("ggt", "GGT", "UI/L", borne_haute=55, code_loinc="2324-2", unite_ucum="U/L"),
+        Analyte("pal", "PAL", "UI/L", borne_haute=130, code_loinc="6768-6", unite_ucum="U/L"),
+        Analyte("bili", "Bili totale", "µmol/L", borne_haute=21, code_loinc="1975-2", unite_ucum="umol/L"),
+        Analyte("bili_d", "Bili directe", "µmol/L", borne_haute=5, code_loinc="1968-7", unite_ucum="umol/L"),
+        Analyte("bili_i", "Bili indirecte", "µmol/L", calcule=True, code_loinc="1971-1", unite_ucum="umol/L"),
     )),
     GroupeAnalytes("lipidique", "Bilan lipidique", (
         # Stockées en mmol/L (unité canonique) — la saisie en g/L n'est
         # qu'une bascule d'affichage, convertie avant enregistrement.
-        Analyte("ct", "CT", "mmol/L"),
-        Analyte("hdl", "HDL-c", "mmol/L"),
-        Analyte("ldl", "LDL-c", "mmol/L"),
-        Analyte("tg", "TG", "mmol/L"),
+        Analyte("ct", "CT", "mmol/L", code_loinc="2093-3", unite_ucum="mmol/L"),
+        Analyte("hdl", "HDL-c", "mmol/L", code_loinc="2085-9", unite_ucum="mmol/L"),
+        Analyte("ldl", "LDL-c", "mmol/L", code_loinc="2089-1", unite_ucum="mmol/L"),
+        Analyte("tg", "TG", "mmol/L", code_loinc="2571-8", unite_ucum="mmol/L"),
     )),
 )
+
+# Les correspondances LOINC ci-dessus n'ont pas encore été vérifiées contre le
+# référentiel officiel. Mettre à True le jour où un senior ou une source
+# officielle les a relues, ligne à ligne.
+LOINC_VALIDE = False
+VERSION_CATALOGUE = "2026-09-03-provisoire"
 
 # Facteurs de conversion mmol/L -> g/L (identiques au fichier HTML fourni).
 FACTEURS_LIPIDES: dict[str, float] = {"ct": 0.387, "hdl": 0.387, "ldl": 0.387, "tg": 0.886}

@@ -15,6 +15,7 @@ import streamlit as st
 
 from rea import analytes as cat, config, listes
 from rea.db import obtenir_base
+from rea.domaine import coherence
 from rea.domaine import prescription as dom
 from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
 from rea.services import bilans as bilans_service
@@ -808,6 +809,11 @@ def onglet_bilans(sejour: dict) -> None:
                         a.libelle, min_value=0.0, step=0.01, value=0.0, key=f"bilan_{a.id}",
                     )
 
+            forcer = st.checkbox(
+                "Forcer l'enregistrement malgré les avertissements",
+                help="La valeur est enregistrée et marquée comme forcée, pour "
+                     "qu'un relecteur puisse la retrouver.",
+            )
             if st.form_submit_button("Enregistrer les bilans"):
                 valeurs_non_nulles = {k: (v or None) for k, v in valeurs.items()}
                 for id_lipide, v in lipides_saisis.items():
@@ -816,8 +822,29 @@ def onglet_bilans(sejour: dict) -> None:
                     valeurs_non_nulles[id_lipide] = (
                         v if unite_lipides == "mmol/L" else bilans_service.gl_vers_mmol(id_lipide, v)
                     )
+
+                # Bloc 4 : un avertissement n'est jamais un blocage, mais on ne
+                # laisse pas passer une kaliémie à 45 sans le dire.
+                avertissements = coherence.verifier_bilan(
+                    valeurs_non_nulles
+                ) + coherence.verifier_gaz_du_sang({
+                    "ph": ph or None, "pao2": pao2 or None, "paco2": paco2 or None,
+                    "hco3": hco3 or None, "lactate": lactate or None,
+                    "fio2": fio2 or None, "pep": pep or None, "fr": fr or None,
+                    "spo2": spo2 or None,
+                })
+                if avertissements and not forcer:
+                    for a in avertissements:
+                        st.warning(a.message)
+                    st.info(
+                        "Corrigez la valeur, ou cochez « Forcer l'enregistrement » "
+                        "puis validez à nouveau."
+                    )
+                    st.stop()
+
                 bilans_service.enregistrer_resultats(
-                    base, sejour["id"], date_heure, valeurs_non_nulles, utilisateur_id=utilisateur_id
+                    base, sejour["id"], date_heure, valeurs_non_nulles,
+                    utilisateur_id=utilisateur_id, saisie_forcee=forcer,
                 )
                 if mode_vent != "—" or any([fio2, pep, fr, spo2, ph, pao2, paco2, hco3, lactate]):
                     bilans_service.enregistrer_gaz_du_sang(

@@ -38,6 +38,7 @@ def ajouter_ligne(
     additifs: str | None = None,
     sous_type: str | None = None,
     duree_prevue_jours: int | None = None,
+    code_atc: str | None = None,
     protocole_code: str | None = None,
     protocole_version: str | None = None,
     utilisateur_id: str | None = None,
@@ -61,6 +62,9 @@ def ajouter_ligne(
             "additifs": additifs,
             "date_debut": date_debut,
             "duree_prevue_jours": duree_prevue_jours,
+            # Posé même vide : sans lui, la consommation en DDD du bloc 14
+            # demanderait de recoder des milliers de lignes (§5).
+            "code_atc": code_atc,
             "statut": "active",
             "protocole_code": protocole_code,
             "protocole_version": protocole_version,

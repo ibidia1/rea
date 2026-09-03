@@ -63,6 +63,7 @@ def enregistrer_resultats(
     valeurs: dict[str, float | None],
     *,
     utilisateur_id: str | None = None,
+    saisie_forcee: bool = False,
 ) -> list[str]:
     """`valeurs` : id d'analyte (voir `rea.analytes`) -> nombre ou None.
     Les analytes calculés (`bili_i`) sont dérivés ici, pas attendus en
@@ -85,7 +86,13 @@ def enregistrer_resultats(
                     "analyte": id_analyte,
                     "valeur_num": float(valeur),
                     "unite": a.unite,
+                    # Codes standards recopiés depuis le catalogue : c'est ce
+                    # qui rend l'export exploitable sans table de
+                    # correspondance a posteriori (feuille de route §5).
+                    "code_loinc": a.code_loinc,
+                    "unite_ucum": a.unite_ucum,
                     "source": "saisie",
+                    "saisie_forcee": int(saisie_forcee),
                 },
                 utilisateur_id=utilisateur_id,
             )
