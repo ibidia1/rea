@@ -428,6 +428,28 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
 # Fiche patient — Identité, Prescrit, Évolution, Sortie
 # --------------------------------------------------------------------------
 
+def _ligne_poids(sejour: dict) -> str:
+    """Poids réel et poids idéal côte à côte : le réel entre dans la
+    clairance, l'idéal sert de référence."""
+    if not sejour["poids_kg"]:
+        return (
+            "<span style='color:#B4442E'>Poids non renseigné — "
+            "clairance incalculable</span>"
+        )
+    texte = f"Poids {_format_valeur(sejour['poids_kg'])} kg"
+    if sejour["taille_cm"]:
+        texte += f" · {_format_valeur(sejour['taille_cm'])} cm"
+    ideal = calculs.poids_ideal_devine(
+        taille_cm=sejour["taille_cm"], sexe=sejour["sexe"]
+    )
+    if ideal.disponible:
+        texte += (
+            f" · <span style='color:#5B6470'>poids idéal "
+            f"{_format_valeur(ideal.valeur)} kg</span>"
+        )
+    return texte
+
+
 def onglet_identite(sejour: dict) -> None:
     age = age_ans(sejour["date_naissance"])
     c_identite, c_motif, c_antecedents = st.columns(3)
@@ -441,9 +463,7 @@ def onglet_identite(sejour: dict) -> None:
                 f"{age if age is not None else '?'} ans · {listes.libelle(listes.SEXES, sejour['sexe'])}",
                 f"Lit {sejour['lit_admission']} · admis le {format_date_fr(sejour['date_admission'][:10])}",
                 f"Provenance : {listes.libelle(listes.PROVENANCES, sejour['provenance_type'], 'non renseignée')}",
-                (f"Poids {_format_valeur(sejour['poids_kg'])} kg"
-                 if sejour["poids_kg"] else
-                 "<span style='color:#B4442E'>Poids non renseigné — clairance incalculable</span>"),
+                _ligne_poids(sejour),
             ],
             theme.BLEU,
         )
@@ -1003,7 +1023,7 @@ def saisie_bilan(sejour: dict) -> None:
     derivees = [
         v for v in calculs.toutes_les_valeurs(
             resultats=valeurs, gaz=gaz, poids_kg=sejour["poids_kg"],
-            age_ans=age, sexe=sejour["sexe"],
+            taille_cm=sejour["taille_cm"], age_ans=age, sexe=sejour["sexe"],
         )
         if v.disponible
     ]

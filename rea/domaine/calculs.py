@@ -77,6 +77,37 @@ def clairance_cockcroft_gault(
 
 
 # --------------------------------------------------------------------------
+# Poids idéal théorique
+# --------------------------------------------------------------------------
+
+def poids_ideal_devine(*, taille_cm: float | None, sexe: str | None) -> ValeurCalculee:
+    """Formule de Devine, adaptée aux centimètres :
+
+        Homme : 50   + 0,91 × (taille − 152,4)
+        Femme : 45,5 + 0,91 × (taille − 152,4)
+
+    Le poids idéal ne remplace jamais le poids réel : il sert de référence
+    (volume courant en ventilation protectrice, par exemple). Les deux sont
+    conservés côte à côte, le réel étant celui qui entre dans la clairance.
+    """
+    valeur = None
+    # En dessous d'environ 1,20 m, la formule sort de son domaine de validité
+    # et rendrait un poids absurde : on préfère ne rien afficher.
+    if taille_cm and taille_cm >= 120 and sexe in ("M", "F"):
+        base_poids = 50.0 if sexe == "M" else 45.5
+        valeur = round(base_poids + 0.91 * (taille_cm - 152.4), 1)
+    return ValeurCalculee(
+        cle="poids_ideal",
+        libelle="Poids idéal (Devine)",
+        valeur=valeur,
+        unite="kg",
+        formule="50 (H) ou 45,5 (F) + 0,91 × (taille − 152,4)",
+        reference="Devine BJ. Drug Intell Clin Pharm 1974;8:650-5",
+        commentaire="Référence théorique — ne remplace pas le poids réel.",
+    )
+
+
+# --------------------------------------------------------------------------
 # Valeurs corrigées — « si disponibles », jamais imposées
 # --------------------------------------------------------------------------
 
@@ -165,6 +196,7 @@ def toutes_les_valeurs(
     resultats: dict[str, float | None],
     gaz: dict[str, float | None] | None = None,
     poids_kg: float | None = None,
+    taille_cm: float | None = None,
     age_ans: int | None = None,
     sexe: str | None = None,
 ) -> list[ValeurCalculee]:
@@ -175,6 +207,7 @@ def toutes_les_valeurs(
     """
     gaz = gaz or {}
     return [
+        poids_ideal_devine(taille_cm=taille_cm, sexe=sexe),
         clairance_cockcroft_gault(
             creatinine_umol_l=resultats.get("creat"),
             poids_kg=poids_kg, age_ans=age_ans, sexe=sexe,
