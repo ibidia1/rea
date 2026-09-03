@@ -16,7 +16,7 @@ import streamlit as st
 from rea import analytes as cat, config, listes
 from rea.db import obtenir_base
 from rea.domaine import prescription as dom
-from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation
+from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
 from rea.services import bilans as bilans_service
 from rea.services import dispositifs as dispositifs_service
 from rea.services import evolution as evolution_service
@@ -76,61 +76,150 @@ def _motif_court(sejour_id: str, traumatique: bool | None) -> str:
 
 
 def ecran_lits() -> None:
-    st.title("Tableau des lits")
     etat = lits_service.etat_des_lits(base)
     occupes = [l for l in etat if l["occupe"]]
 
+    resumes = {
+        l["sejour_id"]: dispositifs_service.etats(base, l["sejour_id"]) for l in occupes
+    }
     intubes = sum(
-        1 for l in occupes
-        if dispositifs_service.dernier_du_type(base, l["sejour_id"], "intubation")
-        and not dispositifs_service.dernier_du_type(base, l["sejour_id"], "intubation")["date_retrait"]
+        1 for e in resumes.values()
+        if any(d.en_place and d.type == "intubation" for d in e)
     )
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Lits occupés", f"{len(occupes)} / {config.NB_LITS}")
-    c2.metric("Lits libres", config.NB_LITS - len(occupes))
-    c3.metric("Taux d'occupation", f"{round(100 * len(occupes) / config.NB_LITS)} %")
-    c4.metric("Patients intubés", intubes)
-    st.divider()
+    sedates = sum(
+        1 for e in resumes.values()
+        if any(d.en_place and d.type == "sedation" for d in e)
+    )
 
-    for chambre in (1, 2, 3):
-        st.markdown(f"##### Chambre {chambre}")
-        colonnes = st.columns(config.LITS_PAR_CHAMBRE)
-        for i, lit_info in enumerate(l for l in etat if l["chambre"] == chambre):
+    st.markdown("### Tableau des lits")
+    c1, c2, c3, c4, c5, _vide = st.columns([1, 1, 1, 1, 1, 3])
+    c1.metric("Occupés", f"{len(occupes)}/{config.NB_LITS}")
+    c2.metric("Libres", config.NB_LITS - len(occupes))
+    c3.metric("Occupation", f"{round(100 * len(occupes) / config.NB_LITS)} %")
+    c4.metric("Intubés", intubes)
+    c5.metric("Sédatés", sedates)
+
+    # Six colonnes : les douze lits tiennent en deux rangées, sans défilement.
+    for rangee in (range(1, 7), range(7, config.NB_LITS + 1)):
+        colonnes = st.columns(6)
+        for i, numero in enumerate(rangee):
+            lit_info = next(l for l in etat if l["lit"] == numero)
             with colonnes[i]:
                 with st.container(border=True):
-                    if lit_info["occupe"]:
-                        sejour_id = lit_info["sejour_id"]
-                        allergies = sejours_service.allergies_du_patient(base, lit_info["patient_id"])
-                        st.markdown(
-                            f"**Lit {lit_info['lit']} · {lit_info['nom_affichage']}**<br>"
-                            f"<span style='color:{theme.GRIS};font-size:.85rem'>"
-                            f"{_motif_court(sejour_id, lit_info['traumatique'])}</span>",
-                            unsafe_allow_html=True,
-                        )
-                        pastilles = [(f"J{lit_info['jour_hospitalisation']}", "info")]
-                        if allergies:
-                            pastilles.append(("Allergie", "alerte"))
-                        for e in dispositifs_service.etats(base, sejour_id):
-                            if e.en_place and e.type in ("intubation", "sedation", "eer"):
-                                pastilles.append((f"{e.texte.split(' (')[0]}", "attention"))
-                        theme.chips(pastilles)
-                        if st.button("Ouvrir", key=f"lit_{lit_info['lit']}", use_container_width=True):
-                            st.session_state["sejour_id"] = sejour_id
-                            st.rerun()
-                    else:
-                        st.markdown(
-                            f"**Lit {lit_info['lit']}**<br>"
-                            f"<span style='color:{theme.VERT};font-size:.85rem'>Libre</span>",
-                            unsafe_allow_html=True,
-                        )
-                        theme.chips([("Disponible", "ok")])
-                        if st.button("Admettre", key=f"lit_{lit_info['lit']}", use_container_width=True):
-                            st.session_state["lit_admission_choisi"] = lit_info["lit"]
-                            st.session_state["mode"] = "nouvelle_admission"
-                            st.rerun()
+                    _carte_lit(lit_info, resumes)
 
     if st.session_state.get("mode") == "nouvelle_admission":
         ecran_nouvelle_admission(st.session_state.get("lit_admission_choisi"))
+        return
+
+    _tableau_de_bord(occupes, resumes)
+
+
+def _tableau_de_bord(occupes: list[dict], resumes: dict) -> None:
+    """Ce qui demande une décision aujourd'hui, calculé depuis ce qui est
+    déjà saisi : rien à ressaisir, rien à cocher."""
+    aujourdhui = _aujourdhui()
+    demain = str(lendemain(aujourdhui))
+
+    echeances: list[str] = []
+    dispositifs_anciens: list[str] = []
+    a_preparer: list[str] = []
+
+    for lit in occupes:
+        nom = lit["nom_affichage"]
+        pancarte = prescriptions_service.pancarte_du_jour(base, lit["sejour_id"], aujourdhui)
+        for ligne in pancarte["lignes"]:
+            if ligne["statut"] != "active":
+                continue
+            etiquette = dom.etiquette_jour(ligne, aujourdhui)
+            if etiquette.dernier_jour:
+                echeances.append(
+                    f"<b>Lit {lit['lit']} · {nom}</b> — {ligne['produit']} "
+                    f'<span class="rea-fin">dernier jour ({etiquette.texte})</span>'
+                )
+            elif etiquette.echue:
+                echeances.append(
+                    f"<b>Lit {lit['lit']} · {nom}</b> — {ligne['produit']} "
+                    f"au-delà de la durée prévue ({etiquette.texte})"
+                )
+
+        for e in resumes.get(lit["sejour_id"], []):
+            if e.en_place and e.jour >= 7 and e.type in (
+                "kt_central", "kta", "sonde_urinaire", "picc", "ktsp", "intubation"
+            ):
+                dispositifs_anciens.append(
+                    f"<b>Lit {lit['lit']} · {nom}</b> — {e.texte}"
+                )
+
+        journee = base.une_ligne(
+            "SELECT preparee_le FROM journee WHERE sejour_id = ? AND date_jour = ? "
+            "AND supprime = 0",
+            (lit["sejour_id"], demain),
+        )
+        if not journee or not journee["preparee_le"]:
+            a_preparer.append(f"Lit {lit['lit']} · {nom}")
+
+    if not occupes:
+        return
+
+    g, m, d = st.columns(3)
+    with g:
+        theme.bloc(
+            "Antibiothérapies à revoir",
+            echeances or ["Aucune échéance aujourd'hui"],
+            theme.ROUGE if echeances else theme.VERT,
+        )
+    with m:
+        theme.bloc(
+            "Dispositifs de 7 jours ou plus",
+            dispositifs_anciens or ["Aucun"],
+            theme.ORANGE if dispositifs_anciens else theme.VERT,
+        )
+    with d:
+        theme.bloc(
+            f"Pancartes de demain à préparer ({len(a_preparer)})",
+            a_preparer or ["Toutes préparées"],
+            theme.BLEU if a_preparer else theme.VERT,
+        )
+
+
+def _carte_lit(lit_info: dict, resumes: dict) -> None:
+    numero = lit_info["lit"]
+    st.markdown(
+        f'<div class="rea-lit"><span class="rea-lit-num">Lit {numero} · '
+        f'Ch. {lit_info["chambre"]}</span>',
+        unsafe_allow_html=True,
+    )
+    if not lit_info["occupe"]:
+        st.markdown('<div class="rea-lit-libre">Libre</div></div>', unsafe_allow_html=True)
+        theme.chips([("Disponible", "ok")])
+        if st.button("Admettre", key=f"lit_{numero}", use_container_width=True):
+            st.session_state["lit_admission_choisi"] = numero
+            st.session_state["mode"] = "nouvelle_admission"
+            st.rerun()
+        return
+
+    sejour_id = lit_info["sejour_id"]
+    st.markdown(
+        f'<div class="rea-lit-nom">{lit_info["nom_affichage"]}</div>'
+        f'<div class="rea-lit-motif">{_motif_court(sejour_id, lit_info["traumatique"])}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    pastilles: list[tuple[str, str]] = [(f"J{lit_info['jour_hospitalisation']}", "info")]
+    if sejours_service.allergies_du_patient(base, lit_info["patient_id"]):
+        pastilles.append(("Allergie", "alerte"))
+    for e in resumes.get(sejour_id, []):
+        if not e.en_place:
+            continue
+        court = e.texte.split(" (")[0]
+        style = "attention" if e.type in ("intubation", "sedation", "eer") else "neutre"
+        pastilles.append((court, style))
+    theme.chips(pastilles[:6])
+
+    if st.button("Ouvrir", key=f"lit_{numero}", use_container_width=True):
+        st.session_state["sejour_id"] = sejour_id
+        st.rerun()
 
 
 # --------------------------------------------------------------------------
@@ -250,29 +339,62 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
 
 def onglet_identite(sejour: dict) -> None:
     age = age_ans(sejour["date_naissance"])
-    st.write(
-        f"**{sejour['nom_affichage']}** · matricule {sejour['matricule']} · "
-        f"{age if age is not None else '?'} ans · Lit {sejour['lit_admission']}"
-    )
-    allergies = sejours_service.allergies_du_patient(base, sejour["patient_id"])
-    if allergies:
-        st.error("⚠ ALLERGIE : " + ", ".join(a["libelle"] for a in allergies))
+    c_identite, c_motif, c_antecedents = st.columns(3)
 
-    if sejour["traumatique"]:
-        regions = sejours_service.regions_traumatiques(base, sejour["id"])
-        libelles = [listes.libelle(listes.REGIONS_TRAUMATIQUES, r) for r in regions]
-        poly = " · **polytraumatisé**" if sejours_service.est_polytraumatise(base, sejour["id"]) else ""
-        st.write(f"Traumatique — {', '.join(libelles) or 'régions non précisées'}{poly}")
-    else:
-        motifs = sejours_service.motifs_du_sejour(base, sejour["id"])
-        principal = next((m for m in motifs if m["principal"]), None)
-        if principal:
-            st.write(f"Motif : {listes.libelle_motif(principal['code'])}")
+    with c_identite:
+        theme.bloc(
+            "Identité",
+            [
+                f"<b>{sejour['nom_affichage']}</b>",
+                f"Matricule {sejour['matricule']}",
+                f"{age if age is not None else '?'} ans · {listes.libelle(listes.SEXES, sejour['sexe'])}",
+                f"Lit {sejour['lit_admission']} · admis le {format_date_fr(sejour['date_admission'][:10])}",
+                f"Provenance : {listes.libelle(listes.PROVENANCES, sejour['provenance_type'], 'non renseignée')}",
+            ],
+            theme.BLEU,
+        )
 
-    st.subheader("Antécédents")
+    with c_motif:
+        if sejour["traumatique"]:
+            regions = sejours_service.regions_traumatiques(base, sejour["id"])
+            elements = [listes.libelle(listes.REGIONS_TRAUMATIQUES, r) for r in regions] or [
+                "Régions non précisées"
+            ]
+            if sejours_service.est_polytraumatise(base, sejour["id"]):
+                elements.insert(0, "<b>Polytraumatisé</b> (calculé)")
+            if sejour["mecanisme"]:
+                elements.append(
+                    f"Mécanisme : {listes.libelle(listes.MECANISMES, sejour['mecanisme'])}"
+                )
+            theme.bloc("Motif traumatique", elements, theme.ORANGE)
+        else:
+            motifs = sejours_service.motifs_du_sejour(base, sejour["id"])
+            principal = next((m for m in motifs if m["principal"]), None)
+            associes = [m for m in motifs if not m["principal"]]
+            elements = []
+            if principal:
+                elements.append(f"<b>{listes.libelle_motif(principal['code'])}</b>")
+            elements += [listes.libelle_motif(m["code"]) for m in associes]
+            theme.bloc("Motif d'admission", elements or ["Non renseigné"], theme.ORANGE)
+
     antecedents = sejours_service.antecedents_du_patient(base, sejour["patient_id"])
-    for a in antecedents:
-        st.write(f"- {a['libelle']} ({listes.libelle(listes.TROIS_ETATS_PRESENCE, a['statut'])})")
+    allergies = [a for a in antecedents if a["categorie"] == "allergie"]
+    with c_antecedents:
+        if allergies:
+            theme.bloc(
+                "Allergies",
+                [f"<b>{a['libelle']}</b>" for a in allergies],
+                theme.ROUGE,
+            )
+        theme.bloc(
+            "Antécédents",
+            [
+                f"{a['libelle']}"
+                + (f" — {a['precision']}" if a["precision"] else "")
+                for a in antecedents if a["categorie"] != "allergie"
+            ] or ["Aucun antécédent enregistré"],
+            theme.GRIS,
+        )
 
     with st.form("ajout_antecedent"):
         col1, col2 = st.columns(2)
@@ -314,27 +436,80 @@ def onglet_prescrit(sejour: dict) -> None:
 
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour["id"], date_jour_str)
 
-    for code_voie in listes.ORDRE_VOIES:
-        lignes = pancarte["lignes_par_voie"].get(code_voie, [])
-        if not lignes:
-            continue
-        st.markdown(f"**{listes.VOIES[code_voie]['titre']}**")
-        for ligne in lignes:
-            texte = dom.libelle_ligne(ligne, date_jour_str)
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                if ligne["statut"] == "arretee":
-                    st.markdown(f"~~{texte}~~")
-                else:
-                    st.write(texte)
-            with col2:
-                if ligne["statut"] == "active" and st.button("Arrêter", key=f"arret_{ligne['id']}"):
-                    prescriptions_service.arreter_ligne(
-                        base, ligne["id"], date_arret=date_jour_str, utilisateur_id=utilisateur_id
-                    )
-                    st.rerun()
+    voies_remplies = [
+        v for v in listes.ORDRE_VOIES if pancarte["lignes_par_voie"].get(v)
+    ]
+    zone_pancarte, zone_actions = st.columns([2.3, 1])
 
-    st.info(f"Entrées calculées sur 24 h : **{pancarte['bilan_entrees'].total_ml:.0f} mL**")
+    with zone_actions:
+        st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
+        if st.button("📅 Préparer la pancarte de demain", use_container_width=True):
+            prescriptions_service.preparer_pancarte_de_demain(
+                base, sejour["id"], aujourdhui=date_jour_str, utilisateur_id=utilisateur_id
+            )
+            st.success("Journée de demain préparée.")
+        if st.button("🖨 Imprimer la pancarte de ce jour", use_container_width=True):
+            snap = pancarte_service.imprimer(
+                base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id
+            )
+            st.session_state["derniere_impression"] = snap["html"]
+            st.success(f"Pancarte enregistrée — version {snap['version']}.")
+        demandes = pancarte["bilans_demandes"]
+        theme.bloc(
+            "Bilans demandés",
+            [
+                f"{listes.libelle(listes.EXAMENS_A_DEMANDER, b['examen_code'])} "
+                f"<span style='color:{theme.GRIS}'>{b['heure_prelevement']}</span>"
+                for b in demandes
+            ] or ["Aucun bilan demandé"],
+            theme.VIOLET if demandes else theme.GRIS,
+        )
+
+    with zone_pancarte:
+        gauche, droite = st.columns(2)
+        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite)
+
+    _actions_prescrit(sejour, pancarte, date_jour_str)
+
+
+def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) -> None:
+    for i, code_voie in enumerate(voies_remplies):
+        lignes = pancarte["lignes_par_voie"][code_voie]
+        colonne = gauche if i % 2 == 0 else droite
+        with colonne:
+            elements = []
+            for ligne in lignes:
+                texte = dom.libelle_ligne(ligne, date_jour_str)
+                etiquette = dom.etiquette_jour(ligne, date_jour_str)
+                # Le compteur de jours en bleu, le dernier jour en rouge :
+                # ce sont les deux choses qu'on cherche du regard.
+                if etiquette.dernier_jour:
+                    texte = texte.replace(
+                        "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
+                    )
+                texte = texte.replace(
+                    etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
+                )
+                classe = ' class="arretee"' if ligne["statut"] == "arretee" else ""
+                elements.append(f"<span{classe}>{texte}</span>")
+            theme.bloc(
+                listes.VOIES[code_voie]["titre"], elements,
+                theme.COULEUR_VOIE.get(code_voie, theme.GRIS),
+            )
+
+def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
+    with st.expander("⏹ Arrêter une ligne"):
+        actives = [l for l in pancarte["lignes"] if l["statut"] == "active"]
+        if not actives:
+            st.caption("Aucune ligne active.")
+        for ligne in actives:
+            col1, col2 = st.columns([6, 1])
+            col1.write(dom.libelle_ligne(ligne, date_jour_str))
+            if col2.button("Arrêter", key=f"arret_{ligne['id']}", use_container_width=True):
+                prescriptions_service.arreter_ligne(
+                    base, ligne["id"], date_arret=date_jour_str, utilisateur_id=utilisateur_id
+                )
+                st.rerun()
 
     with st.expander("➕ Ajouter une ligne"):
         voie = st.selectbox("Voie", listes.ORDRE_VOIES, format_func=lambda c: listes.VOIES[c]["titre"])
@@ -373,7 +548,9 @@ def onglet_prescrit(sejour: dict) -> None:
             if voie in ("IV", "PSE"):
                 duree_prevue = st.number_input("Durée prévue (jours, si antibiotique)", min_value=0, step=1, value=0)
 
-            date_debut = st.date_input("Date de début", value=date_jour, key=f"debut_{voie}")
+            date_debut = st.date_input(
+                "Date de début", value=date.fromisoformat(date_jour_str), key=f"debut_{voie}"
+            )
 
             if st.form_submit_button("Ajouter à la pancarte"):
                 if not produit:
@@ -393,7 +570,7 @@ def onglet_prescrit(sejour: dict) -> None:
                     st.rerun()
 
     with st.expander("🧪 Bilans à demander pour le lendemain"):
-        demain = str(date_jour)
+        demain = date_jour_str
         journee_bilans = prescriptions_service.pancarte_du_jour(base, sejour["id"], demain)["bilans_demandes"]
         deja_coches = {b["examen_code"] for b in journee_bilans}
         with st.form("bilans_demandes"):
@@ -410,19 +587,6 @@ def onglet_prescrit(sejour: dict) -> None:
                 )
                 st.rerun()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📅 Préparer la pancarte de demain", use_container_width=True):
-            prescriptions_service.preparer_pancarte_de_demain(
-                base, sejour["id"], aujourdhui=date_jour_str, utilisateur_id=utilisateur_id
-            )
-            st.success("Journée de demain préparée — les bilans peuvent y être ajoutés.")
-    with col2:
-        if st.button("🖨 Imprimer la pancarte de ce jour", use_container_width=True):
-            snap = pancarte_service.imprimer(base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id)
-            st.session_state["derniere_impression"] = snap["html"]
-            st.success(f"Pancarte enregistrée — version {snap['version']}.")
-
     if st.session_state.get("derniere_impression"):
         with st.expander("Aperçu de la dernière impression", expanded=True):
             st.components.v1.html(st.session_state["derniere_impression"], height=600, scrolling=True)
@@ -433,18 +597,30 @@ def onglet_evolution(sejour: dict) -> None:
     date_jour_str = str(date_jour)
     entree = evolution_service.obtenir_ou_creer(base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id)
 
-    with st.form("evolution_form"):
-        valeurs = {}
-        for cle in evolution_service.PLANS:
-            valeurs[cle] = st.text_area(evolution_service.LIBELLES_PLANS[cle], value=entree.get(cle) or "", height=70)
-        valeurs["conduite"] = st.text_area("Conduite", value=entree.get("conduite") or "")
-        if st.form_submit_button("Enregistrer"):
-            evolution_service.enregistrer(base, sejour["id"], date_jour_str, valeurs, utilisateur_id=utilisateur_id)
-            st.rerun()
-
-    st.subheader("Texte généré")
-    texte = evolution_service.texte_genere(base, sejour["id"], date_jour_str)
-    st.text_area("Prêt à copier dans le DMI", value=texte, height=450)
+    saisie, rendu = st.columns([1.15, 1])
+    with saisie:
+        with st.form("evolution_form"):
+            valeurs = {}
+            plans = list(evolution_service.PLANS)
+            for rangee in (plans[:2], plans[2:]):
+                cols = st.columns(2)
+                for col, cle in zip(cols, rangee):
+                    with col:
+                        valeurs[cle] = st.text_area(
+                            evolution_service.LIBELLES_PLANS[cle],
+                            value=entree.get(cle) or "", height=110,
+                        )
+            valeurs["conduite"] = st.text_area(
+                "Conduite", value=entree.get("conduite") or "", height=90
+            )
+            if st.form_submit_button("Enregistrer", use_container_width=True):
+                evolution_service.enregistrer(
+                    base, sejour["id"], date_jour_str, valeurs, utilisateur_id=utilisateur_id
+                )
+                st.rerun()
+    with rendu:
+        texte = evolution_service.texte_genere(base, sejour["id"], date_jour_str)
+        st.text_area("Prêt à copier dans le DMI", value=texte, height=520)
 
 
 def onglet_sortie(sejour: dict) -> None:
@@ -714,39 +890,50 @@ def onglet_actes(sejour: dict) -> None:
     en_place = [e for e in etats if e.en_place]
     retires = [e for e in etats if not e.en_place]
 
-    st.markdown("##### En place")
+    lignes_en_place = [l for l in lignes if not l["date_retrait"]]
     if not en_place:
         st.caption("Aucun dispositif en place.")
-    for etat_disp, ligne in zip(
-        [e for e in etats if e.en_place], [l for l in lignes if not l["date_retrait"]]
-    ):
-        col1, col2, col3 = st.columns([4, 2, 1.4])
-        col1.markdown(
-            f"**{etat_disp.texte}**<br><span style='color:{theme.GRIS};font-size:.82rem'>"
-            f"posé le {format_date_fr(etat_disp.date_pose)}</span>",
-            unsafe_allow_html=True,
-        )
-        date_retrait = col2.date_input(
-            "Date", value=date.today(), key=f"retrait_date_{ligne['id']}",
-            label_visibility="collapsed",
-        )
-        config_type = listes.TYPES_DISPOSITIF.get(ligne["type"], {})
-        if col3.button(
-            config_type.get("verbe_retrait", "Retirer"),
-            key=f"retrait_{ligne['id']}", use_container_width=True,
-        ):
-            dispositifs_service.retirer(
-                base, ligne["id"], date_retrait=str(date_retrait), utilisateur_id=utilisateur_id
-            )
-            st.rerun()
+    else:
+        colonnes = st.columns(3)
+        for i, (etat_disp, ligne) in enumerate(zip(en_place, lignes_en_place)):
+            couleur = theme.COULEUR_DISPOSITIF.get(etat_disp.type, theme.GRIS)
+            with colonnes[i % 3]:
+                with st.container(border=True):
+                    st.markdown(
+                        f'<div class="rea-bloc-titre" style="color:{couleur}">'
+                        f"{etat_disp.libelle_type}</div>"
+                        f'<div style="font-weight:700;font-size:.95rem">{etat_disp.texte}</div>'
+                        f'<div style="color:{theme.GRIS};font-size:.78rem;margin-bottom:4px">'
+                        f"posé le {format_date_fr(etat_disp.date_pose)}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    c1, c2 = st.columns([1.3, 1])
+                    date_retrait = c1.date_input(
+                        "Date", value=date.today(), key=f"retrait_date_{ligne['id']}",
+                        label_visibility="collapsed",
+                    )
+                    config_type = listes.TYPES_DISPOSITIF.get(ligne["type"], {})
+                    if c2.button(
+                        config_type.get("verbe_retrait", "Retirer"),
+                        key=f"retrait_{ligne['id']}", use_container_width=True,
+                    ):
+                        dispositifs_service.retirer(
+                            base, ligne["id"], date_retrait=str(date_retrait),
+                            utilisateur_id=utilisateur_id,
+                        )
+                        st.rerun()
 
     if retires:
         with st.expander(f"Retirés ({len(retires)})"):
-            for e in retires:
-                st.markdown(
-                    f"- {e.texte} — posé le {format_date_fr(e.date_pose)}, "
+            theme.bloc(
+                "Historique",
+                [
+                    f"{e.texte} — posé le {format_date_fr(e.date_pose)}, "
                     f"retiré le {format_date_fr(e.date_retrait)}"
-                )
+                    for e in retires
+                ],
+                theme.GRIS,
+            )
 
     with st.expander("➕ Poser un dispositif / noter un acte"):
         type_ = st.selectbox(
@@ -777,16 +964,18 @@ def onglet_actes(sejour: dict) -> None:
                 st.rerun()
 
     st.divider()
-    st.markdown("##### Explorations")
     explos = explorations_service.du_sejour(base, sejour["id"])
     if not explos:
         st.caption("Aucune exploration enregistrée.")
-    for e in explos[:15]:
-        st.markdown(
-            f"<span style='color:{theme.GRIS};font-size:.82rem'>"
-            f"{format_date_fr(e['date_heure'][:10])}</span> "
-            f"{explorations_service.texte_exploration(base, e)[2:]}",
-            unsafe_allow_html=True,
+    else:
+        theme.bloc(
+            "Explorations du séjour",
+            [
+                f"<span style='color:{theme.GRIS}'>{format_date_fr(e['date_heure'][:10])}</span> "
+                f"{explorations_service.texte_exploration(base, e)[2:]}"
+                for e in explos[:15]
+            ],
+            theme.VIOLET,
         )
 
     with st.expander("➕ Ajouter une exploration"):
