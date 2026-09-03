@@ -1,6 +1,6 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.7 — 3 septembre 2026**
+**Version 1.8 — 3 septembre 2026**
 
 > **Document de référence du projet.** Complété par **FEUILLE_DE_ROUTE.md**,
 > qui fixe l'ordre de construction et les règles d'isolation entre couches.
@@ -795,6 +795,60 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.8 — 3 septembre 2026**
+
+- **Saisie pensée pour le demi-écran.** L'application est utilisée avec le DMI
+  ouvert à côté, fenêtre en demi-largeur : la saisie des bilans passe en tête
+  d'onglet et tient sur deux colonnes à 960 px
+- **Champs vides à l'ouverture.** Plus de « 0.00 » à effacer avant de taper :
+  le champ est vide, la **plage normale s'affiche en gris dedans**, et la
+  valeur est **signalée en rouge** dès qu'elle sort de la plage. Deux niveaux
+  distincts, comme au bloc 4 : « hors plage usuelle » (anormal) et « hors
+  bornes physiologiques » (impossible)
+- La **virgule décimale française** est acceptée partout : on tape « 9,2 »
+- **Poids et taille à l'admission**, plus la créatinine antérieure connue.
+  Le poids est ce qui rend la **clairance de la créatinine** calculable
+- **Valeurs dérivées** (`rea/domaine/calculs.py`), chacune avec sa formule et
+  sa référence bibliographique dans le code :
+  - Clairance de la créatinine — Cockcroft & Gault 1976
+  - Natrémie corrigée à la glycémie — Katz 1973
+  - Calcémie corrigée à l'albuminémie — Payne 1973
+  - Trou anionique, rapport PaO₂/FiO₂
+  Une valeur dérivée rend `None` dès qu'il lui manque un ingrédient : elle
+  n'invente jamais de valeur par défaut. **Aucune n'est une dose** et le
+  logiciel n'en déduit aucune adaptation de posologie (§3.1)
+- **Albumine et glycémie** ajoutées au catalogue — le manque signalé par la
+  feuille de route (bloc 6, alignement ANZICS). Ce sont aussi les ingrédients
+  des deux corrections ci-dessus
+- **ECG** ajouté aux explorations (rythme, FC, PR, QRS, QTc, axe,
+  repolarisation, territoire) et **ETT étendue** à douze paramètres
+  (ITV sous-aortique, débit cardiaque, E/A, E/e′, TAPSE, VD/VG…)
+- **Éléments fixes dans les quatre plans de l'évolution.** Ce que l'interne
+  réécrivait chaque jour devient saisissable en un geste, et exploitable en
+  cinétique :
+  - *Neurologique* : RASS, Glasgow, pupilles, déficit focal — et
+    automatiquement « Sédaté J4 » ou « Arrêt sédation J4 »
+  - *Respiratoire* : FR, SpO₂, encombrement — et automatiquement « Intubé J6 »
+    et le mode ventilatoire du dernier gaz du sang
+  - *Hémodynamique* : FC, PA (écrite « 105/58 »), PAM, diurèse sur 24 h,
+    diurèse conservée, signes périphériques de choc — et automatiquement les
+    amines en cours avec leur débit
+  - *Infectieux* : température, frissons — et automatiquement les
+    antibiotiques avec leur J{n}/{durée} et les escarres
+- **Escarres suivies dans le temps** (table `escarre`) : localisation, grade
+  NPUAP/EPUAP, date de constat, date de guérison. Une escarre guérie sort de
+  l'évolution mais reste dans l'historique du séjour
+- Un dispositif n'est jamais écrit deux fois : l'intubation et la sédation
+  sont reprises dans leur plan, pas dans la ligne de tête
+- 138 tests (pytest, +30)
+
+**❓ Question ouverte soulevée en séance** — « on corrige au pH les variables ».
+Les deux corrections mises en place sont celles dont la formule fait consensus
+(calcémie/albumine, natrémie/glycémie). Une correction **au pH** est ambiguë :
+s'agit-il de la kaliémie estimée selon le pH, du calcium ionisé, ou d'autre
+chose ? La formule à retenir doit être écrite avec sa référence avant d'être
+codée — une définition non écrite change silencieusement.
 
 **v1.7 — 3 septembre 2026**
 

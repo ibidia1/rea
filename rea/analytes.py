@@ -74,6 +74,14 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
         Analyte("cl", "Cl⁻", "mmol/L", borne_basse=98, borne_haute=107, code_loinc="2075-0", unite_ucum="mmol/L"),
         Analyte("ca", "Ca²⁺", "mmol/L", borne_basse=2.2, borne_haute=2.6, code_loinc="17861-6", unite_ucum="mmol/L"),
     )),
+    GroupeAnalytes("metabolique", "Métabolique", (
+        # Exigées par l'alignement ANZICS (SPEC §9.5) et indispensables aux
+        # corrections calculées : natrémie à la glycémie, calcémie à l'albumine.
+        Analyte("glycemie", "Glycémie", "mmol/L", borne_basse=3.9, borne_haute=7.8,
+                code_loinc="14749-6", unite_ucum="mmol/L"),
+        Analyte("albumine", "Albumine", "g/L", borne_basse=35, borne_haute=50,
+                code_loinc="1751-7", unite_ucum="g/L"),
+    )),
     GroupeAnalytes("renale", "Fonction rénale", (
         Analyte("creat", "Créatinine", "µmol/L", borne_basse=60, borne_haute=110, code_loinc="14682-9", unite_ucum="umol/L"),
         Analyte("uree", "Urée", "mmol/L", borne_basse=2.5, borne_haute=7.5, code_loinc="22664-7", unite_ucum="mmol/L"),

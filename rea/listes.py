@@ -359,9 +359,30 @@ TYPES_EXPLORATION: dict[str, dict] = {
         "libelle": "ETT",
         "valeurs": (
             ("fevg", "FEVG", "%", "nombre"),
+            ("itv_sa", "ITV sous-aortique", "cm", "nombre"),
+            ("debit_cardiaque", "Débit cardiaque", "L/min", "nombre"),
             ("vci", "Diamètre VCI", "mm", "nombre"),
+            ("vci_compliance", "VCI compliante", "", "trois_etats"),
             ("paps", "PAPS", "mmHg", "nombre"),
+            ("e_sur_a", "E/A", "", "nombre"),
+            ("e_sur_e_prime", "E/e′", "", "nombre"),
+            ("tapse", "TAPSE", "mm", "nombre"),
+            ("rapport_vd_vg", "Rapport VD/VG", "", "nombre"),
             ("epanchement", "Épanchement péricardique", "", "trois_etats"),
+            ("valvulopathie", "Valvulopathie", "", "texte"),
+        ),
+    },
+    "ecg": {
+        "libelle": "ECG",
+        "valeurs": (
+            ("rythme", "Rythme", "", "texte"),
+            ("fc", "Fréquence", "/min", "nombre"),
+            ("pr", "PR", "ms", "nombre"),
+            ("qrs", "Durée QRS", "ms", "nombre"),
+            ("qtc", "QTc", "ms", "nombre"),
+            ("axe", "Axe", "°", "nombre"),
+            ("trouble_repolarisation", "Trouble de repolarisation", "", "trois_etats"),
+            ("territoire", "Territoire", "", "texte"),
         ),
     },
     "echo_pleuro_pulmonaire": {
@@ -633,3 +654,66 @@ def libelle_dispositif(code: str | None) -> str:
     if not code:
         return ""
     return TYPES_DISPOSITIF.get(code, {}).get("libelle", code)
+
+
+# --------------------------------------------------------------------------
+# Éléments fixes des quatre plans de l'évolution (SPEC §8.1)
+# --------------------------------------------------------------------------
+# Ce que l'interne écrivait à la main tous les jours, devenu saisissable en un
+# geste — et donc exploitable en cinétique.
+#   (clé, libellé, unité, type, plage affichée en gris)
+ELEMENTS_PLAN: dict[str, tuple[tuple[str, str, str, str, str], ...]] = {
+    "neurologique": (
+        ("rass", "RASS", "", "nombre", "−5 à +4"),
+        ("glasgow", "Glasgow", "/15", "nombre", "3 – 15"),
+        ("pupilles", "Pupilles", "", "liste_pupilles", ""),
+        ("deficit", "Déficit focal", "", "trois_etats", ""),
+    ),
+    "respiratoire": (
+        ("fr_clinique", "FR", "/min", "nombre", "12 – 25"),
+        ("spo2_clinique", "SpO₂", "%", "nombre", "≥ 94"),
+        ("encombrement", "Encombrement", "", "trois_etats", ""),
+    ),
+    "hemodynamique": (
+        ("fc", "FC", "/min", "nombre", "60 – 100"),
+        ("pas", "PA systolique", "mmHg", "nombre", "100 – 140"),
+        ("pad", "PA diastolique", "mmHg", "nombre", "60 – 90"),
+        ("pam", "PAM", "mmHg", "nombre", "≥ 65"),
+        ("diurese_24h", "Diurèse /24 h", "mL", "nombre", "> 1000"),
+        ("diurese_conservee", "Diurèse conservée", "", "oui_non", ""),
+        ("signes_choc", "Signes périphériques de choc", "", "trois_etats", ""),
+    ),
+    "infectieux": (
+        ("temperature", "Température", "°C", "nombre", "36,5 – 37,5"),
+        ("frissons", "Frissons", "", "trois_etats", ""),
+    ),
+}
+
+PUPILLES = (
+    ("symetriques_reactives", "Symétriques et réactives"),
+    ("myosis", "Myosis"),
+    ("mydriase_bilaterale", "Mydriase bilatérale"),
+    ("anisocorie_droite", "Anisocorie droite"),
+    ("anisocorie_gauche", "Anisocorie gauche"),
+    ("areactives", "Aréactives"),
+)
+
+OUI_NON = (
+    ("non_renseigne", "Non renseigné"),
+    ("oui", "Oui"),
+    ("non", "Non"),
+)
+
+# Escarres — grades NPUAP/EPUAP
+LOCALISATIONS_ESCARRE = (
+    "Sacrum", "Talon droit", "Talon gauche", "Trochanter droit", "Trochanter gauche",
+    "Ischion droit", "Ischion gauche", "Occiput", "Oreille droite", "Oreille gauche",
+    "Coude droit", "Coude gauche", "Malléole droite", "Malléole gauche",
+    "Narine (sonde)", "Commissure labiale (sonde)", "Autre",
+)
+GRADES_ESCARRE = (
+    (1, "Grade 1 — érythème qui ne blanchit pas"),
+    (2, "Grade 2 — perte cutanée partielle (phlyctène)"),
+    (3, "Grade 3 — perte cutanée totale, graisse visible"),
+    (4, "Grade 4 — perte tissulaire totale, os ou tendon visible"),
+)

@@ -15,6 +15,7 @@ import streamlit as st
 
 from rea import analytes as cat, config, listes
 from rea.db import obtenir_base
+from rea.domaine import calculs
 from rea.domaine import coherence
 from rea.domaine import prescription as dom
 from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
@@ -317,6 +318,21 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
                 "Date de naissance", value=None, min_value=date(1900, 1, 1), max_value=date.today()
             )
             sexe = st.selectbox("Sexe", listes.codes(listes.SEXES), format_func=lambda c: listes.libelle(listes.SEXES, c))
+            c_poids, c_taille = st.columns(2)
+            # Le poids conditionne la clairance de la créatinine : sans lui,
+            # aucune formule pondérale n'est calculable ensuite.
+            poids_kg = _nombre_saisi(
+                c_poids.text_input("Poids (kg)", value="", placeholder="ex. 70")
+            )
+            taille_cm = _nombre_saisi(
+                c_taille.text_input("Taille (cm)", value="", placeholder="ex. 175")
+            )
+            creatinine_base = _nombre_saisi(
+                st.text_input(
+                    "Créatinine antérieure connue (µmol/L)", value="",
+                    placeholder="si connue — sert au diagnostic d'insuffisance rénale aiguë",
+                )
+            )
         with col2:
             date_admission = st.date_input("Date d'admission", value=date.today())
             provenance_type = st.selectbox(
@@ -389,6 +405,9 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             traumatique=traumatique,
             mecanisme=mecanisme,
             mecanisme_detail=mecanisme_detail or None,
+            poids_kg=poids_kg,
+            taille_cm=taille_cm,
+            creatinine_base=creatinine_base,
             utilisateur_id=utilisateur_id,
         )
         if traumatique and regions_choisies:
@@ -422,6 +441,9 @@ def onglet_identite(sejour: dict) -> None:
                 f"{age if age is not None else '?'} ans · {listes.libelle(listes.SEXES, sejour['sexe'])}",
                 f"Lit {sejour['lit_admission']} · admis le {format_date_fr(sejour['date_admission'][:10])}",
                 f"Provenance : {listes.libelle(listes.PROVENANCES, sejour['provenance_type'], 'non renseignée')}",
+                (f"Poids {_format_valeur(sejour['poids_kg'])} kg"
+                 if sejour["poids_kg"] else
+                 "<span style='color:#B4442E'>Poids non renseigné — clairance incalculable</span>"),
             ],
             theme.BLEU,
         )
@@ -664,35 +686,144 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             st.components.v1.html(st.session_state["derniere_impression"], height=600, scrolling=True)
 
 
+def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
+                   valeur_actuelle, prefixe: str):
+    """Un élément fixe d'un plan. Même principe que les bilans : champ vide,
+    plage normale en gris, et l'unité dans le libellé."""
+    etiquette = f"{libelle} ({unite})" if unite else libelle
+    cle_widget = f"{prefixe}_{cle}"
+    if type_ == "nombre":
+        return _nombre_saisi(
+            st.text_input(
+                etiquette,
+                value="" if valeur_actuelle is None else str(valeur_actuelle).replace(".", ","),
+                placeholder=plage,
+                key=cle_widget,
+            )
+        )
+    if type_ == "liste_pupilles":
+        options = ["", *listes.codes(listes.PUPILLES)]
+        index = options.index(valeur_actuelle) if valeur_actuelle in options else 0
+        return st.selectbox(
+            etiquette, options, index=index, key=cle_widget,
+            format_func=lambda c: "—" if not c else listes.libelle(listes.PUPILLES, c),
+        ) or None
+    if type_ == "oui_non":
+        options = listes.codes(listes.OUI_NON)
+        index = options.index(valeur_actuelle) if valeur_actuelle in options else 0
+        return st.selectbox(
+            etiquette, options, index=index, key=cle_widget,
+            format_func=lambda c: listes.libelle(listes.OUI_NON, c),
+        )
+    options = listes.codes(listes.TROIS_ETATS_PRESENCE)
+    index = options.index(valeur_actuelle) if valeur_actuelle in options else 0
+    return st.selectbox(
+        etiquette, options, index=index, key=cle_widget,
+        format_func=lambda c: listes.libelle(listes.TROIS_ETATS_PRESENCE, c),
+    )
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
-    entree = evolution_service.obtenir_ou_creer(base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id)
+    entree = evolution_service.obtenir_ou_creer(
+        base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id
+    )
+    elements_existants = evolution_service.elements_du_jour(
+        base, sejour["id"], date_jour_str
+    )
 
-    saisie, rendu = st.columns([1.15, 1])
+    saisie, rendu = st.columns([1.25, 1])
+
     with saisie:
-        with st.form("evolution_form"):
-            valeurs = {}
-            plans = list(evolution_service.PLANS)
-            for rangee in (plans[:2], plans[2:]):
-                cols = st.columns(2)
-                for col, cle in zip(cols, rangee):
-                    with col:
-                        valeurs[cle] = st.text_area(
-                            evolution_service.LIBELLES_PLANS[cle],
-                            value=entree.get(cle) or "", height=110,
+        elements: dict = {}
+        plans = list(evolution_service.PLANS)
+        for rangee in (plans[:2], plans[2:]):
+            colonnes = st.columns(2)
+            for colonne, cle_plan in zip(colonnes, rangee):
+                plan = cle_plan.replace("plan_", "")
+                with colonne:
+                    with st.container(border=True):
+                        st.markdown(
+                            f'<div class="rea-bloc-titre" style="color:{theme.BLEU}">'
+                            f"{evolution_service.LIBELLES_PLANS[cle_plan]}</div>",
+                            unsafe_allow_html=True,
                         )
-            valeurs["conduite"] = st.text_area(
-                "Conduite", value=entree.get("conduite") or "", height=90
+                        # Ce que le logiciel sait déjà : affiché, jamais retapé.
+                        auto = evolution_service._elements_automatiques(
+                            base, sejour["id"], plan, date_jour_str
+                        )
+                        if auto:
+                            st.caption(auto)
+                        for champ in listes.ELEMENTS_PLAN.get(plan, ()):
+                            cle, libelle, unite, type_, plage = champ
+                            elements[cle] = _champ_element(
+                                cle, libelle, unite, type_, plage,
+                                elements_existants.get(cle), f"evo_{date_jour_str}",
+                            )
+                        texte_libre = st.text_area(
+                            "Commentaire", value=entree.get(cle_plan) or "", height=80,
+                            key=f"evo_libre_{date_jour_str}_{cle_plan}",
+                            label_visibility="collapsed", placeholder="Commentaire libre…",
+                        )
+                        elements[f"__libre__{cle_plan}"] = texte_libre
+
+        conduite = st.text_area(
+            "Conduite", value=entree.get("conduite") or "", height=90,
+            key=f"evo_conduite_{date_jour_str}",
+        )
+
+        if st.button("Enregistrer l'évolution", type="primary", use_container_width=True):
+            mesures = {k: v for k, v in elements.items() if not k.startswith("__libre__")}
+            evolution_service.enregistrer_elements(
+                base, sejour["id"], date_jour_str, mesures, utilisateur_id=utilisateur_id
             )
-            if st.form_submit_button("Enregistrer", use_container_width=True):
-                evolution_service.enregistrer(
-                    base, sejour["id"], date_jour_str, valeurs, utilisateur_id=utilisateur_id
+            evolution_service.enregistrer(
+                base, sejour["id"], date_jour_str,
+                {
+                    **{p: elements.get(f"__libre__{p}", "") for p in plans},
+                    "conduite": conduite,
+                },
+                utilisateur_id=utilisateur_id,
+            )
+            st.success("Évolution enregistrée.")
+            st.rerun()
+
+        with st.expander("🩹 Escarres"):
+            existantes = evolution_service.escarres(base, sejour["id"])
+            for e in existantes:
+                col1, col2 = st.columns([4, 1])
+                etat = "guérie le " + format_date_fr(e["date_guerison"]) if e["date_guerison"] else "en cours"
+                col1.markdown(
+                    f"**{e['localisation']}** — grade {e['grade'] or '?'} · "
+                    f"constatée le {format_date_fr(e['date_constat'])} · {etat}"
                 )
-                st.rerun()
+                if not e["date_guerison"] and col2.button(
+                    "Guérie", key=f"escarre_guerie_{e['id']}", use_container_width=True
+                ):
+                    evolution_service.modifier_escarre(
+                        base, e["id"], {"date_guerison": date_jour_str},
+                        utilisateur_id=utilisateur_id,
+                    )
+                    st.rerun()
+            with st.form(f"ajout_escarre_{date_jour_str}"):
+                c1, c2 = st.columns(2)
+                localisation = c1.selectbox("Localisation", listes.LOCALISATIONS_ESCARRE)
+                grade = c2.selectbox(
+                    "Grade", [g for g, _l in listes.GRADES_ESCARRE],
+                    format_func=lambda g: listes.libelle(listes.GRADES_ESCARRE, g),
+                )
+                if st.form_submit_button("Ajouter l'escarre"):
+                    evolution_service.ajouter_escarre(
+                        base, sejour_id=sejour["id"], localisation=localisation,
+                        grade=grade, date_constat=date_jour_str,
+                        utilisateur_id=utilisateur_id,
+                    )
+                    st.rerun()
+
     with rendu:
         texte = evolution_service.texte_genere(base, sejour["id"], date_jour_str)
-        st.text_area("Prêt à copier dans le DMI", value=texte, height=520)
+        st.text_area("Prêt à copier dans le DMI", value=texte, height=640)
 
 
 def onglet_sortie(sejour: dict) -> None:
@@ -725,138 +856,214 @@ def onglet_sortie(sejour: dict) -> None:
             st.rerun()
 
 
+def _nombre_saisi(texte: str | None) -> float | None:
+    """Lit un nombre tapé à la main. La virgule décimale est acceptée : au lit
+    du malade on tape « 9,2 », pas « 9.2 »."""
+    if not texte or not texte.strip():
+        return None
+    try:
+        return float(texte.strip().replace(",", ".").replace(" ", ""))
+    except ValueError:
+        return None
+
+
+def _plage_normale(a) -> str:
+    """Texte gris affiché dans le champ vide : la plage attendue."""
+    if a.borne_basse is not None and a.borne_haute is not None:
+        return f"{_format_valeur(a.borne_basse)} – {_format_valeur(a.borne_haute)}"
+    if a.borne_haute is not None:
+        return f"< {_format_valeur(a.borne_haute)}"
+    if a.borne_basse is not None:
+        return f"> {_format_valeur(a.borne_basse)}"
+    return ""
+
+
+def _champ_analyte(a, cle_widget: str) -> float | None:
+    """Un champ de saisie : vide au départ, la plage normale en gris dedans,
+    un signalement rouge sous le champ si la valeur en sort."""
+    texte = st.text_input(
+        f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
+        value="",
+        placeholder=_plage_normale(a),
+        key=cle_widget,
+    )
+    if not texte.strip():
+        return None
+    valeur = _nombre_saisi(texte)
+    if valeur is None:
+        st.markdown(
+            f"<span style='color:{theme.ROUGE};font-size:.74rem'>valeur non numérique</span>",
+            unsafe_allow_html=True,
+        )
+        return None
+
+    # Deux niveaux, comme le veut le bloc 4 : « anormal » n'est pas
+    # « impossible ». Le premier informe, le second alerte.
+    impossible = coherence.verifier_bilan({a.id: valeur})
+    if impossible:
+        st.markdown(
+            f"<span style='color:{theme.ROUGE};font-size:.74rem;font-weight:700'>"
+            f"⚠ hors bornes physiologiques</span>",
+            unsafe_allow_html=True,
+        )
+    else:
+        alerte = a.hors_bornes(valeur)
+        if alerte:
+            fleche = "↑" if alerte == "haut" else "↓"
+            st.markdown(
+                f"<span style='color:{theme.ROUGE};font-size:.74rem;font-weight:600'>"
+                f"{fleche} hors plage usuelle</span>",
+                unsafe_allow_html=True,
+            )
+    return valeur
+
+
 def onglet_bilans(sejour: dict) -> None:
-    """Lecture d'abord, saisie ensuite : au lit du malade on consulte les
-    bilans bien plus souvent qu'on n'en saisit."""
+    """Deux usages, deux ordres de lecture. Par défaut on vient saisir un
+    bilan, souvent avec le DMI ouvert à côté et la fenêtre en demi-écran :
+    la saisie est donc en premier, sur deux colonnes qui tiennent dans cette
+    largeur. La cinétique suit."""
+    saisie_bilan(sejour)
+
+    st.divider()
     vue_cinetique(sejour)
 
     st.subheader("Texte généré")
     date_affichee = st.date_input("Jour", value=date.today(), key="date_bilan_texte")
     texte = bilans_service.texte_genere(base, sejour["id"], str(date_affichee))
-    st.text_area("Prêt à coller dans l'évolution", value=texte or "(aucun bilan ce jour-là)", height=200)
+    st.text_area(
+        "Prêt à coller dans l'évolution",
+        value=texte or "(aucun bilan ce jour-là)",
+        height=200,
+    )
 
 
-    with st.expander("➕ Saisir un bilan"):
-        unite_lipides = st.radio(
-            "Saisie des lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
+def saisie_bilan(sejour: dict) -> None:
+    st.markdown("##### Saisir un bilan")
+    haut1, haut2 = st.columns(2)
+    date_heure = haut1.text_input(
+        "Date / heure du prélèvement",
+        value=datetime.now().isoformat(timespec="minutes"),
+        key="bilan_date_heure",
+    )
+    unite_lipides = haut2.radio(
+        "Lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
+    )
+
+    valeurs: dict[str, float | None] = {}
+
+    # Deux colonnes : c'est ce qui tient dans une fenêtre en demi-écran, à
+    # côté du DMI.
+    for groupe in cat.GROUPES:
+        st.markdown(f"**{groupe.titre}**")
+        colonnes = st.columns(2)
+        saisissables = [a for a in groupe.analytes if not a.calcule]
+        for i, a in enumerate(saisissables):
+            with colonnes[i % 2]:
+                valeur = _champ_analyte(a, f"bilan_{a.id}")
+                if groupe.code == "lipidique" and valeur is not None and unite_lipides == "g/L":
+                    valeur = bilans_service.gl_vers_mmol(a.id, valeur)
+                valeurs[a.id] = valeur
+
+    st.markdown("**Gaz du sang & ventilation**")
+    g1, g2 = st.columns(2)
+    mode_vent = g1.selectbox("Mode ventilatoire", ["—", *cat.MODES_VENTILATOIRES], key="gds_mode")
+    debit_o2 = _nombre_saisi(
+        g2.text_input("Débit O₂ (L/min)", value="", placeholder="si masque ou lunette",
+                      key="gds_debit")
+    )
+    gaz: dict[str, float | None] = {}
+    champs_gaz = [
+        ("fio2", "FiO₂ (%)", "21 – 100"), ("pep", "PEP (cmH₂O)", "0 – 20"),
+        ("fr", "FR (/min)", "12 – 25"), ("spo2", "SpO₂ (%)", "≥ 94"),
+        ("ph", "pH", "7,35 – 7,45"), ("pao2", "PaO₂ (mmHg)", "80 – 100"),
+        ("paco2", "PaCO₂ (mmHg)", "35 – 45"), ("hco3", "HCO₃⁻ (mmol/L)", "22 – 26"),
+        ("lactate", "Lactates (mmol/L)", "< 2"),
+    ]
+    colonnes_gaz = st.columns(2)
+    for i, (cle, libelle, plage) in enumerate(champs_gaz):
+        with colonnes_gaz[i % 2]:
+            texte = st.text_input(libelle, value="", placeholder=plage, key=f"gds_{cle}")
+            valeur = _nombre_saisi(texte)
+            if texte.strip() and valeur is None:
+                st.markdown(
+                    f"<span style='color:{theme.ROUGE};font-size:.74rem'>valeur non numérique</span>",
+                    unsafe_allow_html=True,
+                )
+            elif valeur is not None and coherence.verifier_gaz_du_sang({cle: valeur}):
+                st.markdown(
+                    f"<span style='color:{theme.ROUGE};font-size:.74rem;font-weight:700'>"
+                    f"⚠ hors bornes physiologiques</span>",
+                    unsafe_allow_html=True,
+                )
+            gaz[cle] = valeur
+
+    # Valeurs dérivées, affichées dès que leurs ingrédients sont là.
+    age = age_ans(sejour["date_naissance"])
+    derivees = [
+        v for v in calculs.toutes_les_valeurs(
+            resultats=valeurs, gaz=gaz, poids_kg=sejour["poids_kg"],
+            age_ans=age, sexe=sejour["sexe"],
+        )
+        if v.disponible
+    ]
+    if derivees:
+        theme.bloc(
+            "Calculé automatiquement",
+            [
+                f"<b>{v.libelle}</b> : {_format_valeur(v.valeur)} {v.unite}"
+                f" <span style='color:{theme.GRIS};font-size:.78rem'>— {v.formule}</span>"
+                for v in derivees
+            ],
+            theme.BLEU,
+        )
+    if not sejour["poids_kg"]:
+        st.caption(
+            "Poids non renseigné à l'admission : la clairance de la créatinine "
+            "ne peut pas être calculée."
         )
 
-        with st.form("bilans_form"):
-            date_heure = st.text_input(
-                "Date / heure du prélèvement", value=datetime.now().isoformat(timespec="minutes")
+    avertissements = (
+        coherence.verifier_bilan(valeurs) + coherence.verifier_gaz_du_sang(gaz)
+    )
+    forcer = False
+    if avertissements:
+        for a in avertissements:
+            st.warning(a.message)
+        forcer = st.checkbox(
+            "Forcer l'enregistrement malgré les avertissements",
+            key="bilan_forcer",
+            help="La valeur est enregistrée et marquée comme forcée, pour qu'un "
+                 "relecteur puisse la retrouver.",
+        )
+
+    saisi = any(v is not None for v in valeurs.values()) or any(
+        v is not None for v in gaz.values()
+    ) or mode_vent != "—"
+
+    if st.button("Enregistrer le bilan", type="primary", use_container_width=True,
+                 disabled=not saisi):
+        if avertissements and not forcer:
+            st.error(
+                "Corrigez les valeurs signalées, ou cochez « Forcer "
+                "l'enregistrement » puis validez à nouveau."
             )
-
-            valeurs: dict[str, float | None] = {}
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**NFS**")
-                for a in [a for g in cat.GROUPES if g.code == "nfs" for a in g.analytes]:
-                    valeurs[a.id] = st.number_input(
-                        f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
-                        min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
-                    )
-            with col2:
-                st.markdown("**Hémostase**")
-                for a in [a for g in cat.GROUPES if g.code == "hemostase" for a in g.analytes]:
-                    valeurs[a.id] = st.number_input(
-                        f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
-                        min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
-                    )
-
-            st.markdown("**Ionogramme & rénale**")
-            cols = st.columns(4)
-            for i, a in enumerate(
-                [a for code in ("ionogramme", "renale", "inflammation") for g in cat.GROUPES if g.code == code for a in g.analytes]
-            ):
-                with cols[i % 4]:
-                    valeurs[a.id] = st.number_input(
-                        f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
-                        min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
-                    )
-
-            st.markdown("**Gaz du sang & ventilation**")
-            c1, c2, c3 = st.columns(3)
-            mode_vent = c1.selectbox("Mode ventilatoire", ["—", *cat.MODES_VENTILATOIRES])
-            debit_o2 = c2.number_input("Débit O₂ (L/min, si masque/lunette)", min_value=0.0, step=0.5, value=0.0)
-            fio2 = c3.number_input("FiO₂ (%)", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
-            c4, c5, c6 = st.columns(3)
-            pep = c4.number_input("PEP (cmH₂O)", min_value=0.0, step=1.0, value=0.0)
-            fr = c5.number_input("FR (/min)", min_value=0.0, step=1.0, value=0.0)
-            spo2 = c6.number_input("SpO₂ (%)", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
-            c7, c8, c9, c10 = st.columns(4)
-            ph = c7.number_input("pH", min_value=0.0, step=0.01, value=0.0, format="%.2f")
-            pao2 = c8.number_input("PaO₂ (mmHg)", min_value=0.0, step=1.0, value=0.0)
-            paco2 = c9.number_input("PaCO₂ (mmHg)", min_value=0.0, step=1.0, value=0.0)
-            hco3 = c10.number_input("HCO₃⁻ (mmol/L)", min_value=0.0, step=0.1, value=0.0)
-            lactate = st.number_input("Lactates (mmol/L)", min_value=0.0, step=0.1, value=0.0)
-
-            st.markdown("**Bilan hépatique**")
-            cols = st.columns(4)
-            for i, a in enumerate([a for g in cat.GROUPES if g.code == "hepatique" for a in g.analytes if not a.calcule]):
-                with cols[i % 4]:
-                    valeurs[a.id] = st.number_input(
-                        f"{a.libelle} ({a.unite})" if a.unite else a.libelle,
-                        min_value=0.0, step=0.1, value=0.0, key=f"bilan_{a.id}",
-                    )
-
-            st.markdown(f"**Bilan lipidique** (saisi en {unite_lipides})")
-            cols = st.columns(4)
-            lipides_saisis: dict[str, float | None] = {}
-            for i, a in enumerate([a for g in cat.GROUPES if g.code == "lipidique" for a in g.analytes]):
-                with cols[i % 4]:
-                    lipides_saisis[a.id] = st.number_input(
-                        a.libelle, min_value=0.0, step=0.01, value=0.0, key=f"bilan_{a.id}",
-                    )
-
-            forcer = st.checkbox(
-                "Forcer l'enregistrement malgré les avertissements",
-                help="La valeur est enregistrée et marquée comme forcée, pour "
-                     "qu'un relecteur puisse la retrouver.",
+            return
+        bilans_service.enregistrer_resultats(
+            base, sejour["id"], date_heure, valeurs,
+            utilisateur_id=utilisateur_id, saisie_forcee=forcer,
+        )
+        if mode_vent != "—" or any(v is not None for v in gaz.values()):
+            bilans_service.enregistrer_gaz_du_sang(
+                base, sejour["id"], date_heure,
+                mode_ventilatoire=None if mode_vent == "—" else mode_vent,
+                debit_o2=debit_o2, utilisateur_id=utilisateur_id, **gaz,
             )
-            if st.form_submit_button("Enregistrer les bilans"):
-                valeurs_non_nulles = {k: (v or None) for k, v in valeurs.items()}
-                for id_lipide, v in lipides_saisis.items():
-                    if not v:
-                        continue
-                    valeurs_non_nulles[id_lipide] = (
-                        v if unite_lipides == "mmol/L" else bilans_service.gl_vers_mmol(id_lipide, v)
-                    )
-
-                # Bloc 4 : un avertissement n'est jamais un blocage, mais on ne
-                # laisse pas passer une kaliémie à 45 sans le dire.
-                avertissements = coherence.verifier_bilan(
-                    valeurs_non_nulles
-                ) + coherence.verifier_gaz_du_sang({
-                    "ph": ph or None, "pao2": pao2 or None, "paco2": paco2 or None,
-                    "hco3": hco3 or None, "lactate": lactate or None,
-                    "fio2": fio2 or None, "pep": pep or None, "fr": fr or None,
-                    "spo2": spo2 or None,
-                })
-                if avertissements and not forcer:
-                    for a in avertissements:
-                        st.warning(a.message)
-                    st.info(
-                        "Corrigez la valeur, ou cochez « Forcer l'enregistrement » "
-                        "puis validez à nouveau."
-                    )
-                    st.stop()
-
-                bilans_service.enregistrer_resultats(
-                    base, sejour["id"], date_heure, valeurs_non_nulles,
-                    utilisateur_id=utilisateur_id, saisie_forcee=forcer,
-                )
-                if mode_vent != "—" or any([fio2, pep, fr, spo2, ph, pao2, paco2, hco3, lactate]):
-                    bilans_service.enregistrer_gaz_du_sang(
-                        base, sejour["id"], date_heure,
-                        ph=ph or None, pao2=pao2 or None, paco2=paco2 or None, hco3=hco3 or None,
-                        lactate=lactate or None, mode_ventilatoire=None if mode_vent == "—" else mode_vent,
-                        debit_o2=debit_o2 or None, fio2=fio2 or None, pep=pep or None, fr=fr or None,
-                        spo2=spo2 or None, utilisateur_id=utilisateur_id,
-                    )
-                st.success("Bilan enregistré.")
-                st.rerun()
-
+        for cle in list(st.session_state):
+            if cle.startswith(("bilan_", "gds_")) and cle != "bilan_date_heure":
+                del st.session_state[cle]
+        st.success("Bilan enregistré.")
+        st.rerun()
 
 
 def _format_valeur(valeur: float | None) -> str:
