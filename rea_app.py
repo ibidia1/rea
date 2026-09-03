@@ -191,8 +191,9 @@ def _carte_lit(lit_info: dict, resumes: dict) -> None:
         unsafe_allow_html=True,
     )
     if not lit_info["occupe"]:
+        # « Libre » suffit : ajouter une pastille « Disponible » disait deux
+        # fois la même chose dans une carte déjà étroite.
         st.markdown('<div class="rea-lit-libre">Libre</div></div>', unsafe_allow_html=True)
-        theme.chips([("Disponible", "ok")])
         if st.button("Admettre", key=f"lit_{numero}", use_container_width=True):
             st.session_state["lit_admission_choisi"] = numero
             st.session_state["mode"] = "nouvelle_admission"
@@ -209,13 +210,15 @@ def _carte_lit(lit_info: dict, resumes: dict) -> None:
     pastilles: list[tuple[str, str]] = [(f"J{lit_info['jour_hospitalisation']}", "info")]
     if sejours_service.allergies_du_patient(base, lit_info["patient_id"]):
         pastilles.append(("Allergie", "alerte"))
+    # Sur une tuile étroite, seuls les dispositifs qui changent la conduite
+    # tiennent : le détail complet est dans le bandeau de la fiche patient.
     for e in resumes.get(sejour_id, []):
-        if not e.en_place:
+        if not e.en_place or e.type not in ("intubation", "sedation", "eer", "kt_central"):
             continue
         court = e.texte.split(" (")[0]
         style = "attention" if e.type in ("intubation", "sedation", "eer") else "neutre"
         pastilles.append((court, style))
-    theme.chips(pastilles[:6])
+    theme.chips(pastilles[:4])
 
     if st.button("Ouvrir", key=f"lit_{numero}", use_container_width=True):
         st.session_state["sejour_id"] = sejour_id
