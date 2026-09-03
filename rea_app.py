@@ -91,13 +91,25 @@ def ecran_lits() -> None:
         if any(d.en_place and d.type == "sedation" for d in e)
     )
 
+    aujourdhui = _aujourdhui()
+    admissions_jour = base.une_ligne(
+        "SELECT COUNT(*) AS n FROM sejour WHERE date_admission LIKE ? AND supprime = 0",
+        (f"{aujourdhui}%",),
+    )["n"]
+    sorties_jour = base.une_ligne(
+        "SELECT COUNT(*) AS n FROM sejour WHERE date_sortie LIKE ? AND supprime = 0",
+        (f"{aujourdhui}%",),
+    )["n"]
+
     st.markdown("### Tableau des lits")
-    c1, c2, c3, c4, c5, _vide = st.columns([1, 1, 1, 1, 1, 3])
+    c1, c2, c3, c4, c5, c6, c7, _vide = st.columns([1, 1, 1, 1, 1, 1, 1, 1.6])
     c1.metric("Occupés", f"{len(occupes)}/{config.NB_LITS}")
     c2.metric("Libres", config.NB_LITS - len(occupes))
     c3.metric("Occupation", f"{round(100 * len(occupes) / config.NB_LITS)} %")
     c4.metric("Intubés", intubes)
     c5.metric("Sédatés", sedates)
+    c6.metric("Admissions du jour", admissions_jour)
+    c7.metric("Sorties du jour", sorties_jour)
 
     # Six colonnes : les douze lits tiennent en deux rangées, sans défilement.
     for rangee in (range(1, 7), range(7, config.NB_LITS + 1)):
@@ -116,22 +128,34 @@ def ecran_lits() -> None:
 
 
 def _tableau_de_bord(occupes: list[dict], resumes: dict) -> None:
-    """Ce qui demande une décision aujourd'hui, calculé depuis ce qui est
-    déjà saisi : rien à ressaisir, rien à cocher."""
+    """La vue de la visite : une ligne par patient avec l'essentiel, et à
+    côté ce qui demande une décision aujourd'hui. Tout est calculé depuis ce
+    qui est déjà saisi — rien à ressaisir, rien à cocher."""
+    if not occupes:
+        st.info("Aucun patient hospitalisé. Cliquez sur « Admettre » pour ouvrir un séjour.")
+        return
+
     aujourdhui = _aujourdhui()
     demain = str(lendemain(aujourdhui))
 
+    synoptique: list[dict] = []
     echeances: list[str] = []
     dispositifs_anciens: list[str] = []
     a_preparer: list[str] = []
 
-    for lit in occupes:
+    for lit in sorted(occupes, key=lambda l: l["lit"]):
         nom = lit["nom_affichage"]
-        pancarte = prescriptions_service.pancarte_du_jour(base, lit["sejour_id"], aujourdhui)
+        sejour_id = lit["sejour_id"]
+        pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, aujourdhui)
+
+        durees: list[str] = []
         for ligne in pancarte["lignes"]:
             if ligne["statut"] != "active":
                 continue
             etiquette = dom.etiquette_jour(ligne, aujourdhui)
+            if not ligne["duree_prevue_jours"]:
+                continue
+            durees.append(f"{ligne['produit']} {etiquette.texte}")
             if etiquette.dernier_jour:
                 echeances.append(
                     f"<b>Lit {lit['lit']} · {nom}</b> — {ligne['produit']} "
@@ -143,29 +167,73 @@ def _tableau_de_bord(occupes: list[dict], resumes: dict) -> None:
                     f"au-delà de la durée prévue ({etiquette.texte})"
                 )
 
-        for e in resumes.get(lit["sejour_id"], []):
+        etats_disp = resumes.get(sejour_id, [])
+        for e in etats_disp:
             if e.en_place and e.jour >= 7 and e.type in (
                 "kt_central", "kta", "sonde_urinaire", "picc", "ktsp", "intubation"
             ):
-                dispositifs_anciens.append(
-                    f"<b>Lit {lit['lit']} · {nom}</b> — {e.texte}"
-                )
+                dispositifs_anciens.append(f"<b>Lit {lit['lit']} · {nom}</b> — {e.texte}")
 
         journee = base.une_ligne(
             "SELECT preparee_le FROM journee WHERE sejour_id = ? AND date_jour = ? "
             "AND supprime = 0",
-            (lit["sejour_id"], demain),
+            (sejour_id, demain),
         )
-        if not journee or not journee["preparee_le"]:
+        prete = bool(journee and journee["preparee_le"])
+        if not prete:
             a_preparer.append(f"Lit {lit['lit']} · {nom}")
 
-    if not occupes:
-        return
+        derniers = bilans_service.dernieres_variations(
+            base, sejour_id, ["crp", "creat", "hb"]
+        )
+        valeurs = {v.analyte: v for v in derniers}
+
+        def _valeur(code: str) -> str:
+            v = valeurs.get(code)
+            if not v or v.valeur is None:
+                return "—"
+            fleche = ""
+            if v.delta:
+                fleche = " ↑" if v.delta > 0 else " ↓"
+            marque = " !" if v.alerte else ""
+            return f"{_format_valeur(v.valeur)}{fleche}{marque}"
+
+        synoptique.append({
+            "Lit": lit["lit"],
+            "Patient": nom,
+            "J": lit["jour_hospitalisation"],
+            "Motif": _motif_court(sejour_id, lit["traumatique"]),
+            "Dispositifs": " · ".join(
+                e.texte.split(" (")[0] for e in etats_disp if e.en_place
+            ) or "—",
+            "Durées prévues": " · ".join(durees) or "—",
+            "Entrées 24 h": f"{pancarte['bilan_entrees'].total_ml:.0f} mL",
+            "CRP": _valeur("crp"),
+            "Créat.": _valeur("creat"),
+            "Hb": _valeur("hb"),
+            "Bilans demain": len(pancarte["bilans_demandes"]) or "—",
+            "Pancarte demain": "prête" if prete else "à préparer",
+        })
+
+    import pandas as pd
+
+    # Le synoptique prend toute la largeur : c'est un tableau de visite, il
+    # ne doit jamais avoir de colonne tronquée.
+    st.markdown("##### Synoptique du service")
+    st.dataframe(
+        pd.DataFrame(synoptique).set_index("Lit"),
+        use_container_width=True,
+        height=min(36 * len(synoptique) + 40, 430),
+    )
+    st.caption(
+        "Flèche = variation depuis le prélèvement précédent · "
+        "« ! » = hors des bornes usuelles, à valider par un senior"
+    )
 
     g, m, d = st.columns(3)
     with g:
         theme.bloc(
-            "Antibiothérapies à revoir",
+            "Traitements à revoir",
             echeances or ["Aucune échéance aujourd'hui"],
             theme.ROUGE if echeances else theme.VERT,
         )
@@ -177,7 +245,7 @@ def _tableau_de_bord(occupes: list[dict], resumes: dict) -> None:
         )
     with d:
         theme.bloc(
-            f"Pancartes de demain à préparer ({len(a_preparer)})",
+            f"Pancartes de demain ({len(a_preparer)} à préparer)",
             a_preparer or ["Toutes préparées"],
             theme.BLEU if a_preparer else theme.VERT,
         )
