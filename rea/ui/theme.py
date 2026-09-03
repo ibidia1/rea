@@ -1,103 +1,161 @@
 """Habillage visuel commun (CSS injecté une fois par page).
 
-L'écran est lu debout, parfois de loin, dans une pièce éclairée : on
-privilégie le contraste et la taille des cibles cliquables sur l'esthétique.
-Le code couleur est constant dans toute l'application :
+Trois contraintes, dans cet ordre :
 
-* rouge   — alerte : allergie, décès, valeur hors norme haute, dernier jour
-* orange  — attention : échéance proche, valeur hors norme basse
-* bleu    — information calculée par le logiciel (compteurs, totaux)
-* vert    — situation stable / lit libre
+1. **Densité** — un écran de réanimation doit montrer beaucoup d'un coup.
+   On préfère toujours élargir plutôt qu'allonger : le défilement fait
+   perdre le fil, la largeur non.
+2. **Contraste** — l'écran est lu debout, parfois de loin, dans une pièce
+   éclairée.
+3. **Un code couleur constant** dans toute l'application :
+
+   * rouge   — alerte : allergie, décès, valeur trop haute, dernier jour
+   * orange  — attention : dispositif invasif, échéance proche
+   * bleu    — information calculée par le logiciel (compteurs, totaux)
+   * vert    — stable, disponible
+   * violet  — examens et explorations
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
-ROUGE = "#E63946"
-ORANGE = "#F4A261"
+ROUGE = "#D62839"
+ORANGE = "#E8850C"
 BLEU = "#1D6FB8"
-VERT = "#2A9D8F"
-GRIS = "#6B7280"
+VERT = "#1E8E6A"
+VIOLET = "#7048B6"
+GRIS = "#5B6470"
+BORDURE = "#DDE3EC"
+
+# Couleur d'accent par voie d'administration : la pancarte se lit d'un coup
+# d'œil parce que chaque voie a toujours la même couleur.
+COULEUR_VOIE = {
+    "PO": VERT,
+    "IV": ROUGE,
+    "PSE": ORANGE,
+    "SC": BLEU,
+    "AEROSOL": VIOLET,
+    "SOINS": GRIS,
+    "KINE": GRIS,
+    "ENTREES": BLEU,
+}
+
+# Idem pour les familles de dispositifs.
+COULEUR_DISPOSITIF = {
+    "intubation": ROUGE, "sedation": ROUGE, "tracheotomie": ROUGE,
+    "sng": ORANGE, "gastrostomie": ORANGE,
+    "kt_central": VIOLET, "picc": VIOLET, "kta": VIOLET, "voie_peripherique": VIOLET,
+    "sonde_urinaire": BLEU, "ktsp": BLEU,
+    "drain_thoracique": GRIS, "drain_abdominal": GRIS, "dve": GRIS, "eer": GRIS,
+}
 
 CSS = f"""
 <style>
-/* --- Densité : une pancarte tient à l'écran sans défilement inutile --- */
-.block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1400px; }}
-h1 {{ font-size: 1.9rem !important; font-weight: 700 !important; }}
-h2 {{ font-size: 1.35rem !important; }}
-h3 {{ font-size: 1.1rem !important; }}
-
-/* --- Tuiles de lit --- */
-div[data-testid="stButton"] > button {{
-    border-radius: 10px;
-    border: 1px solid #E2E6EE;
-    transition: border-color .12s, box-shadow .12s, transform .06s;
+/* ---- Occuper la largeur, économiser la hauteur ---------------------- */
+.block-container {{
+    /* 2.6rem en haut : moins que le défaut, mais assez pour passer sous la
+       barre d'outils fixe de Streamlit, qui masquerait le premier titre. */
+    padding: 2.6rem 1.6rem 2rem 1.6rem !important;
+    max-width: 100% !important;
 }}
-div[data-testid="stButton"] > button:hover {{
-    border-color: {ROUGE};
-    box-shadow: 0 2px 10px rgba(0,0,0,.07);
-}}
-div[data-testid="stButton"] > button:active {{ transform: scale(.99); }}
+div[data-testid="stVerticalBlock"] {{ gap: .45rem; }}
+div[data-testid="stHorizontalBlock"] {{ gap: .6rem; }}
+h1 {{ font-size: 1.55rem !important; font-weight: 700 !important; margin-bottom: .2rem !important; }}
+h2 {{ font-size: 1.15rem !important; margin: .2rem 0 .1rem 0 !important; }}
+h3, h4, h5 {{ font-size: .98rem !important; margin: .1rem 0 !important; }}
+hr {{ margin: .5rem 0 !important; }}
+p, li, .stMarkdown {{ font-size: .92rem; }}
+div[data-testid="stExpander"] details {{ border-radius: 10px; border-color: {BORDURE}; }}
 
-/* --- Bandeaux d'état du patient --- */
-.rea-chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 14px 0; }}
+/* ---- Métriques compactes -------------------------------------------- */
+div[data-testid="stMetric"] {{
+    background: #FFF; border: 1px solid {BORDURE}; border-radius: 10px;
+    padding: .45rem .7rem; border-left: 4px solid {BLEU};
+}}
+div[data-testid="stMetricLabel"] p {{ font-size: .72rem !important; color: {GRIS}; font-weight: 600; }}
+div[data-testid="stMetricValue"] {{ font-size: 1.5rem !important; }}
+
+/* ---- Tuiles et cartes ----------------------------------------------- */
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    border-radius: 11px !important; border-color: {BORDURE} !important;
+}}
+.rea-lit {{ line-height: 1.25; }}
+.rea-lit-num {{ font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: {GRIS}; }}
+.rea-lit-nom {{ font-size: 1rem; font-weight: 700; margin: 1px 0; }}
+.rea-lit-motif {{ font-size: .8rem; color: {GRIS}; margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.rea-lit-libre {{ font-size: .9rem; color: {VERT}; font-weight: 600; }}
+
+/* ---- Pastilles d'état ------------------------------------------------ */
+.rea-chips {{ display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 8px 0; }}
 .rea-chip {{
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 11px; border-radius: 999px;
-    font-size: .82rem; font-weight: 600; line-height: 1.5;
-    border: 1px solid transparent; white-space: nowrap;
+    display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px;
+    font-size: .74rem; font-weight: 600; line-height: 1.55; border: 1px solid transparent;
+    white-space: nowrap;
 }}
-.rea-chip.alerte  {{ background: #FDE8EA; color: #9B1C26; border-color: #F5C2C7; }}
-.rea-chip.attention {{ background: #FEF3E2; color: #8A5200; border-color: #F8D9A8; }}
-.rea-chip.info    {{ background: #E7F0FA; color: #14507F; border-color: #C5DCF2; }}
-.rea-chip.ok      {{ background: #E6F5F3; color: #1E6F65; border-color: #BEE3DE; }}
-.rea-chip.neutre  {{ background: #F1F4F9; color: #4B5563; border-color: #E2E6EE; }}
+.rea-chip.alerte    {{ background: #FCE4E7; color: #96131F; border-color: #F3BFC5; }}
+.rea-chip.attention {{ background: #FDF0DC; color: #8A5200; border-color: #F5D9AE; }}
+.rea-chip.info      {{ background: #E4EEF9; color: #144E7F; border-color: #C2D9F0; }}
+.rea-chip.ok        {{ background: #E1F2EC; color: #14624A; border-color: #B9E0D2; }}
+.rea-chip.examen    {{ background: #EEE8F8; color: #4C2E86; border-color: #D6C8F0; }}
+.rea-chip.neutre    {{ background: #EEF1F6; color: #454C58; border-color: {BORDURE}; }}
 
-/* --- Cartes de section --- */
-.rea-carte {{
-    border: 1px solid #E2E6EE; border-radius: 12px;
-    padding: 14px 16px; background: #fff; margin-bottom: 12px;
+/* ---- Blocs de section colorés --------------------------------------- */
+.rea-bloc {{
+    border: 1px solid {BORDURE}; border-left: 4px solid {GRIS};
+    border-radius: 9px; padding: 8px 11px; background: #fff; margin-bottom: 7px;
 }}
-.rea-carte-titre {{
-    font-size: .72rem; font-weight: 700; letter-spacing: .09em;
-    text-transform: uppercase; color: {GRIS}; margin-bottom: 8px;
+.rea-bloc-titre {{
+    font-size: .68rem; font-weight: 800; letter-spacing: .09em;
+    text-transform: uppercase; margin-bottom: 4px;
 }}
+.rea-bloc ul {{ margin: 0; padding-left: 1.05rem; }}
+.rea-bloc li {{ font-size: .88rem; line-height: 1.5; }}
+.rea-bloc li.arretee {{ text-decoration: line-through; color: {GRIS}; }}
+.rea-j {{ font-weight: 700; color: {BLEU}; }}
+.rea-fin {{ color: {ROUGE}; font-weight: 700; }}
 
-/* --- Lignes de prescription --- */
-.rea-ligne {{ padding: 3px 0; font-size: .95rem; }}
-.rea-ligne.arretee {{ text-decoration: line-through; color: {GRIS}; }}
-.rea-compteur {{ font-weight: 700; color: {BLEU}; }}
-.rea-dernier-jour {{ color: {ROUGE}; font-weight: 600; }}
-
-/* --- Valeurs de bilan --- */
-.rea-haut {{ color: {ROUGE}; font-weight: 700; }}
-.rea-bas  {{ color: {BLEU}; font-weight: 700; }}
-
-/* --- Onglets un peu plus lisibles --- */
-button[data-baseweb="tab"] {{ font-size: 1rem !important; font-weight: 600 !important; }}
+/* ---- Tableaux plus denses ------------------------------------------- */
+div[data-testid="stDataFrame"] {{ font-size: .85rem; }}
 </style>
 """
 
 
 def appliquer() -> None:
-    """À appeler une fois, au début du script."""
     st.markdown(CSS, unsafe_allow_html=True)
 
 
 def chips(elements: list[tuple[str, str]]) -> None:
-    """Bandeau de pastilles d'état. `elements` : (texte, style) où style vaut
-    alerte / attention / info / ok / neutre."""
+    """Bandeau de pastilles. `elements` : (texte, style) où style vaut
+    alerte / attention / info / ok / examen / neutre."""
     if not elements:
         return
-    html = '<div class="rea-chips">' + "".join(
-        f'<span class="rea-chip {style}">{texte}</span>' for texte, style in elements
-    ) + "</div>"
-    st.markdown(html, unsafe_allow_html=True)
-
-
-def carte(titre: str, contenu_html: str) -> None:
     st.markdown(
-        f'<div class="rea-carte"><div class="rea-carte-titre">{titre}</div>{contenu_html}</div>',
+        '<div class="rea-chips">'
+        + "".join(f'<span class="rea-chip {s}">{t}</span>' for t, s in elements)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def bloc(titre: str, lignes_html: list[str], couleur: str = GRIS) -> None:
+    """Bloc de section : un titre coloré et une liste. Bien plus compact
+    qu'un `st.subheader` suivi de `st.write` ligne à ligne."""
+    corps = "".join(f"<li>{l}</li>" for l in lignes_html) if lignes_html else ""
+    st.markdown(
+        f'<div class="rea-bloc" style="border-left-color:{couleur}">'
+        f'<div class="rea-bloc-titre" style="color:{couleur}">{titre}</div>'
+        f"<ul>{corps}</ul></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def bloc_html(titre: str, contenu: str, couleur: str = GRIS) -> None:
+    st.markdown(
+        f'<div class="rea-bloc" style="border-left-color:{couleur}">'
+        f'<div class="rea-bloc-titre" style="color:{couleur}">{titre}</div>'
+        f"{contenu}</div>",
         unsafe_allow_html=True,
     )
