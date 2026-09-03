@@ -122,3 +122,49 @@ def test_toutes_les_valeurs_sur_un_bilan_vide():
     # Les entrées existent quand même, avec leur formule : on peut expliquer
     # à l'utilisateur ce qui manque.
     assert all(v.formule and v.reference for v in valeurs)
+
+
+# --- poids idéal (Devine, 1974) -------------------------------------------
+
+def test_poids_ideal_homme():
+    # 50 + 0,91 × (175 − 152,4) = 70,6
+    assert calculs.poids_ideal_devine(taille_cm=175, sexe="M").valeur == pytest.approx(70.6, abs=0.1)
+
+
+def test_poids_ideal_femme():
+    # 45,5 + 0,91 × (165 − 152,4) = 57,0
+    assert calculs.poids_ideal_devine(taille_cm=165, sexe="F").valeur == pytest.approx(57.0, abs=0.1)
+
+
+def test_poids_ideal_a_la_taille_pivot():
+    # À 152,4 cm, la formule rend exactement la constante de départ.
+    assert calculs.poids_ideal_devine(taille_cm=152.4, sexe="M").valeur == 50.0
+    assert calculs.poids_ideal_devine(taille_cm=152.4, sexe="F").valeur == 45.5
+
+
+def test_poids_ideal_sans_taille_rend_none():
+    assert calculs.poids_ideal_devine(taille_cm=None, sexe="M").valeur is None
+
+
+def test_poids_ideal_sans_sexe_rend_none():
+    # La formule diffère entre homme et femme : sans le sexe, pas de résultat.
+    assert calculs.poids_ideal_devine(taille_cm=175, sexe="non_renseigne").valeur is None
+
+
+def test_poids_ideal_hors_domaine_de_validite():
+    # Sous 1,20 m la formule rendrait un poids absurde : on n'affiche rien.
+    assert calculs.poids_ideal_devine(taille_cm=100, sexe="M").valeur is None
+
+
+def test_poids_ideal_ne_remplace_pas_le_poids_reel():
+    v = calculs.poids_ideal_devine(taille_cm=175, sexe="M")
+    assert "ne remplace pas le poids réel" in v.commentaire
+    assert "Devine" in v.reference
+
+
+def test_poids_ideal_figure_dans_les_valeurs_derivees():
+    valeurs = calculs.toutes_les_valeurs(
+        resultats={}, gaz={}, taille_cm=175, sexe="M",
+    )
+    ideal = next(v for v in valeurs if v.cle == "poids_ideal")
+    assert ideal.valeur == pytest.approx(70.6, abs=0.1)

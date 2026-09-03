@@ -1,6 +1,6 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.8 — 3 septembre 2026**
+**Version 1.9 — 3 septembre 2026**
 
 > **Document de référence du projet.** Complété par **FEUILLE_DE_ROUTE.md**,
 > qui fixe l'ordre de construction et les règles d'isolation entre couches.
@@ -795,6 +795,24 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.9 — 3 septembre 2026**
+
+- **Poids idéal théorique** ajouté aux valeurs dérivées, formule de Devine
+  adaptée aux centimètres, telle que fournie par le service :
+
+      Homme : 50   + 0,91 × (taille − 152,4)
+      Femme : 45,5 + 0,91 × (taille − 152,4)
+
+  Référence : Devine BJ, *Drug Intell Clin Pharm* 1974;8:650-5
+- Le poids idéal **ne remplace jamais le poids réel** : les deux sont affichés
+  côte à côte dans la fiche d'identité. C'est le **poids réel** qui entre dans
+  la clairance de la créatinine
+- La formule sort de son domaine de validité chez les patients de moins de
+  1,20 m : dans ce cas rien n'est affiché plutôt qu'un poids absurde
+- Le sexe est indispensable — sans lui, la formule n'a pas de constante de
+  départ et la valeur reste vide
+- 146 tests (pytest, +8)
 
 **v1.8 — 3 septembre 2026**
 
