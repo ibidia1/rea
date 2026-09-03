@@ -66,6 +66,7 @@ def creer_sejour(
     traumatique: bool | None = None,
     mecanisme: str | None = None,
     mecanisme_detail: str | None = None,
+    creatinine_base: float | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     numero = base.une_ligne(
@@ -85,6 +86,8 @@ def creer_sejour(
             "traumatique": None if traumatique is None else int(traumatique),
             "mecanisme": mecanisme,
             "mecanisme_detail": mecanisme_detail,
+            # Créatinine antérieure : sans elle KDIGO est incalculable (§5).
+            "creatinine_base": creatinine_base,
             "complication_statut": "non_renseigne",
         },
         utilisateur_id=utilisateur_id,

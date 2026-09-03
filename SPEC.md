@@ -1,8 +1,10 @@
 # SPEC — Logiciel de service, Réanimation polyvalente
 
-**Version 1.6 — 3 septembre 2026**
+**Version 1.7 — 3 septembre 2026**
 
-> **Document de référence du projet.** À renvoyer au début de chaque session de
+> **Document de référence du projet.** Complété par **FEUILLE_DE_ROUTE.md**,
+> qui fixe l'ordre de construction et les règles d'isolation entre couches.
+> À renvoyer au début de chaque session de
 > travail, accompagné du code à jour. C'est la mémoire commune du projet.
 >
 > Toute décision prise en session doit être reportée ici avant la fin de la session.
@@ -726,7 +728,8 @@ de soin.
 | 5 | Mortalité : réanimation seule, ou aussi J28 ? | Modèle de données | ouverte — les deux champs existent |
 | 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** — 6-12-18-24, modifiable |
 | 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | **résolue v1.5** — fichier HTML reçu et intégré |
-| 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte — bornes usuelles de l'adulte posées en v1.6 pour colorer la cinétique, **à valider par un senior** |
+| 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte — bornes usuelles posées (affichage) et bornes physiologiques posées (contrôles de saisie, v1.7), **les deux à valider par un senior** |
+| 13 | Source officielle des référentiels CIM-10, LOINC et ATC | Export recherche | **ouverte** — correspondances LOINC provisoires en v1.7, `LOINC_VALIDE = False` |
 | 9 | Poste du chef de service : copie lecture seule ou rien ? | Architecture | ouverte |
 | 10 | Liste des gestes chirurgicaux les plus fréquents | Interventions | ouverte — liste provisoire dans `listes.py` |
 | 11 | Qui maintient le programme en cas d'absence de l'auteur | Continuité | ouverte |
@@ -792,6 +795,45 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v1.7 — 3 septembre 2026**
+
+- **Feuille de route modulaire reprise dans le dépôt** (`FEUILLE_DE_ROUTE.md`),
+  avec en §10 un audit honnête du code existant contre ses règles. Deux
+  violations constatées et non encore corrigées : les référentiels sont dans du
+  code et non dans des fichiers (règle R2), et trois règles d'alerte sont
+  codées en dur dans l'écran (règle R4)
+- **Colonnes « à câbler tôt » posées** (§5 de la feuille de route) — elles
+  coûtent quelques minutes maintenant et des semaines de reprise rétroactive
+  plus tard :
+  - `code_atc` sur chaque ligne de prescription — sans lui, la consommation
+    antibiotique en DDD demanderait de recoder des milliers de lignes
+  - `code_loinc` et `unite_ucum` sur chaque résultat de bilan, recopiés
+    automatiquement depuis le catalogue d'analytes à l'enregistrement
+  - `code_icd10` sur le motif d'admission
+  - `creatinine_base` sur le séjour — sans elle, la définition KDIGO de
+    l'insuffisance rénale aiguë est incalculable a posteriori
+- Les 25 analytes portent une correspondance LOINC et UCUM. ⚠️ **Ces
+  correspondances sont une proposition, pas une source validée** : le drapeau
+  `analytes.LOINC_VALIDE` reste à `False` tant qu'un senior ou une source
+  officielle ne les a pas relues ligne à ligne (question B de la feuille de
+  route). L'export devra les marquer comme provisoires
+- **Bloc 4 fait — contrôles de cohérence à la saisie**, le meilleur ratio de la
+  feuille de route. Deux jeux de bornes bien distincts :
+  - *bornes usuelles* (`rea/analytes.py`) : « anormal ». Une kaliémie à 6,2 est
+    hors normes mais parfaitement réelle en réanimation
+  - *bornes physiologiques* (`rea/domaine/coherence.py`) : « impossible chez un
+    patient vivant ». Une kaliémie à 45 est une faute de frappe
+  Sont également vérifiés : sortie avant admission, extubation avant
+  intubation, naissance dans le futur, âge de plus de 120 ans, dose ou vitesse
+  absurde, durée prévue déraisonnable
+- **Un avertissement n'est jamais un blocage** : le médecin peut toujours
+  forcer, et la valeur forcée est marquée `saisie_forcee` en base pour qu'un
+  relecteur la retrouve
+- Critère de fin du bloc 4 respecté et transformé en test : **dix erreurs de
+  frappe volontaires sur dix sont signalées**, et aucune valeur anormale mais
+  réelle ne déclenche de fausse alerte
+- 108 tests (pytest, +15)
 
 **v1.6 — 3 septembre 2026**
 

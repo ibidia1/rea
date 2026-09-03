@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS sejour (
     provenance_type     TEXT,
     provenance_detail   TEXT,
     est_readmission     INTEGER NOT NULL DEFAULT 0,
+    -- Créatinine antérieure connue, en µmol/L. Sans elle, la définition KDIGO
+    -- de l'insuffisance rénale aiguë est incalculable a posteriori
+    -- (feuille de route §5, exploitée au bloc 15).
+    creatinine_base     REAL,
     motif_readmission   TEXT,
 
     -- Question filtre : conditionne toute la suite de l'écran d'admission
@@ -177,6 +181,7 @@ CREATE TABLE IF NOT EXISTS sejour_motif (
     principal  INTEGER NOT NULL DEFAULT 0,
     texte      TEXT,
     donnees    TEXT,          -- JSON
+    code_icd10 TEXT,          -- posé tôt, exploité au bloc 17
     cree_le    TEXT NOT NULL,
     cree_par   TEXT REFERENCES utilisateur(id),
     supprime   INTEGER NOT NULL DEFAULT 0
@@ -219,6 +224,10 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
     voie               TEXT NOT NULL,   -- PO / IV / PSE / SC / AEROSOL / SOINS / KINE / ENTREES
     sous_type          TEXT,            -- perfusion / nutrition_enterale / nutrition_parenterale
     produit            TEXT NOT NULL,
+    -- Code ATC (OMS). Posé dès maintenant même s'il reste vide : sans lui, la
+    -- consommation antibiotique en DDD pour 1 000 jours-patients demanderait de
+    -- recoder des milliers de lignes à la main (feuille de route §5).
+    code_atc           TEXT,
     dose               REAL,
     unite              TEXT,
     rythme             TEXT,
@@ -345,7 +354,14 @@ CREATE TABLE IF NOT EXISTS bilan_resultat (
     analyte      TEXT NOT NULL,     -- 'hb', 'creatinine', 'crp'…
     valeur_num   REAL,
     valeur_texte TEXT,
-    unite        TEXT,
+    unite        TEXT,              -- unité affichée, telle que saisie
+    -- Codes standards, remplis depuis le catalogue au moment de
+    -- l'enregistrement (feuille de route §5). Une unité UCUM normalisée est ce
+    -- qui empêche de confondre µmol/L et mg/L à l'analyse.
+    code_loinc   TEXT,
+    unite_ucum   TEXT,
+    -- Valeur enregistrée malgré un avertissement de cohérence (bloc 4).
+    saisie_forcee INTEGER NOT NULL DEFAULT 0,
     source       TEXT,              -- 'import_html' / 'saisie'
     cree_le      TEXT NOT NULL,
     cree_par     TEXT REFERENCES utilisateur(id),
