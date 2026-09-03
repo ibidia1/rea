@@ -56,44 +56,66 @@ CSS = f"""
 .block-container {{
     /* 2.6rem en haut : moins que le défaut, mais assez pour passer sous la
        barre d'outils fixe de Streamlit, qui masquerait le premier titre. */
-    padding: 2.6rem 1.6rem 2rem 1.6rem !important;
+    padding: 2.6rem 1.4rem 2rem 1.4rem !important;
     max-width: 100% !important;
 }}
-div[data-testid="stVerticalBlock"] {{ gap: .45rem; }}
-div[data-testid="stHorizontalBlock"] {{ gap: .6rem; }}
-h1 {{ font-size: 1.55rem !important; font-weight: 700 !important; margin-bottom: .2rem !important; }}
-h2 {{ font-size: 1.15rem !important; margin: .2rem 0 .1rem 0 !important; }}
-h3, h4, h5 {{ font-size: .98rem !important; margin: .1rem 0 !important; }}
-hr {{ margin: .5rem 0 !important; }}
-p, li, .stMarkdown {{ font-size: .92rem; }}
-div[data-testid="stExpander"] details {{ border-radius: 10px; border-color: {BORDURE}; }}
+div[data-testid="stVerticalBlock"] {{ gap: .4rem; }}
+div[data-testid="stHorizontalBlock"] {{ gap: .7rem; }}
+
+/* ---- Échelle typographique -------------------------------------------
+   Volontairement plus petite que le défaut de Streamlit : les cartes sont
+   étroites (six par rangée), un texte trop grand les fait paraître pleines
+   à craquer alors qu'elles portent trois informations. */
+html, body, [class*="css"] {{ font-size: 15px; }}
+h1 {{ font-size: 1.45rem !important; font-weight: 700 !important; margin-bottom: .15rem !important; }}
+h2 {{ font-size: 1.1rem !important; margin: .2rem 0 .1rem 0 !important; }}
+h3, h4, h5 {{ font-size: .95rem !important; margin: .1rem 0 !important; }}
+hr {{ margin: .45rem 0 !important; }}
+p, li, .stMarkdown {{ font-size: .86rem; }}
+label, .stSelectbox label, .stTextInput label {{ font-size: .82rem !important; }}
+
+/* ---- Boutons compacts ------------------------------------------------ */
+div[data-testid="stButton"] > button {{
+    padding: .28rem .7rem; font-size: .84rem; border-radius: 8px;
+    border: 1px solid {BORDURE}; min-height: 0;
+}}
+div[data-testid="stButton"] > button:hover {{ border-color: {ROUGE}; color: {ROUGE}; }}
+div[data-testid="stExpander"] details {{ border-radius: 9px; border-color: {BORDURE}; }}
+div[data-testid="stExpander"] summary p {{ font-size: .86rem; }}
 
 /* ---- Métriques compactes -------------------------------------------- */
 div[data-testid="stMetric"] {{
-    background: #FFF; border: 1px solid {BORDURE}; border-radius: 10px;
-    padding: .45rem .7rem; border-left: 4px solid {BLEU};
+    background: #FFF; border: 1px solid {BORDURE}; border-radius: 9px;
+    padding: .4rem .6rem; border-left: 3px solid {BLEU};
 }}
-div[data-testid="stMetricLabel"] p {{ font-size: .72rem !important; color: {GRIS}; font-weight: 600; }}
-div[data-testid="stMetricValue"] {{ font-size: 1.5rem !important; }}
+div[data-testid="stMetricLabel"] p {{ font-size: .7rem !important; color: {GRIS}; font-weight: 600; }}
+div[data-testid="stMetricValue"] {{ font-size: 1.15rem !important; font-weight: 700; }}
+div[data-testid="stMetricDelta"] {{ font-size: .74rem !important; }}
 
-/* ---- Tuiles et cartes ----------------------------------------------- */
+/* ---- Cartes : de l'air à l'intérieur, des bords nets ---------------- */
 div[data-testid="stVerticalBlockBorderWrapper"] {{
-    border-radius: 11px !important; border-color: {BORDURE} !important;
+    border-radius: 10px !important; border-color: {BORDURE} !important;
 }}
-.rea-lit {{ line-height: 1.25; }}
-.rea-lit-num {{ font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {{
+    padding: .15rem .1rem;
+}}
+
+/* ---- Tuiles de lit --------------------------------------------------- */
+.rea-lit {{ line-height: 1.3; }}
+.rea-lit-num {{ font-size: .66rem; font-weight: 700; letter-spacing: .07em;
     text-transform: uppercase; color: {GRIS}; }}
-.rea-lit-nom {{ font-size: 1rem; font-weight: 700; margin: 1px 0; }}
-.rea-lit-motif {{ font-size: .8rem; color: {GRIS}; margin-bottom: 4px;
+.rea-lit-nom {{ font-size: .92rem; font-weight: 700; margin: 2px 0 1px 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.rea-lit-libre {{ font-size: .9rem; color: {VERT}; font-weight: 600; }}
+.rea-lit-motif {{ font-size: .76rem; color: {GRIS}; margin-bottom: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.rea-lit-libre {{ font-size: .84rem; color: {VERT}; font-weight: 600; margin: 2px 0 4px 0; }}
 
 /* ---- Pastilles d'état ------------------------------------------------ */
-.rea-chips {{ display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 8px 0; }}
+.rea-chips {{ display: flex; flex-wrap: wrap; gap: 3px; margin: 1px 0 6px 0; }}
 .rea-chip {{
-    display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px;
-    font-size: .74rem; font-weight: 600; line-height: 1.55; border: 1px solid transparent;
-    white-space: nowrap;
+    display: inline-flex; align-items: center; padding: 0 6px; border-radius: 999px;
+    font-size: .68rem; font-weight: 600; line-height: 1.6; border: 1px solid transparent;
+    white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
 }}
 .rea-chip.alerte    {{ background: #FCE4E7; color: #96131F; border-color: #F3BFC5; }}
 .rea-chip.attention {{ background: #FDF0DC; color: #8A5200; border-color: #F5D9AE; }}
@@ -104,21 +126,21 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 
 /* ---- Blocs de section colorés --------------------------------------- */
 .rea-bloc {{
-    border: 1px solid {BORDURE}; border-left: 4px solid {GRIS};
-    border-radius: 9px; padding: 8px 11px; background: #fff; margin-bottom: 7px;
+    border: 1px solid {BORDURE}; border-left: 3px solid {GRIS};
+    border-radius: 8px; padding: 7px 10px 6px 10px; background: #fff; margin-bottom: 6px;
 }}
 .rea-bloc-titre {{
-    font-size: .68rem; font-weight: 800; letter-spacing: .09em;
-    text-transform: uppercase; margin-bottom: 4px;
+    font-size: .64rem; font-weight: 800; letter-spacing: .085em;
+    text-transform: uppercase; margin-bottom: 3px;
 }}
-.rea-bloc ul {{ margin: 0; padding-left: 1.05rem; }}
-.rea-bloc li {{ font-size: .88rem; line-height: 1.5; }}
-.rea-bloc li.arretee {{ text-decoration: line-through; color: {GRIS}; }}
+.rea-bloc ul {{ margin: 0; padding-left: .95rem; }}
+.rea-bloc li {{ font-size: .82rem; line-height: 1.55; }}
+.rea-bloc li.arretee, .rea-bloc li span.arretee {{ text-decoration: line-through; color: {GRIS}; }}
 .rea-j {{ font-weight: 700; color: {BLEU}; }}
 .rea-fin {{ color: {ROUGE}; font-weight: 700; }}
 
 /* ---- Tableaux plus denses ------------------------------------------- */
-div[data-testid="stDataFrame"] {{ font-size: .85rem; }}
+div[data-testid="stDataFrame"] {{ font-size: .8rem; }}
 </style>
 """
 
