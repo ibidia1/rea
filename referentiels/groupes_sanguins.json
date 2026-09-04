@@ -1,0 +1,45 @@
+{
+  "nom": "groupes_sanguins",
+  "libelle": "Groupe sanguin",
+  "version": "2026-09-05.1",
+  "date": "2026-09-05",
+  "note": "Groupe ABO et rhésus. « Non renseigné » est une valeur à part entière : un groupe inconnu ne doit jamais être deviné.",
+  "valeurs": [
+    [
+      "non_renseigne",
+      "Non renseigné"
+    ],
+    [
+      "O+",
+      "O Rh+"
+    ],
+    [
+      "O-",
+      "O Rh−"
+    ],
+    [
+      "A+",
+      "A Rh+"
+    ],
+    [
+      "A-",
+      "A Rh−"
+    ],
+    [
+      "B+",
+      "B Rh+"
+    ],
+    [
+      "B-",
+      "B Rh−"
+    ],
+    [
+      "AB+",
+      "AB Rh+"
+    ],
+    [
+      "AB-",
+      "AB Rh−"
+    ]
+  ]
+}

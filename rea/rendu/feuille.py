@@ -268,6 +268,32 @@ def _creneaux_du_jour(
     return (valeurs + [""] * NB_CRENEAUX_PAR_JOUR)[:NB_CRENEAUX_PAR_JOUR]
 
 
+def _rapport_pf(base: Base, sejour_id: str, jours: list[str]) -> Brut:
+    """Le rapport PaO₂/FiO₂, recalculé pour chaque gaz du sang.
+
+    C'est le seul chiffre de la feuille qui n'est ni saisi ni recopié : il se
+    déduit de deux valeurs déjà là, et le recalculer à la main à chaque gaz du
+    sang est exactement le genre d'arithmétique qu'on finit par ne plus faire.
+
+    Il n'est écrit que là où les deux ingrédients existent : une case vide dit
+    « pas de gaz du sang », jamais « rapport normal ».
+    """
+    cellules: list[str] = []
+    for index_jour, jour in enumerate(jours):
+        creneaux = [""] * NB_CRENEAUX_PAR_JOUR
+        if index_jour < len(jours) - 1:          # le jour en cours reste à la garde
+            valeurs = []
+            for gaz in bilans_service.gaz_du_sang_du_sejour(base, sejour_id):
+                if not (gaz["date_heure"] or "").startswith(jour):
+                    continue
+                rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
+                if rapport.disponible:
+                    valeurs.append(_nombre(rapport.valeur))
+            creneaux = (valeurs + [""] * NB_CRENEAUX_PAR_JOUR)[:NB_CRENEAUX_PAR_JOUR]
+        cellules.extend(creneaux)
+    return _cellules_valeurs(cellules, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR)
+
+
 def _abords(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     """Les dispositifs en place, cochés, avec leur compteur de jours.
 
@@ -347,7 +373,7 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
         "lit": sejour.get("lit_admission") or "",
         "jour_hosp": f"J{jour_hospitalisation(sejour['date_admission'], date_jour)}",
         "dossier": sejour.get("matricule") or "",
-        "groupe_sanguin": "",          # non saisi : reste à écrire à la main
+        "groupe_sanguin": sejour.get("groupe_sanguin") or "",
         "nom_patient": sejour.get("nom_affichage") or "",
         "age": _age(sejour, date_jour),
         "poids_ideal": f"{_nombre(ideal.valeur)} kg" if ideal.disponible else "",
@@ -375,6 +401,7 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
         "bioHepat": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["hepat"]), "bilan"),
         "bioAutres": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["autres"]), "bilan"),
         "gdsGaz": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["gaz"]), "gaz"),
+        "pfRow": _rapport_pf(base, sejour_id, jours),
         "gdsVent": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["ventilation"]), "gaz"),
         "infRows": _microbiologie(base, sejour_id),
         "examensDemain": _examens_demain(base, sejour_id, date_jour),

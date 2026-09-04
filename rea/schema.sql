@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS patient (
     fusionne_vers          TEXT REFERENCES patient(id),  -- patient non identifié réuni au vrai dossier
     traitement_habituel    TEXT,            -- texte libre, un seul champ (SPEC §4.2)
     sans_antecedent_connu  INTEGER NOT NULL DEFAULT 0,
+    -- Groupe sanguin : propriété de la personne, pas du séjour — il ne
+    -- change pas d'une admission à l'autre et n'a pas à être resaisi.
+    groupe_sanguin         TEXT,
     -- identifiant d'étude stable, utilisé par l'export pseudonymisé (règle 8)
     identifiant_etude      TEXT NOT NULL,
     cree_le                TEXT NOT NULL,

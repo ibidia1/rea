@@ -857,6 +857,24 @@ navigateur (A3, paysage, marges nulles, sans mise à l'échelle).
 - 251 tests (pytest, +19), et vérification de la feuille remplie sur un dossier
   complet ainsi que de l'impression depuis l'application
 
+*Groupe sanguin et rapport PaO₂/FiO₂ (ajoutés le 5 septembre)*
+
+- Le **groupe sanguin** est demandé dès l'admission, à côté du sexe : il figure
+  en tête de la feuille imprimée, et quatre heures du matin n'est pas un moment
+  pour le chercher. Il est porté par le **patient**, pas par le séjour — il ne
+  change pas d'une admission à l'autre et n'a pas à être resaisi. « Non
+  renseigné » reste une valeur à part entière : un groupe inconnu n'est jamais
+  deviné ni affiché comme connu.
+- Le **rapport PaO₂/FiO₂** est calculé pour chaque gaz du sang et porté à sa
+  ligne sur la feuille. C'est le seul chiffre de la feuille qui n'est ni saisi
+  ni recopié : le recalculer à la main à chaque gaz du sang est exactement le
+  genre d'arithmétique qu'on finit par ne plus faire. Une case reste vide
+  quand la FiO₂ manque — elle dit « pas de gaz du sang », jamais « rapport
+  normal ».
+
+- 256 tests (pytest, +24)
+
+
 
 **v2.0 — 4 septembre 2026 — tous les blocs codables de la feuille de route**
 

@@ -354,7 +354,19 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             date_naissance = None if non_identifie else st.date_input(
                 "Date de naissance", value=None, min_value=date(1900, 1, 1), max_value=date.today()
             )
-            sexe = st.selectbox("Sexe", listes.codes(listes.SEXES), format_func=lambda c: listes.libelle(listes.SEXES, c))
+            c_sexe, c_groupe = st.columns(2)
+            sexe = c_sexe.selectbox(
+                "Sexe", listes.codes(listes.SEXES),
+                format_func=lambda c: listes.libelle(listes.SEXES, c),
+            )
+            # Le groupe sanguin est demandé dès l'admission : il figure en tête
+            # de la feuille imprimée, et le chercher à quatre heures du matin
+            # n'est pas un moment pour le chercher.
+            groupes = referentiels.charger("groupes_sanguins")
+            groupe_sanguin = c_groupe.selectbox(
+                "Groupe sanguin", listes.codes(groupes),
+                format_func=lambda c: listes.libelle(groupes, c),
+            )
             c_poids, c_taille = st.columns(2)
             # Le poids conditionne la clairance de la créatinine : sans lui,
             # aucune formule pondérale n'est calculable ensuite.
@@ -446,6 +458,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             nom_affichage=nom_affichage or "Non identifié",
             date_naissance=str(date_naissance) if date_naissance else None,
             sexe=sexe,
+            groupe_sanguin=groupe_sanguin,
             non_identifie=non_identifie,
             utilisateur_id=utilisateur_id,
         )
@@ -519,7 +532,9 @@ def onglet_identite(sejour: dict) -> None:
             [
                 f"<b>{sejour['nom_affichage']}</b>",
                 f"Matricule {sejour['matricule']}",
-                f"{age if age is not None else '?'} ans · {listes.libelle(listes.SEXES, sejour['sexe'])}",
+                f"{age if age is not None else '?'} ans · {listes.libelle(listes.SEXES, sejour.get('sexe'))}"
+                + (f" · groupe {sejour['groupe_sanguin']}"
+                   if sejour.get("groupe_sanguin") else ""),
                 f"Lit {sejour['lit_admission']} · admis le {format_date_fr(sejour['date_admission'][:10])}",
                 f"Provenance : {listes.libelle(listes.PROVENANCES, sejour['provenance_type'], 'non renseignée')}",
                 _ligne_poids(sejour),

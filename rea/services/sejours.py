@@ -19,6 +19,7 @@ def creer_patient(
     nom_affichage: str,
     date_naissance: str | None,
     sexe: str = "non_renseigne",
+    groupe_sanguin: str | None = None,
     utilisateur_id: str | None = None,
     non_identifie: bool = False,
 ) -> str:
@@ -29,6 +30,8 @@ def creer_patient(
             "nom_affichage": nom_affichage,
             "date_naissance": date_naissance,
             "sexe": sexe,
+            "groupe_sanguin": None if groupe_sanguin in (None, "non_renseigne")
+                              else groupe_sanguin,
             "non_identifie": int(non_identifie),
             "identifiant_etude": _nouvel_identifiant_etude(base),
         },
@@ -107,7 +110,8 @@ def sejour_avec_patient(base: Base, sejour_id: str) -> dict | None:
     return base.une_ligne(
         """
         SELECT s.*, p.nom_affichage, p.date_naissance, p.matricule, p.sexe,
-               p.traitement_habituel, p.sans_antecedent_connu
+               p.traitement_habituel, p.sans_antecedent_connu,
+               p.groupe_sanguin
         FROM sejour s JOIN patient p ON p.id = s.patient_id
         WHERE s.id = ?
         """,

@@ -224,3 +224,51 @@ def test_un_debordement_de_lignes_est_signale(base, dossier):
     contexte = feuille.contexte(base, sid, AUJ)
     assert "⚠" in contexte["pied"]
     assert "2 ligne(s) de plus" in contexte["pied"]
+
+
+# -- valeurs calculées et identité -------------------------------------------
+
+def test_le_rapport_pao2_fio2_est_calcule(base, dossier):
+    """La seule ligne de la feuille qui n'est ni saisie ni recopiée."""
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T07:00", pao2=90, fio2=50)
+    contexte = feuille.contexte(base, sid, AUJ)
+    assert "180" in contexte["pfRow"].html      # 90 / 0,50
+
+
+def test_le_rapport_reste_vide_sans_gaz_du_sang(base, dossier):
+    """Une case vide dit « pas de gaz du sang », jamais « rapport normal »."""
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T07:00", pao2=90)  # pas de FiO₂
+    cellules = re.findall(r">([^<>]*)</div>",
+                          feuille.contexte(base, sid, AUJ)["pfRow"].html)
+    assert set(cellules) == {""}
+
+
+def test_le_rapport_du_jour_reste_a_la_garde(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{AUJ}T03:00", pao2=90, fio2=50)
+    assert "180" not in feuille.contexte(base, sid, AUJ)["pfRow"].html
+
+
+def test_le_groupe_sanguin_est_imprime(base):
+    pid = sejours.creer_patient(
+        base, matricule="M1", nom_affichage="X", date_naissance="1980-01-01",
+        groupe_sanguin="O+",
+    )
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
+                               lit_admission=1)
+    assert feuille.contexte(base, sid, AUJ)["groupe_sanguin"] == "O+"
+
+
+def test_un_groupe_non_renseigne_ne_devient_pas_une_valeur(base):
+    """Un groupe inconnu ne doit jamais être deviné ni affiché comme connu."""
+    pid = sejours.creer_patient(
+        base, matricule="M2", nom_affichage="Y", date_naissance=None,
+        groupe_sanguin="non_renseigne",
+    )
+    ligne = base.une_ligne("SELECT groupe_sanguin FROM patient WHERE id = ?", (pid,))
+    assert ligne["groupe_sanguin"] is None
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
+                               lit_admission=2)
+    assert feuille.contexte(base, sid, AUJ)["groupe_sanguin"] == ""
