@@ -17,8 +17,10 @@ from datetime import datetime
 
 import streamlit as st
 
-from .. import aides, config, protocoles, referentiels
+from .. import aides, config, listes, protocoles, referentiels
 from ..db import Base
+from ..domaine.dates import format_date_fr
+from ..services import pancarte as pancarte_service
 from . import theme
 
 
@@ -36,17 +38,20 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
     )
 
     onglets = st.tabs(
-        ["Sauvegardes", "Journal", "Référentiels", "Protocoles", "Règles d'aide"]
+        ["Sauvegardes", "Journal", "Fiches imprimées", "Référentiels",
+         "Protocoles", "Règles d'aide"]
     )
     with onglets[0]:
         _sauvegardes(base)
     with onglets[1]:
         _journal(base)
     with onglets[2]:
-        _referentiels()
+        _fiches_imprimees(base)
     with onglets[3]:
-        _protocoles()
+        _referentiels()
     with onglets[4]:
+        _protocoles()
+    with onglets[5]:
         _regles()
 
 
@@ -173,6 +178,50 @@ def _journal(base: Base) -> None:
 # --------------------------------------------------------------------------
 # Référentiels et protocoles — quelle liste, dans quelle version
 # --------------------------------------------------------------------------
+
+def _fiches_imprimees(base: Base) -> None:
+    """Retrouver ce qui a été imprimé dans le service, jour par jour.
+
+    Chaque fiche est un instantané figé : on revoit exactement ce qui est
+    sorti sur papier ce jour-là, même si le dossier a changé depuis — la
+    seule lecture fidèle pour une relecture médico-légale ou une visite qui
+    veut comparer plusieurs jours.
+    """
+    st.caption(
+        "Chaque impression est conservée telle quelle, quel que soit le "
+        "patient ou le lit. Choisir un jour pour voir tout ce qui a été "
+        "imprimé ce jour-là dans le service."
+    )
+    dates = pancarte_service.dates_avec_impression(base)
+    if not dates:
+        st.info("Aucune fiche n'a encore été imprimée.")
+        return
+    jour = st.selectbox(
+        "Jour", dates, format_func=lambda d: format_date_fr(d),
+    )
+    fiches = pancarte_service.snapshots_par_date(base, jour)
+    if not fiches:
+        st.caption("Aucune fiche imprimée ce jour-là.")
+        return
+    for fiche in fiches:
+        with st.expander(
+            f"Lit {fiche['lit_admission']} — {fiche['nom_affichage']} "
+            f"(v{fiche['version']})"
+        ):
+            st.caption(
+                f"Imprimée à {fiche['imprime_le'][11:16]}"
+                + (f" par {fiche['imprime_par_nom']}" if fiche.get("imprime_par_nom") else "")
+            )
+            complete = pancarte_service.snapshot(base, fiche["id"])
+            if complete:
+                st.download_button(
+                    "⬇ Télécharger",
+                    data=complete["html"],
+                    file_name=f"feuille-lit{fiche['lit_admission']}-{jour}-v{fiche['version']}.html",
+                    mime="text/html",
+                    key=f"dl_admin_{fiche['id']}",
+                )
+
 
 def _referentiels() -> None:
     st.caption(

@@ -184,3 +184,91 @@ def test_une_base_ancienne_recupere_les_colonnes_ajoutees(base, monkeypatch, tmp
     finally:
         rouverte.arreter_sauvegardes_periodiques()
         rouverte.connexion.close()
+
+
+# -- correction d'une admission (pas une suppression, une mise à jour tracée) -
+
+def test_modifier_identite_corrige_sans_recreer(base):
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(
+        base, matricule="M1", nom_affichage="K. Abdelaziz",
+        date_naissance="1980-01-01", sexe="M",
+    )
+    sejours.modifier_identite(
+        base, pid, matricule="M1-corrige", nom_affichage="K. Abdelaziz",
+        date_naissance="1978-01-01", sexe="M", groupe_sanguin="O+",
+    )
+    patient = base.une_ligne("SELECT * FROM patient WHERE id = ?", (pid,))
+    assert patient["id"] == pid                    # même ligne, pas une nouvelle
+    assert patient["matricule"] == "M1-corrige"
+    assert patient["date_naissance"] == "1978-01-01"
+    assert patient["groupe_sanguin"] == "O+"
+    actions = [j["action"] for j in base.journal(table="patient")]
+    assert "correction" in actions
+
+
+def test_modifier_admission_bascule_de_non_traumatique_vers_traumatique(base):
+    """Le motif coché du mauvais côté à l'admission doit pouvoir être corrigé
+    sans laisser les deux catégories peuplées en même temps."""
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(base, matricule="M2", nom_affichage="X",
+                                date_naissance="1980-01-01")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-01",
+                               lit_admission=1, traumatique=False)
+    sejours.definir_motifs(base, sid, motif_principal="choc_septique")
+    assert sejours.motifs_du_sejour(base, sid)
+
+    sejours.modifier_admission(
+        base, sid, date_admission="2026-09-01", provenance_type="urgences",
+        provenance_detail=None, poids_kg=70, taille_cm=175, creatinine_base=None,
+        type_admission="medicale", maladie_chronique_igs2="aucune",
+        traumatique=True, regions_traumatiques_choisies=["cranien", "thoracique"],
+        mecanisme="avp",
+    )
+    sejour = base.une_ligne("SELECT * FROM sejour WHERE id = ?", (sid,))
+    assert sejour["traumatique"] == 1
+    assert sejour["poids_kg"] == 70
+    assert set(sejours.regions_traumatiques(base, sid)) == {"cranien", "thoracique"}
+    assert sejours.motifs_du_sejour(base, sid) == []      # l'ancien motif ne traîne pas
+
+
+def test_modifier_admission_bascule_de_traumatique_vers_non_traumatique(base):
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(base, matricule="M3", nom_affichage="Y",
+                                date_naissance="1980-01-01")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-01",
+                               lit_admission=2, traumatique=True, mecanisme="avp")
+    sejours.definir_regions_traumatiques(base, sid, ["thoracique"])
+
+    sejours.modifier_admission(
+        base, sid, date_admission="2026-09-01", provenance_type="urgences",
+        provenance_detail=None, poids_kg=None, taille_cm=None, creatinine_base=None,
+        type_admission=None, maladie_chronique_igs2=None,
+        traumatique=False, motif_principal="choc_septique",
+    )
+    assert sejours.regions_traumatiques(base, sid) == []
+    assert [m["code"] for m in sejours.motifs_du_sejour(base, sid)] == ["choc_septique"]
+
+
+def test_modifier_admission_ne_touche_pas_au_lit(base):
+    """Changer de lit est un transfert, pas une correction : cette fonction ne
+    doit pas y toucher."""
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(base, matricule="M4", nom_affichage="Z",
+                                date_naissance="1980-01-01")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-01",
+                               lit_admission=5, traumatique=False)
+    sejours.definir_motifs(base, sid, motif_principal="choc_septique")
+    sejours.modifier_admission(
+        base, sid, date_admission="2026-09-02", provenance_type="bloc",
+        provenance_detail=None, poids_kg=80, taille_cm=180, creatinine_base=70,
+        type_admission="chirurgie_programmee", maladie_chronique_igs2="aucune",
+        traumatique=False, motif_principal="choc_septique",
+    )
+    sejour = base.une_ligne("SELECT * FROM sejour WHERE id = ?", (sid,))
+    assert sejour["lit_admission"] == 5
+    assert sejour["date_admission"] == "2026-09-02"

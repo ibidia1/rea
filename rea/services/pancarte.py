@@ -89,8 +89,49 @@ def imprimer(base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str 
 
 
 def snapshots_du_sejour(base: Base, sejour_id: str) -> list[dict]:
+    """La liste des fiches déjà imprimées pour ce séjour — pas leur contenu,
+    trop lourd pour un simple historique. Voir `snapshot()` pour le relire."""
     return base.requete(
         "SELECT id, date_jour, version, imprime_le, imprime_par FROM pancarte_snapshot "
         "WHERE sejour_id = ? ORDER BY date_jour DESC, version DESC",
         (sejour_id,),
     )
+
+
+def snapshot(base: Base, snapshot_id: str) -> dict | None:
+    """Relit une fiche telle qu'elle a été imprimée.
+
+    Le HTML rendu à ce moment-là est stocké tel quel (règle de conception 6 —
+    le texte est calculé, sauf les instantanés de pancarte, qui sont
+    immuables) : c'est la seule façon de revoir une fiche exactement comme
+    elle était le jour où elle est sortie, même si le dossier a changé depuis.
+    """
+    return base.une_ligne(
+        "SELECT p.*, u.nom AS imprime_par_nom FROM pancarte_snapshot p "
+        "LEFT JOIN utilisateur u ON u.id = p.imprime_par WHERE p.id = ?",
+        (snapshot_id,),
+    )
+
+
+def snapshots_par_date(base: Base, date_jour: str) -> list[dict]:
+    """Toutes les fiches imprimées un jour donné, tous patients confondus —
+    la relecture « qu'y avait-il dans le service ce jour-là »."""
+    return base.requete(
+        "SELECT p.id, p.sejour_id, p.date_jour, p.version, p.imprime_le, "
+        "s.lit_admission, pt.nom_affichage, u.nom AS imprime_par_nom "
+        "FROM pancarte_snapshot p "
+        "JOIN sejour s ON s.id = p.sejour_id "
+        "JOIN patient pt ON pt.id = s.patient_id "
+        "LEFT JOIN utilisateur u ON u.id = p.imprime_par "
+        "WHERE p.date_jour = ? ORDER BY s.lit_admission, p.version DESC",
+        (date_jour,),
+    )
+
+
+def dates_avec_impression(base: Base) -> list[str]:
+    """Les jours pour lesquels au moins une fiche existe — sert à peupler le
+    sélecteur de date sans proposer des jours vides."""
+    lignes = base.requete(
+        "SELECT DISTINCT date_jour FROM pancarte_snapshot ORDER BY date_jour DESC"
+    )
+    return [l["date_jour"] for l in lignes]

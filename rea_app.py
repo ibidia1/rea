@@ -18,7 +18,7 @@ from rea.db import obtenir_base
 from rea.domaine import calculs
 from rea.domaine import coherence
 from rea.domaine import prescription as dom
-from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
+from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain, parse_date
 from rea.services import aides as aides_service
 from rea.services import bilans as bilans_service
 from rea.services import dispositifs as dispositifs_service
@@ -585,6 +585,7 @@ def onglet_identite(sejour: dict) -> None:
         )
 
     _codage_cim10(sejour)
+    _corriger_admission(sejour)
 
     with st.form("ajout_antecedent"):
         col1, col2 = st.columns(2)
@@ -618,6 +619,170 @@ def onglet_identite(sejour: dict) -> None:
                     libelle=libelle_libre, precision=precision or None, utilisateur_id=utilisateur_id,
                 )
             st.rerun()
+
+
+def _corriger_admission(sejour: dict) -> None:
+    """Corrige une erreur de saisie faite à l'admission.
+
+    Ce n'est pas un nouveau séjour : les mêmes lignes sont mises à jour, avec
+    trace dans le journal de qui a corrigé et quand (règle de conception 2 —
+    jamais de suppression physique). Le lit n'est pas modifiable ici : changer
+    de lit est un transfert, une autre opération, avec d'autres contrôles.
+
+    Fermé par défaut et sans enregistrement automatique : une correction est
+    un geste délibéré, pas quelque chose qui doit pouvoir arriver par mégarde
+    en survolant le formulaire.
+    """
+    with st.expander("✏️ Corriger l'admission"):
+        st.caption(
+            "Pour une erreur de saisie — matricule, nom, date, poids, motif "
+            "coché du mauvais côté. Le lit ne se change pas ici."
+        )
+        with st.form(f"correction_{sejour['id']}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                matricule = st.text_input("Matricule", value=sejour.get("matricule") or "")
+                nom_affichage = st.text_input(
+                    "Nom affiché", value=sejour.get("nom_affichage") or ""
+                )
+                date_naissance = st.date_input(
+                    "Date de naissance",
+                    value=parse_date(sejour.get("date_naissance")),
+                    min_value=date(1900, 1, 1), max_value=date.today(),
+                )
+                c_sexe, c_groupe = st.columns(2)
+                sexe = c_sexe.selectbox(
+                    "Sexe", listes.codes(listes.SEXES),
+                    index=listes.codes(listes.SEXES).index(sejour.get("sexe") or "non_renseigne"),
+                    format_func=lambda c: listes.libelle(listes.SEXES, c),
+                )
+                groupes = referentiels.charger("groupes_sanguins")
+                codes_groupes = listes.codes(groupes)
+                groupe_sanguin = c_groupe.selectbox(
+                    "Groupe sanguin", codes_groupes,
+                    index=codes_groupes.index(sejour.get("groupe_sanguin") or "non_renseigne"),
+                    format_func=lambda c: listes.libelle(groupes, c),
+                )
+                c_poids, c_taille = st.columns(2)
+                poids_kg = _nombre_saisi(c_poids.text_input(
+                    "Poids (kg)", value=_valeur_texte(sejour.get("poids_kg"))
+                ))
+                taille_cm = _nombre_saisi(c_taille.text_input(
+                    "Taille (cm)", value=_valeur_texte(sejour.get("taille_cm"))
+                ))
+                creatinine_base = _nombre_saisi(st.text_input(
+                    "Créatinine antérieure (µmol/L)",
+                    value=_valeur_texte(sejour.get("creatinine_base")),
+                ))
+            with col2:
+                date_admission = st.date_input(
+                    "Date d'admission",
+                    value=parse_date(sejour["date_admission"]) or date.today(),
+                )
+                provenance_type = st.selectbox(
+                    "Provenance", listes.codes(listes.PROVENANCES),
+                    index=listes.codes(listes.PROVENANCES).index(sejour.get("provenance_type"))
+                          if sejour.get("provenance_type") in listes.codes(listes.PROVENANCES) else 0,
+                    format_func=lambda c: listes.libelle(listes.PROVENANCES, c),
+                )
+                provenance_detail = st.text_input(
+                    "Préciser la provenance", value=sejour.get("provenance_detail") or ""
+                )
+                types_admission = referentiels.charger("types_admission")
+                codes_types = listes.codes(types_admission)
+                type_admission = st.selectbox(
+                    "Type d'admission (IGS II)", codes_types,
+                    index=codes_types.index(sejour.get("type_admission"))
+                          if sejour.get("type_admission") in codes_types else 0,
+                    format_func=lambda c: listes.libelle(types_admission, c),
+                )
+                maladies = referentiels.charger("maladies_chroniques_igs2")
+                codes_maladies = listes.codes(maladies)
+                maladie_chronique_igs2 = st.selectbox(
+                    "Maladie chronique (IGS II)", codes_maladies,
+                    index=codes_maladies.index(sejour.get("maladie_chronique_igs2"))
+                          if sejour.get("maladie_chronique_igs2") in codes_maladies else 0,
+                    format_func=lambda c: listes.libelle(maladies, c),
+                )
+
+            st.markdown("**Motif d'admission**")
+            traumatique = st.radio(
+                "Type", ["Traumatique", "Non traumatique"], horizontal=True,
+                index=0 if sejour.get("traumatique") else 1,
+                key=f"corr_type_{sejour['id']}",
+            ) == "Traumatique"
+
+            regions_choisies: list[str] = []
+            mecanisme = None
+            motif_principal = None
+            motifs_associes: list[str] = []
+            if traumatique:
+                regions_actuelles = sejours_service.regions_traumatiques(base, sejour["id"])
+                regions_choisies = st.multiselect(
+                    "Régions atteintes", listes.codes(listes.REGIONS_TRAUMATIQUES),
+                    default=[r for r in regions_actuelles if r in listes.codes(listes.REGIONS_TRAUMATIQUES)],
+                    format_func=lambda c: listes.libelle(listes.REGIONS_TRAUMATIQUES, c),
+                )
+                codes_mecanismes = listes.codes(listes.MECANISMES)
+                mecanisme = st.selectbox(
+                    "Mécanisme", codes_mecanismes,
+                    index=codes_mecanismes.index(sejour.get("mecanisme"))
+                          if sejour.get("mecanisme") in codes_mecanismes else 0,
+                    format_func=lambda c: listes.libelle(listes.MECANISMES, c),
+                )
+            else:
+                motifs_actuels = sejours_service.motifs_du_sejour(base, sejour["id"])
+                principal_actuel = next((m["code"] for m in motifs_actuels if m["principal"]), None)
+                tous_motifs = listes.motifs_a_plat()
+                codes_motifs = [c for c, _l, _g in tous_motifs]
+                motif_principal = st.selectbox(
+                    "Motif principal", codes_motifs,
+                    index=codes_motifs.index(principal_actuel) if principal_actuel in codes_motifs else 0,
+                    format_func=lambda c: f"{listes.libelle_motif(c)} "
+                                          f"({next(g for cc,_l,g in tous_motifs if cc==c)})",
+                )
+                motifs_associes = st.multiselect(
+                    "Motifs associés",
+                    [c for c in codes_motifs if c != motif_principal],
+                    default=[m["code"] for m in motifs_actuels
+                            if not m["principal"] and m["code"] in codes_motifs and m["code"] != motif_principal],
+                    format_func=listes.libelle_motif,
+                )
+
+            if st.form_submit_button("Enregistrer les corrections", type="primary"):
+                if not _controle(
+                    f"correction_{sejour['id']}",
+                    coherence.verifier_sejour(
+                        date_admission=date_admission, date_naissance=date_naissance
+                    ),
+                ):
+                    return
+                sejours_service.modifier_identite(
+                    base, sejour["patient_id"], matricule=matricule,
+                    nom_affichage=nom_affichage or "Non identifié",
+                    date_naissance=str(date_naissance) if date_naissance else None,
+                    sexe=sexe, groupe_sanguin=groupe_sanguin,
+                    utilisateur_id=utilisateur_id,
+                )
+                sejours_service.modifier_admission(
+                    base, sejour["id"],
+                    date_admission=datetime.combine(date_admission, datetime.min.time()).isoformat(),
+                    provenance_type=provenance_type, provenance_detail=provenance_detail or None,
+                    poids_kg=poids_kg, taille_cm=taille_cm, creatinine_base=creatinine_base,
+                    type_admission=type_admission, maladie_chronique_igs2=maladie_chronique_igs2,
+                    traumatique=traumatique,
+                    regions_traumatiques_choisies=regions_choisies, mecanisme=mecanisme,
+                    motif_principal=motif_principal, motifs_associes=motifs_associes,
+                    utilisateur_id=utilisateur_id,
+                )
+                st.success("Admission corrigée.")
+                st.rerun()
+
+
+def _valeur_texte(valeur) -> str:
+    if valeur is None:
+        return ""
+    return str(valeur).replace(".", ",") if isinstance(valeur, float) else str(valeur)
 
 
 def _codage_cim10(sejour: dict) -> None:
@@ -710,6 +875,46 @@ def onglet_prescrit(sejour: dict) -> None:
 
     _actions_prescrit(sejour, pancarte, date_jour_str)
 
+
+def _historique_fiches(sejour: dict) -> None:
+    """Retrouver une fiche imprimée un autre jour.
+
+    Chaque impression est un instantané figé (`pancarte_snapshot`) : le
+    revoir montre la fiche telle qu'elle est sortie ce jour-là, même si le
+    dossier a changé depuis — c'est la seule lecture fidèle d'un historique
+    médico-légal.
+    """
+    snapshots = pancarte_service.snapshots_du_sejour(base, sejour["id"])
+    if not snapshots:
+        return
+    with st.expander(f"📜 Anciennes fiches imprimées ({len(snapshots)})"):
+        options = [s["id"] for s in snapshots]
+        choix = st.selectbox(
+            "Jour", options,
+            format_func=lambda sid: next(
+                f"{format_date_fr(s['date_jour'])} — v{s['version']}"
+                + (f", imprimée {s['imprime_le'][11:16]}" if s.get("imprime_le") else "")
+                for s in snapshots if s["id"] == sid
+            ),
+            key=f"hist_fiche_{sejour['id']}",
+        )
+        ancienne = pancarte_service.snapshot(base, choix)
+        if not ancienne:
+            st.caption("Fiche introuvable — a-t-elle été purgée ?")
+            return
+        st.caption(
+            f"Imprimée le {format_date_fr(ancienne['date_jour'])}"
+            + (f" par {ancienne['imprime_par_nom']}" if ancienne.get("imprime_par_nom") else "")
+        )
+        st.download_button(
+            "⬇ Télécharger cette version",
+            data=ancienne["html"],
+            file_name=f"feuille-lit{sejour['lit_admission']}-{ancienne['date_jour']}"
+                      f"-v{ancienne['version']}.html",
+            mime="text/html",
+            key=f"dl_hist_{choix}",
+        )
+        st.components.v1.html(ancienne["html"], height=700, scrolling=True)
 
 def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) -> None:
     for i, code_voie in enumerate(voies_remplies):
@@ -854,6 +1059,8 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             st.components.v1.html(
                 st.session_state["derniere_impression"], height=900, scrolling=True
             )
+
+    _historique_fiches(sejour)
 
 
 def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,

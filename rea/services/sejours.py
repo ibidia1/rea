@@ -39,6 +39,103 @@ def creer_patient(
     )
 
 
+def modifier_identite(
+    base: Base,
+    patient_id: str,
+    *,
+    matricule: str,
+    nom_affichage: str,
+    date_naissance: str | None,
+    sexe: str,
+    groupe_sanguin: str | None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Corrige une erreur de saisie à l'admission (matricule, nom, date de
+    naissance, sexe, groupe).
+
+    Ce n'est pas une nouvelle admission : la ligne existante est mise à jour,
+    jamais recréée (règle de conception 2 — pas de suppression physique).
+    Le journal garde qui a corrigé, quand, et vers quelles valeurs ; c'est ce
+    qui distingue une correction tracée d'une donnée simplement écrasée.
+    """
+    base.mettre_a_jour(
+        "patient",
+        patient_id,
+        {
+            "matricule": matricule,
+            "nom_affichage": nom_affichage,
+            "date_naissance": date_naissance,
+            "sexe": sexe,
+            "groupe_sanguin": None if groupe_sanguin in (None, "non_renseigne")
+                              else groupe_sanguin,
+        },
+        utilisateur_id=utilisateur_id,
+        action="correction",
+    )
+
+
+def modifier_admission(
+    base: Base,
+    sejour_id: str,
+    *,
+    date_admission: str,
+    provenance_type: str | None,
+    provenance_detail: str | None,
+    poids_kg: float | None,
+    taille_cm: float | None,
+    creatinine_base: float | None,
+    type_admission: str | None,
+    maladie_chronique_igs2: str | None,
+    traumatique: bool,
+    regions_traumatiques_choisies: list[str] | None = None,
+    mecanisme: str | None = None,
+    mecanisme_detail: str | None = None,
+    motif_principal: str | None = None,
+    motifs_associes: list[str] | None = None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Corrige les circonstances de l'admission.
+
+    Couvre aussi le cas où le motif a été coché du mauvais côté (traumatique
+    / non traumatique) à l'admission : les régions et les motifs de l'autre
+    catégorie sont effacés, pas laissés à traîner en double.
+
+    Le lit n'est volontairement pas modifiable ici — changer de lit est un
+    transfert (`changer_de_lit`), pas une correction d'erreur de saisie ; les
+    deux n'ont ni la même trace attendue ni les mêmes contrôles.
+    """
+    base.mettre_a_jour(
+        "sejour",
+        sejour_id,
+        {
+            "date_admission": date_admission,
+            "provenance_type": provenance_type,
+            "provenance_detail": provenance_detail,
+            "poids_kg": poids_kg,
+            "taille_cm": taille_cm,
+            "creatinine_base": creatinine_base,
+            "type_admission": type_admission,
+            "maladie_chronique_igs2": maladie_chronique_igs2,
+            "traumatique": int(traumatique),
+            "mecanisme": mecanisme if traumatique else None,
+            "mecanisme_detail": mecanisme_detail if traumatique else None,
+        },
+        utilisateur_id=utilisateur_id,
+        action="correction",
+    )
+    if traumatique:
+        definir_regions_traumatiques(
+            base, sejour_id, regions_traumatiques_choisies or [], utilisateur_id=utilisateur_id
+        )
+        definir_motifs(base, sejour_id, motif_principal=None, utilisateur_id=utilisateur_id)
+    else:
+        definir_regions_traumatiques(base, sejour_id, [], utilisateur_id=utilisateur_id)
+        definir_motifs(
+            base, sejour_id, motif_principal=motif_principal,
+            motifs_associes=motifs_associes, utilisateur_id=utilisateur_id,
+        )
+
+
 def _nouvel_identifiant_etude(base: Base) -> str:
     """Identifiant stable, sans lien direct avec le matricule (règle de
     conception 8 — export recherche pseudonymisé automatiquement)."""
@@ -167,14 +264,19 @@ def definir_motifs(
     base: Base,
     sejour_id: str,
     *,
-    motif_principal: str,
+    motif_principal: str | None,
     motifs_associes: list[str] | None = None,
     precisions: dict[str, dict] | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
+    """`motif_principal=None` efface les motifs sans en reposer — c'est ce
+    dont une correction d'admission a besoin quand le séjour bascule de
+    « non traumatique » à « traumatique »."""
     import json
 
     base.executer("UPDATE sejour_motif SET supprime = 1 WHERE sejour_id = ?", (sejour_id,))
+    if motif_principal is None:
+        return
     precisions = precisions or {}
     tous = [(motif_principal, True)] + [(m, False) for m in (motifs_associes or [])]
     for code, principal in tous:

@@ -796,6 +796,51 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.2 — 5 septembre 2026 — corriger une admission, revoir les fiches imprimées**
+
+Deux manques signalés à l'usage : aucune façon de corriger une erreur de
+saisie à l'admission sans recréer le patient, et aucune façon de retrouver
+une fiche déjà imprimée un autre jour.
+
+*Corriger l'admission*
+
+Un encadré « ✏️ Corriger l'admission » dans l'onglet Identité, fermé par
+défaut, pré-rempli avec les valeurs actuelles. Ce n'est pas une nouvelle
+admission : la même ligne est mise à jour (règle de conception 2 — jamais de
+suppression physique), avec trace de qui a corrigé et quand dans le journal.
+
+Couvre aussi le cas où le motif a été coché du mauvais côté à l'admission
+(traumatique / non traumatique) : basculer d'un côté à l'autre efface
+proprement les régions ou les motifs de l'ancienne catégorie, sans les laisser
+traîner en double.
+
+Le **lit n'est volontairement pas modifiable** ici : changer de lit est un
+transfert (`changer_de_lit`, déjà écrit côté service mais pas encore relié à
+un écran), pas une correction d'erreur de saisie — les deux n'ont ni la même
+trace attendue ni les mêmes contrôles.
+
+*Revoir les fiches imprimées*
+
+Chaque impression était déjà conservée telle quelle en base
+(`pancarte_snapshot`, une des rares tables où le texte est stocké et non
+recalculé — règle de conception 6), mais rien ne permettait de la relire :
+seule la toute dernière impression restait visible, et seulement jusqu'au
+prochain rafraîchissement du navigateur.
+
+- **Par patient** (onglet Prescrit) : « 📜 Anciennes fiches imprimées »,
+  sélecteur par jour et version, aperçu et téléchargement.
+- **Par jour, tout le service** (Administration → Fiches imprimées) : choisir
+  une date, voir tout ce qui a été imprimé ce jour-là, tous lits confondus —
+  la relecture qu'une visite ou une revue médico-légale demande.
+
+La fiche relue est **l'instantané exact du jour d'impression**, pas une
+version recalculée avec les données d'aujourd'hui : un test vérifie que
+modifier le dossier après coup ne change pas une fiche déjà imprimée.
+
+- 265 tests (pytest, +9), vérifiés aussi dans l'application réelle : correction
+  d'une admission, historique par patient, historique par jour tout le service
+
+
 **v2.1 — 5 septembre 2026 — la feuille du service**
 
 Le document attendu depuis le début est arrivé : la maquette A3 de la feuille
