@@ -796,6 +796,47 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.4 — 4 septembre 2026 — éditeur de règles et de protocoles, sans JSON**
+
+Jusqu'ici, ajouter un rappel ou un protocole pré-rempli demandait d'éditer un
+fichier JSON à la main dans `regles/` ou `protocoles/` — en pratique un frein
+pour le service, qui n'a pas à ouvrir un éditeur de texte pour ça.
+Administration → **Règles d'aide** et **Protocoles** portent maintenant un
+formulaire complet ; le fichier reste la vérité, ces écrans ne font que le
+lire et le réécrire exactement comme une main l'aurait fait.
+
+- **Règles d'aide** : choisir un fichier existant ou en créer un nouveau,
+  lister/modifier/supprimer ses règles, composer une condition (jusqu'à 4
+  clauses, et/ou) sur la liste des faits que le moteur sait déjà calculer
+  (`FAITS_CONNUS` dans `rea/domaine/regles.py`), et **tester la règle avec des
+  valeurs d'exemple avant de l'enregistrer** — un aller-retour sans quitter
+  l'écran. Le garde-fou SPEC §3.1 (aucune règle ne peut porter un mot de
+  posologie — mg/kg, administrer, injecter…) est vérifié au moment de la
+  frappe du message, avec le même code que celui qui protège les fichiers
+  livrés.
+- **Protocoles** : mêmes principes pour les protocoles de pré-remplissage —
+  déclencheur (région traumatique ou motif), jusqu'à 6 lignes de prescription
+  et 4 explorations proposées, consignes. La règle de sécurité 1 (SPEC §4.5)
+  reste tenue par le code, pas par l'écran : tant que « Validé » n'est pas
+  coché et « Signé par » renseigné, `protocoles_valides()` — et donc tout
+  écran de proposition — ignore le protocole, qui reste un brouillon visible
+  mais inerte.
+- Chaque enregistrement incrémente la version du fichier
+  (`AAAA-MM-JJ.N`, `regles.prochaine_version()`), comme une modification
+  manuelle l'aurait fait.
+- En corrigeant ce chantier : un bug d'isolation dans les tests de cet
+  éditeur écrivait, lors d'une exécution complète de la suite, dans les
+  vrais dossiers `regles/` et `protocoles/` du dépôt au lieu d'un dossier
+  temporaire — `conftest.base` vide `sys.modules["rea.*"]` pour forcer une
+  relecture de `REA_DIR`, ce qui pouvait faire pointer un module `rea.config`
+  fraîchement importé vers un objet différent de celui déjà capturé par
+  `rea.protocoles`. Le correctif patche `protocoles.config` directement
+  plutôt qu'un `rea.config` réimporté à part.
+- 290 tests (pytest, +10) ; vérifié aussi dans l'application réelle
+  (Playwright) : créer/tester/modifier/supprimer une règle, créer un
+  protocole brouillon et vérifier qu'aucun écran ne le proposerait, le
+  valider et signer, vérifier qu'il devient proposable, le supprimer.
+
 **v2.3 — 5 septembre 2026 — neuf remarques du service sur la feuille imprimée**
 
 Toutes issues d'une relecture de la feuille par le service.

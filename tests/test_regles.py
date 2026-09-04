@@ -81,11 +81,9 @@ def test_aucune_regle_livree_ne_parle_de_posologie():
     """SPEC §3.1 : le logiciel calcule des dates, des heures et des volumes,
     jamais une dose. Une règle qui proposerait une posologie franchirait la
     limite — ce test la rattrape."""
-    interdits = ("mg/kg", "µg/kg", "mg/j", "UI/kg", "administrer", "injecter")
     for r in fichiers_regles.toutes_les_regles():
-        message = r.message.lower()
-        for mot in interdits:
-            assert mot.lower() not in message, f"{r.code} : « {mot} »"
+        trouve = regles.contient_une_posologie(r.message)
+        assert trouve is None, f"{r.code} : « {trouve} »"
 
 
 def test_checklist_fast_hug_a_sept_items():

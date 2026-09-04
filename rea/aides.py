@@ -9,9 +9,11 @@ prenne pour une position validée du service.
 from __future__ import annotations
 
 import json
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
+from .domaine import regles as domaine_regles
 from .domaine.regles import Regle
 
 DOSSIER = Path(__file__).resolve().parent.parent / "regles"
@@ -72,3 +74,65 @@ def inventaire() -> tuple[dict, ...]:
 
 def recharger() -> None:
     _fichiers.cache_clear()
+
+
+# --------------------------------------------------------------------------
+# Édition (Administration → Règles d'aide)
+# --------------------------------------------------------------------------
+# Le fichier reste la vérité — ces fonctions ne font que le lire et le
+# réécrire pour quelqu'un qui n'a pas de raison d'ouvrir un éditeur de texte.
+# Une règle enregistrée ici s'applique tout de suite, comme si elle avait été
+# tapée à la main dans le fichier : le badge « non signé » reste affiché tant
+# que personne n'a coché la validation, mais il ne bloque rien (feuille de
+# route, bloc 7) — c'est la même règle qu'avant l'éditeur.
+
+def noms_fichiers() -> tuple[str, ...]:
+    """Les fichiers de règles présents, hors check-list et barèmes de score
+    (qui ont une autre forme et ne passent pas par cet éditeur)."""
+    if not DOSSIER.exists():
+        return ()
+    noms = []
+    for chemin in sorted(DOSSIER.glob("*.json")):
+        contenu = json.loads(chemin.read_text(encoding="utf-8"))
+        if "regles" in contenu:
+            noms.append(chemin.stem)
+    return tuple(noms)
+
+
+def lire_fichier(nom: str) -> dict:
+    """Le contenu brut d'un fichier de règles — pas les objets `Regle`, pour
+    pouvoir le modifier et le réécrire tel quel."""
+    chemin = DOSSIER / f"{nom}.json"
+    if not chemin.exists():
+        raise FileNotFoundError(f"Fichier de règles introuvable : {nom}")
+    return json.loads(chemin.read_text(encoding="utf-8"))
+
+
+def enregistrer_fichier(nom: str, contenu: dict) -> None:
+    """Réécrit le fichier avec une version incrémentée, et vide le cache pour
+    que la prochaine lecture voie le changement sans redémarrer le logiciel."""
+    contenu = dict(contenu)
+    contenu["version"] = domaine_regles.prochaine_version(contenu.get("version", ""))
+    contenu["date"] = date.today().isoformat()
+    chemin = DOSSIER / f"{nom}.json"
+    chemin.write_text(json.dumps(contenu, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    recharger()
+
+
+def creer_fichier(nom: str, titre: str) -> dict:
+    """Un nouveau fichier de règles, vide, prêt à recevoir des lignes."""
+    chemin = DOSSIER / f"{nom}.json"
+    if chemin.exists():
+        raise FileExistsError(f"Le fichier « {nom} » existe déjà.")
+    contenu = {
+        "code": nom,
+        "titre": titre,
+        "version": "",
+        "date_version": "",
+        "valide": False,
+        "signe_par": None,
+        "note": "Créé depuis l'éditeur de règles — à faire valider par un senior.",
+        "regles": [],
+    }
+    enregistrer_fichier(nom, contenu)
+    return lire_fichier(nom)

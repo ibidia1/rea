@@ -20,7 +20,8 @@ pseudonymisé avec dictionnaire des données, gel de base.
 
 *Administration* : sauvegardes et **restauration**, journal d'audit
 consultable, version de chaque référentiel, de chaque protocole et de chaque
-jeu de règles.
+jeu de règles, **éditeur** pour ajouter ou modifier une règle d'aide ou un
+protocole pré-rempli depuis un formulaire (sans toucher au JSON).
 
 Les listes codées (`referentiels/`), les règles d'aide et les barèmes de score
 (`regles/`) sont des **fichiers JSON versionnés** : les modifier ne demande pas

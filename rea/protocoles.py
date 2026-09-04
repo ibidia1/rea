@@ -87,3 +87,49 @@ def protocoles_pour_motif(code_motif: str) -> tuple[Protocole, ...]:
         for p in protocoles_valides()
         if p.declencheur.get("type") == "motif" and p.declencheur.get("valeur") == code_motif
     )
+
+
+# --------------------------------------------------------------------------
+# Édition (Administration → Protocoles)
+# --------------------------------------------------------------------------
+# Comme pour les règles d'aide : le fichier reste la vérité, ces fonctions ne
+# font que le lire et le réécrire pour quelqu'un qui n'a pas de raison
+# d'ouvrir un éditeur de texte. La règle de sécurité 1 ne change pas : tant
+# que `valide` n'est pas coché et `signe_par` rempli, le protocole reste un
+# brouillon que `protocoles_valides()` ignore.
+
+def codes() -> tuple[str, ...]:
+    if not config.DOSSIER_PROTOCOLES.exists():
+        return ()
+    return tuple(sorted(p.stem for p in config.DOSSIER_PROTOCOLES.glob("*.json")))
+
+
+def lire_fichier(code: str) -> dict:
+    chemin = config.DOSSIER_PROTOCOLES / f"{code}.json"
+    if not chemin.exists():
+        raise FileNotFoundError(f"Protocole introuvable : {code}")
+    return json.loads(chemin.read_text(encoding="utf-8"))
+
+
+def enregistrer(code: str, contenu: dict) -> None:
+    """Réécrit le protocole. La date de version est toujours celle du jour de
+    l'enregistrement : c'est elle qui doit apparaître sur toute pancarte
+    imprimée à partir de ce protocole."""
+    from datetime import date
+
+    from .domaine.regles import prochaine_version
+
+    contenu = dict(contenu)
+    contenu["code"] = code
+    contenu["version"] = prochaine_version(contenu.get("version", ""))
+    contenu["date_version"] = date.today().isoformat()
+    config.DOSSIER_PROTOCOLES.mkdir(parents=True, exist_ok=True)
+    chemin = config.DOSSIER_PROTOCOLES / f"{code}.json"
+    chemin.write_text(json.dumps(contenu, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _tous.cache_clear()
+
+
+def supprimer(code: str) -> None:
+    chemin = config.DOSSIER_PROTOCOLES / f"{code}.json"
+    chemin.unlink(missing_ok=True)
+    _tous.cache_clear()
