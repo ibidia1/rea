@@ -166,6 +166,16 @@ class Base:
         config.DOSSIER_SAUVEGARDES.mkdir(parents=True, exist_ok=True)
         horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
         destination = config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}.db"
+        # Deux sauvegardes dans la même seconde portaient le même nom : la
+        # seconde écrasait la première. Ça n'arrive jamais avec les sauvegardes
+        # périodiques, mais toujours avec le filet de sécurité posé juste avant
+        # une restauration — c'est-à-dire au pire moment possible.
+        rang = 1
+        while destination.exists():
+            rang += 1
+            destination = (
+                config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}-{rang}.db"
+            )
         with self._verrou:
             sauvegarde_connexion = sqlite3.connect(str(destination))
             with sauvegarde_connexion:
@@ -217,6 +227,79 @@ class Base:
         if self._minuteur_sauvegarde is not None:
             self._minuteur_sauvegarde.cancel()
             self._minuteur_sauvegarde = None
+
+    # -- restauration (feuille de route, critère de fin du bloc 0) ----------
+    def sauvegardes_disponibles(self) -> list[dict]:
+        """Les fichiers de sauvegarde présents, du plus récent au plus ancien."""
+        if not config.DOSSIER_SAUVEGARDES.exists():
+            return []
+        fichiers = sorted(
+            config.DOSSIER_SAUVEGARDES.glob("rea-*.db"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        return [
+            {
+                "chemin": f,
+                "nom": f.name,
+                "taille": f.stat().st_size,
+                "date": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
+            }
+            for f in fichiers
+        ]
+
+    def restaurer(self, chemin_sauvegarde: Path | str) -> Path:
+        """Remplace la base courante par une sauvegarde.
+
+        « Une sauvegarde jamais restaurée n'existe pas » : cette fonction est
+        le critère de fin du bloc 0, et elle est testée.
+
+        La base actuelle est sauvegardée avant tout — restaurer par erreur ne
+        doit jamais être irréversible.
+        """
+        source = Path(chemin_sauvegarde)
+        if not source.exists():
+            raise FileNotFoundError(f"Sauvegarde introuvable : {source}")
+
+        filet = self.sauvegarder(motif="avant-restauration")
+        self.arreter_sauvegardes_periodiques()
+        with self._verrou:
+            self.connexion.close()
+            shutil.copy2(source, self.chemin)
+            # Les fichiers annexes du mode WAL décrivent l'ancienne base : les
+            # laisser rendrait la restauration incohérente.
+            for suffixe in ("-wal", "-shm"):
+                annexe = Path(str(self.chemin) + suffixe)
+                annexe.unlink(missing_ok=True)
+            self.connexion = sqlite3.connect(
+                str(self.chemin), check_same_thread=False, isolation_level=None
+            )
+            self.connexion.row_factory = _dict_factory
+            self.connexion.execute("PRAGMA foreign_keys = ON")
+            self.connexion.execute("PRAGMA journal_mode = WAL")
+        self._initialiser_schema()
+        self.connexion.execute(
+            "INSERT INTO journal(id, date_heure, utilisateur_id, table_cible, ligne_id, "
+            "action, details) VALUES (?, ?, NULL, 'base', 'base', 'restauration', ?)",
+            (nouvel_id(), maintenant(),
+             json.dumps({"depuis": str(source), "filet": str(filet)}, ensure_ascii=False)),
+        )
+        return filet
+
+    # -- journal d'audit consultable (bloc 0) -------------------------------
+    def journal(self, limite: int = 200, table: str | None = None) -> list[dict]:
+        """Le journal doit être lisible, pas seulement écrit : sans ça,
+        « qui a modifié quoi » n'est pas reconstituable (principes ALCOA+)."""
+        sql = (
+            "SELECT j.*, u.nom AS utilisateur_nom FROM journal j "
+            "LEFT JOIN utilisateur u ON u.id = j.utilisateur_id "
+        )
+        parametres: tuple = ()
+        if table:
+            sql += "WHERE j.table_cible = ? "
+            parametres = (table,)
+        sql += "ORDER BY j.date_heure DESC, j.rowid DESC LIMIT ?"
+        return self.requete(sql, (*parametres, limite))
 
     def fermer(self) -> None:
         self.arreter_sauvegardes_periodiques()

@@ -1,0 +1,21 @@
+{
+  "nom": "roles",
+  "libelle": "Rôles des utilisateurs",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "interne",
+      "Interne"
+    ],
+    [
+      "resident",
+      "Résident"
+    ],
+    [
+      "senior",
+      "Senior"
+    ]
+  ]
+}

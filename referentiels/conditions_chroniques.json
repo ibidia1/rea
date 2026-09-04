@@ -1,0 +1,41 @@
+{
+  "nom": "conditions_chroniques",
+  "libelle": "Conditions chroniques (ANZICS)",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "respiratoire",
+      "Insuffisance respiratoire chronique"
+    ],
+    [
+      "cardiovasculaire",
+      "Insuffisance cardiovasculaire chronique"
+    ],
+    [
+      "renale",
+      "Insuffisance rénale chronique"
+    ],
+    [
+      "hepatique",
+      "Insuffisance hépatique chronique"
+    ],
+    [
+      "immunosuppression",
+      "Immunosuppression"
+    ],
+    [
+      "cancer",
+      "Cancer (dont hémopathie)"
+    ],
+    [
+      "diabete",
+      "Diabète"
+    ],
+    [
+      "aucune",
+      "Aucune de ces conditions"
+    ]
+  ]
+}

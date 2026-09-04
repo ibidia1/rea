@@ -1,0 +1,33 @@
+{
+  "nom": "pupilles",
+  "libelle": "État pupillaire",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "symetriques_reactives",
+      "Symétriques et réactives"
+    ],
+    [
+      "myosis",
+      "Myosis"
+    ],
+    [
+      "mydriase_bilaterale",
+      "Mydriase bilatérale"
+    ],
+    [
+      "anisocorie_droite",
+      "Anisocorie droite"
+    ],
+    [
+      "anisocorie_gauche",
+      "Anisocorie gauche"
+    ],
+    [
+      "areactives",
+      "Aréactives"
+    ]
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "nom": "profondeurs_brulure",
+  "libelle": "Profondeur de brûlure",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "second_degre_superficiel",
+      "2e degré superficiel"
+    ],
+    [
+      "second_degre_profond",
+      "2e degré profond"
+    ],
+    [
+      "troisieme_degre",
+      "3e degré"
+    ],
+    [
+      "mixte",
+      "Mixte"
+    ]
+  ]
+}

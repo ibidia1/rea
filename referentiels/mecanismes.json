@@ -1,0 +1,73 @@
+{
+  "nom": "mecanismes",
+  "libelle": "Mécanisme du traumatisme",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "avec_detail": [
+    "chute_lieu_eleve",
+    "autre"
+  ],
+  "valeurs": [
+    [
+      "avp_deux_roues",
+      "AVP deux-roues"
+    ],
+    [
+      "avp_quatre_roues",
+      "AVP quatre-roues"
+    ],
+    [
+      "avp_pieton",
+      "AVP piéton"
+    ],
+    [
+      "chute_hauteur",
+      "Chute de sa hauteur"
+    ],
+    [
+      "chute_lieu_eleve",
+      "Chute d'un lieu élevé (préciser hauteur)"
+    ],
+    [
+      "arme_blanche",
+      "Agression par arme blanche"
+    ],
+    [
+      "arme_a_feu",
+      "Agression par arme à feu"
+    ],
+    [
+      "contondante",
+      "Agression contondante"
+    ],
+    [
+      "accident_travail",
+      "Accident de travail"
+    ],
+    [
+      "accident_domestique",
+      "Accident domestique"
+    ],
+    [
+      "sport",
+      "Sport"
+    ],
+    [
+      "ecrasement",
+      "Écrasement / ensevelissement"
+    ],
+    [
+      "blast",
+      "Blast / explosion"
+    ],
+    [
+      "autre",
+      "Autre"
+    ],
+    [
+      "non_renseigne",
+      "Non renseigné"
+    ]
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "nom": "gestes_chirurgicaux",
+  "libelle": "Gestes chirurgicaux",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "laparotomie",
+      "Laparotomie exploratrice"
+    ],
+    [
+      "splenectomie",
+      "Splénectomie"
+    ],
+    [
+      "hepatique",
+      "Chirurgie hépatique d'hémostase"
+    ],
+    [
+      "drainage_thoracique",
+      "Drainage thoracique"
+    ],
+    [
+      "thoracotomie",
+      "Thoracotomie"
+    ],
+    [
+      "craniectomie",
+      "Craniectomie décompressive"
+    ],
+    [
+      "evacuation_hematome",
+      "Évacuation d'hématome intracrânien"
+    ],
+    [
+      "dvE",
+      "Dérivation ventriculaire externe"
+    ],
+    [
+      "fixateur_externe",
+      "Fixateur externe"
+    ],
+    [
+      "osteosynthese",
+      "Ostéosynthèse"
+    ],
+    [
+      "parage",
+      "Parage de plaie / excision-greffe"
+    ],
+    [
+      "tracheotomie",
+      "Trachéotomie"
+    ],
+    [
+      "cesarienne",
+      "Césarienne"
+    ],
+    [
+      "hysterectomie_hemostase",
+      "Hystérectomie d'hémostase"
+    ],
+    [
+      "autre",
+      "Autre (préciser)"
+    ]
+  ]
+}

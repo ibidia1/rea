@@ -27,6 +27,7 @@ from rea.services import lits as lits_service
 from rea.services import pancarte as pancarte_service
 from rea.services import prescriptions as prescriptions_service
 from rea.services import sejours as sejours_service
+from rea.ui import administration as administration_ui
 from rea.ui import theme
 from rea.ui import utilisateur as utilisateur_ui
 
@@ -49,6 +50,11 @@ with st.sidebar:
     st.divider()
     if st.button("🛏 Tableau des lits", use_container_width=True):
         st.session_state.pop("sejour_id", None)
+        st.session_state.pop("ecran", None)
+        st.rerun()
+    if st.button("⚙ Administration", use_container_width=True):
+        st.session_state.pop("sejour_id", None)
+        st.session_state["ecran"] = "administration"
         st.rerun()
     st.caption(f"Réanimation polyvalente · {config.NB_LITS} lits")
     st.caption("SPEC.md — voir le dépôt pour l'état d'avancement")
@@ -292,6 +298,7 @@ def _carte_lit(lit_info: dict, resumes: dict) -> None:
 
     if st.button("Ouvrir", key=f"lit_{numero}", use_container_width=True):
         st.session_state["sejour_id"] = sejour_id
+        st.session_state.pop("ecran", None)
         st.rerun()
 
 
@@ -420,6 +427,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
         st.session_state.pop("mode", None)
         st.session_state.pop("lit_admission_choisi", None)
         st.session_state["sejour_id"] = sid
+        st.session_state.pop("ecran", None)
         st.success("Séjour créé.")
         st.rerun()
 
@@ -1396,7 +1404,9 @@ def ecran_fiche(sejour_id: str) -> None:
 # --------------------------------------------------------------------------
 # Routage
 # --------------------------------------------------------------------------
-if st.session_state.get("sejour_id"):
+if st.session_state.get("ecran") == "administration":
+    administration_ui.ecran(base, utilisateur_id)
+elif st.session_state.get("sejour_id"):
     ecran_fiche(st.session_state["sejour_id"])
 else:
     ecran_lits()

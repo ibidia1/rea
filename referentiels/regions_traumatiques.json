@@ -1,0 +1,29 @@
+{
+  "nom": "regions_traumatiques",
+  "libelle": "Régions traumatiques",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "cranien",
+      "Traumatisme crânien"
+    ],
+    [
+      "thoracique",
+      "Traumatisme thoracique"
+    ],
+    [
+      "abdominal",
+      "Traumatisme abdominal"
+    ],
+    [
+      "pelvien",
+      "Traumatisme pelvien"
+    ],
+    [
+      "peripherique",
+      "Traumatisme périphérique (massif facial, membres, rachis)"
+    ]
+  ]
+}

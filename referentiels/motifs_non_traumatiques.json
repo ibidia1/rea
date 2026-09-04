@@ -1,0 +1,240 @@
+{
+  "nom": "motifs_non_traumatiques",
+  "libelle": "Motifs d'admission non traumatiques",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Format : groupe -> [code, libellé, champs de précision attendus].",
+  "valeurs": {
+    "Défaillance circulatoire": [
+      [
+        "choc_septique",
+        "Choc septique",
+        [
+          "porte_entree"
+        ]
+      ],
+      [
+        "choc_hemorragique",
+        "Choc hémorragique non traumatique",
+        []
+      ],
+      [
+        "choc_cardiogenique",
+        "Choc cardiogénique",
+        []
+      ],
+      [
+        "choc_anaphylactique",
+        "Choc anaphylactique",
+        []
+      ],
+      [
+        "choc_obstructif",
+        "Choc obstructif",
+        []
+      ]
+    ],
+    "Défaillance respiratoire": [
+      [
+        "sdra",
+        "SDRA",
+        []
+      ],
+      [
+        "pneumopathie_grave",
+        "Pneumopathie grave",
+        []
+      ],
+      [
+        "decompensation_bpco",
+        "Décompensation de BPCO",
+        []
+      ],
+      [
+        "oap_cardiogenique",
+        "OAP cardiogénique",
+        []
+      ],
+      [
+        "embolie_pulmonaire",
+        "Embolie pulmonaire",
+        []
+      ],
+      [
+        "inhalation",
+        "Inhalation",
+        []
+      ],
+      [
+        "obstruction_vas",
+        "Obstruction des voies aériennes",
+        []
+      ]
+    ],
+    "Défaillance neurologique": [
+      [
+        "avc_ischemique",
+        "AVC ischémique",
+        []
+      ],
+      [
+        "avc_hemorragique",
+        "AVC hémorragique",
+        []
+      ],
+      [
+        "hemorragie_meningee",
+        "Hémorragie méningée",
+        []
+      ],
+      [
+        "etat_de_mal",
+        "État de mal épileptique",
+        []
+      ],
+      [
+        "meningo_encephalite",
+        "Méningo-encéphalite",
+        []
+      ],
+      [
+        "coma_metabolique",
+        "Coma métabolique",
+        []
+      ],
+      [
+        "coma_toxique",
+        "Coma toxique",
+        []
+      ]
+    ],
+    "Postopératoire": [
+      [
+        "postop_programme",
+        "Surveillance postopératoire lourde programmée",
+        []
+      ],
+      [
+        "postop_complication",
+        "Complication postopératoire non programmée",
+        [
+          "texte"
+        ]
+      ]
+    ],
+    "Brûlures": [
+      [
+        "brulure",
+        "Brûlure",
+        [
+          "brulure"
+        ]
+      ]
+    ],
+    "Métabolique et rénal": [
+      [
+        "acidocetose",
+        "Acidocétose diabétique",
+        []
+      ],
+      [
+        "coma_hyperosmolaire",
+        "Coma hyperosmolaire",
+        []
+      ],
+      [
+        "dysnatremie",
+        "Dysnatrémie sévère",
+        []
+      ],
+      [
+        "dyskaliemie",
+        "Dyskaliémie sévère",
+        []
+      ],
+      [
+        "ira_epuration",
+        "Insuffisance rénale aiguë avec indication d'épuration",
+        []
+      ]
+    ],
+    "Intoxications et envenimations": [
+      [
+        "intox_medicamenteuse",
+        "Intoxication médicamenteuse",
+        []
+      ],
+      [
+        "intox_organophosphores",
+        "Organophosphorés",
+        []
+      ],
+      [
+        "intox_co",
+        "Monoxyde de carbone",
+        []
+      ],
+      [
+        "intox_caustique",
+        "Caustique",
+        []
+      ],
+      [
+        "envenimation_scorpionique",
+        "Envenimation scorpionique",
+        []
+      ],
+      [
+        "envenimation_ophidienne",
+        "Envenimation ophidienne",
+        []
+      ]
+    ],
+    "Obstétrical": [
+      [
+        "preeclampsie",
+        "Prééclampsie sévère",
+        []
+      ],
+      [
+        "eclampsie",
+        "Éclampsie",
+        []
+      ],
+      [
+        "hellp",
+        "HELLP syndrome",
+        []
+      ],
+      [
+        "hemorragie_post_partum",
+        "Hémorragie du post-partum",
+        []
+      ],
+      [
+        "embolie_amniotique",
+        "Embolie amniotique",
+        []
+      ]
+    ],
+    "Autre": [
+      [
+        "post_arret_cardiaque",
+        "Post-arrêt cardiaque",
+        []
+      ],
+      [
+        "tetanos",
+        "Tétanos",
+        []
+      ],
+      [
+        "autre",
+        "Autre",
+        [
+          "texte"
+        ]
+      ]
+    ]
+  }
+}

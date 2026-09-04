@@ -1,0 +1,57 @@
+{
+  "nom": "examens_a_demander",
+  "libelle": "Examens à demander pour le lendemain",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "nfs",
+      "NFS"
+    ],
+    [
+      "ionogramme",
+      "Ionogramme"
+    ],
+    [
+      "creatinine",
+      "Créatinine"
+    ],
+    [
+      "uree",
+      "Urée"
+    ],
+    [
+      "crp",
+      "CRP"
+    ],
+    [
+      "procalcitonine",
+      "Procalcitonine"
+    ],
+    [
+      "gds",
+      "Gaz du sang"
+    ],
+    [
+      "tp_inr",
+      "TP / INR"
+    ],
+    [
+      "bilan_hepatique",
+      "Bilan hépatique"
+    ],
+    [
+      "hemoculture",
+      "Hémoculture"
+    ],
+    [
+      "ecbu",
+      "ECBU"
+    ],
+    [
+      "pdp",
+      "PDP"
+    ]
+  ]
+}

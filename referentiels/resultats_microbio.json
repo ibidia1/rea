@@ -1,0 +1,21 @@
+{
+  "nom": "resultats_microbio",
+  "libelle": "Résultats de microbiologie",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "en_cours",
+      "En cours"
+    ],
+    [
+      "sterile",
+      "Stérile"
+    ],
+    [
+      "positif",
+      "Positif"
+    ]
+  ]
+}

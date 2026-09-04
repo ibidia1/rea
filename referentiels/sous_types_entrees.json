@@ -1,0 +1,21 @@
+{
+  "nom": "sous_types_entrees",
+  "libelle": "Sous-types d'entrées",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "perfusion",
+      "Perfusion (cc/h)"
+    ],
+    [
+      "nutrition_enterale",
+      "Nutrition entérale (mL/24 h)"
+    ],
+    [
+      "nutrition_parenterale",
+      "Nutrition parentérale (mL/24 h)"
+    ]
+  ]
+}

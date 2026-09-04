@@ -1,0 +1,33 @@
+{
+  "nom": "modes_sortie",
+  "libelle": "Mode de sortie",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "domicile",
+      "Domicile"
+    ],
+    [
+      "transfert_service",
+      "Transfert vers un service (préciser)"
+    ],
+    [
+      "transfert_hopital",
+      "Transfert vers un autre hôpital"
+    ],
+    [
+      "reeducation",
+      "Rééducation"
+    ],
+    [
+      "contre_avis",
+      "Sortie contre avis médical"
+    ],
+    [
+      "deces",
+      "Décès"
+    ]
+  ]
+}

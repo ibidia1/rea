@@ -1,0 +1,37 @@
+{
+  "nom": "portes_entree_sepsis",
+  "libelle": "Porte d'entrée du sepsis",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "pulmonaire",
+      "Pulmonaire"
+    ],
+    [
+      "digestive",
+      "Digestive"
+    ],
+    [
+      "urinaire",
+      "Urinaire"
+    ],
+    [
+      "cutanee",
+      "Cutanée — parties molles"
+    ],
+    [
+      "catheter",
+      "Cathéter"
+    ],
+    [
+      "meningee",
+      "Méningée"
+    ],
+    [
+      "indeterminee",
+      "Indéterminée"
+    ]
+  ]
+}

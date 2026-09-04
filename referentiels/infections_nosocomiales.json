@@ -1,0 +1,29 @@
+{
+  "nom": "infections_nosocomiales",
+  "libelle": "Infections nosocomiales",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "pavm",
+      "PAVM"
+    ],
+    [
+      "ilc",
+      "Infection liée au cathéter"
+    ],
+    [
+      "iu",
+      "Infection urinaire"
+    ],
+    [
+      "iss",
+      "Infection du site opératoire"
+    ],
+    [
+      "autre",
+      "Autre"
+    ]
+  ]
+}
