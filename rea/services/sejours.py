@@ -345,12 +345,12 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
     from ..domaine.dates import duree_sejour_jours, format_date_fr
 
     sejour = sejour_avec_patient(base, sejour_id)
-    duree = duree_sejour_jours(sejour["date_admission"], sejour["date_sortie"])
+    duree = duree_sejour_jours(sejour["date_admission"], sejour.get("date_sortie"))
 
     lignes = [f"{sejour['nom_affichage']} — matricule {sejour['matricule']}"]
 
     date_admission_fr = format_date_fr(sejour["date_admission"])
-    date_sortie_fr = format_date_fr(sejour["date_sortie"]) if sejour["date_sortie"] else "en cours"
+    date_sortie_fr = format_date_fr(sejour.get("date_sortie")) if sejour.get("date_sortie") else "en cours"
     lignes.append(f"Séjour du {date_admission_fr} au {date_sortie_fr} — {duree} jours")
 
     provenance = listes.libelle(listes.PROVENANCES, sejour["provenance_type"], "non renseignée")
@@ -387,10 +387,10 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
     elif sejour["complication_statut"] == "aucune":
         lignes.append("Sans complication rapportée")
 
-    mode = listes.libelle(listes.MODES_SORTIE, sejour["mode_sortie"], "")
+    mode = listes.libelle(listes.MODES_SORTIE, sejour.get("mode_sortie"), "")
     destination = sejour["destination"] or ""
     meme_etab = " (même établissement)" if sejour["meme_etablissement"] else ""
-    if sejour["mode_sortie"] == "deces":
+    if sejour.get("mode_sortie") == "deces":
         lignes.append("Décès en réanimation")
     elif destination:
         lignes.append(f"Sortie vers {destination}{meme_etab} le {date_sortie_fr}")

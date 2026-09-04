@@ -56,11 +56,25 @@ class Base:
 
     # -- schéma -----------------------------------------------------------
     def _initialiser_schema(self) -> None:
+        """Crée le schéma, puis rattrape ce qui manque à une base plus ancienne.
+
+        L'ordre compte. Le script complet contient des index qui portent sur des
+        colonnes ajoutées après coup (`idx_sejour_ouvert` sur `date_sortie`, par
+        exemple) : le jouer en entier sur une base ancienne échoue avant même
+        d'arriver au rattrapage, et l'application ne démarre plus du tout. Les
+        tables sont donc créées d'abord, les colonnes manquantes ajoutées
+        ensuite, et le reste du script seulement à la fin.
+        """
         sql = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
+        tables = "\n".join(
+            bloc.group(0)
+            for bloc in re.finditer(r"CREATE TABLE IF NOT EXISTS.*?\n\);", sql, re.S)
+        )
         with self._verrou:
-            self.connexion.executescript(sql)
+            self.connexion.executescript(tables)
         self._completer_colonnes_manquantes(sql)
         with self._verrou:
+            self.connexion.executescript(sql)
             existe = self.connexion.execute(
                 "SELECT valeur FROM meta WHERE cle = 'version_schema'"
             ).fetchone()

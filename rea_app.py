@@ -490,16 +490,16 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
 def _ligne_poids(sejour: dict) -> str:
     """Poids réel et poids idéal côte à côte : le réel entre dans la
     clairance, l'idéal sert de référence."""
-    if not sejour["poids_kg"]:
+    if not sejour.get("poids_kg"):
         return (
             "<span style='color:#B4442E'>Poids non renseigné — "
             "clairance incalculable</span>"
         )
     texte = f"Poids {_format_valeur(sejour['poids_kg'])} kg"
-    if sejour["taille_cm"]:
+    if sejour.get("taille_cm"):
         texte += f" · {_format_valeur(sejour['taille_cm'])} cm"
     ideal = calculs.poids_ideal_devine(
-        taille_cm=sejour["taille_cm"], sexe=sejour["sexe"]
+        taille_cm=sejour.get("taille_cm"), sexe=sejour.get("sexe")
     )
     if ideal.disponible:
         texte += (
@@ -510,7 +510,7 @@ def _ligne_poids(sejour: dict) -> str:
 
 
 def onglet_identite(sejour: dict) -> None:
-    age = age_ans(sejour["date_naissance"])
+    age = age_ans(sejour.get("date_naissance"))
     c_identite, c_motif, c_antecedents = st.columns(3)
 
     with c_identite:
@@ -1108,7 +1108,7 @@ def onglet_evolution(sejour: dict) -> None:
 
 
 def onglet_sortie(sejour: dict) -> None:
-    if sejour["date_sortie"]:
+    if sejour.get("date_sortie"):
         st.success(f"Séjour clôturé le {format_date_fr(sejour['date_sortie'])}")
         st.text_area("Compte rendu de sortie", value=sejours_service.compte_rendu_sortie(base, sejour["id"]), height=250)
         return
@@ -1396,11 +1396,11 @@ def saisie_bilan(sejour: dict) -> None:
             gaz[cle] = valeur
 
     # Valeurs dérivées, affichées dès que leurs ingrédients sont là.
-    age = age_ans(sejour["date_naissance"])
+    age = age_ans(sejour.get("date_naissance"))
     derivees = [
         v for v in calculs.toutes_les_valeurs(
-            resultats=valeurs, gaz=gaz, poids_kg=sejour["poids_kg"],
-            taille_cm=sejour["taille_cm"], age_ans=age, sexe=sejour["sexe"],
+            resultats=valeurs, gaz=gaz, poids_kg=sejour.get("poids_kg"),
+            taille_cm=sejour.get("taille_cm"), age_ans=age, sexe=sejour.get("sexe"),
         )
         if v.disponible
     ]
@@ -1414,7 +1414,7 @@ def saisie_bilan(sejour: dict) -> None:
             ],
             theme.BLEU,
         )
-    if not sejour["poids_kg"]:
+    if not sejour.get("poids_kg"):
         st.caption(
             "Poids non renseigné à l'admission : la clairance de la créatinine "
             "ne peut pas être calculée."

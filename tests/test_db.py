@@ -132,3 +132,55 @@ def test_sauvegardes_disponibles_les_plus_recentes_d_abord(base):
     dispo = base.sauvegardes_disponibles()
     assert len(dispo) >= 2
     assert dispo[0]["date"] >= dispo[1]["date"]
+
+
+# -- montée de version d'une base existante --------------------------------
+
+def test_une_base_ancienne_recupere_les_colonnes_ajoutees(base, monkeypatch, tmp_path):
+    """`CREATE TABLE IF NOT EXISTS` ne touche pas à une table déjà créée.
+
+    Sans rattrapage, une base saisie par une version antérieure du logiciel
+    n'a pas les colonnes ajoutées depuis, et l'écran patient plante au premier
+    affichage — c'est exactement ce qui s'est produit sur le poste de test.
+    """
+    import sqlite3
+    import uuid
+    from pathlib import Path
+
+    from rea.db import Base, maintenant
+
+    # Une base « d'avant » : le séjour n'a que ses colonnes d'origine.
+    chemin = tmp_path / "ancienne.db"
+    vieille = sqlite3.connect(str(chemin))
+    vieille.executescript(
+        "CREATE TABLE meta (cle TEXT PRIMARY KEY, valeur TEXT);"
+        "CREATE TABLE patient (id TEXT PRIMARY KEY, matricule TEXT, "
+        "nom_affichage TEXT, identifiant_etude TEXT, cree_le TEXT);"
+        "CREATE TABLE sejour (id TEXT PRIMARY KEY, patient_id TEXT, "
+        "date_admission TEXT, lit_admission INTEGER, cree_le TEXT);"
+    )
+    pid, sid = str(uuid.uuid4()), str(uuid.uuid4())
+    vieille.execute(
+        "INSERT INTO patient VALUES (?,?,?,?,?)",
+        (pid, "M1", "K. A.", "ETU-1", maintenant()),
+    )
+    vieille.execute(
+        "INSERT INTO sejour VALUES (?,?,?,?,?)",
+        (sid, pid, "2026-09-01", 1, maintenant()),
+    )
+    vieille.commit()
+    vieille.close()
+
+    rouverte = Base(chemin)
+    try:
+        colonnes = rouverte._colonnes("sejour")
+        for attendue in ("poids_kg", "taille_cm", "creatinine_base",
+                         "type_admission", "maladie_chronique_igs2", "code_icd10"):
+            assert attendue in colonnes, f"{attendue} non rattrapée"
+        # La ligne saisie avant existe toujours, et les nouvelles colonnes y
+        # valent « non renseigné » — pas zéro.
+        sejour = rouverte.une_ligne("SELECT * FROM sejour WHERE id = ?", (sid,))
+        assert sejour["poids_kg"] is None
+    finally:
+        rouverte.arreter_sauvegardes_periodiques()
+        rouverte.connexion.close()
