@@ -446,64 +446,73 @@ le coder ?**
 
 ---
 
-## 10. ÉTAT D'APPLICATION AU 3 SEPTEMBRE 2026
+## 10. ÉTAT D'APPLICATION AU 4 SEPTEMBRE 2026
 
-Audit du code existant contre les règles de ce document, fait à sa reprise dans
-le dépôt. Le code avait été écrit avant, dans un ordre différent.
+Audit du code contre les règles de ce document. Refait à chaque session ; la
+version précédente (3 septembre) signalait deux prérequis violés, R2 et R4,
+tous deux levés depuis.
 
 ### Blocs faits, partiels, ou non commencés
 
 | Bloc | État réel |
 |---|---|
-| 0 Noyau | ✅ fait — sauf **restauration de sauvegarde jamais testée** et journal d'audit non consultable dans l'interface |
-| 1 Référentiels | ❌ **non fait** — les listes sont dans `rea/listes.py` et `rea/analytes.py`, donc dans du code (violation R2) |
+| 0 Noyau | ✅ fait — restauration **testée**, journal consultable, écran Administration. Les colonnes manquantes d'une base ancienne sont rattrapées à l'ouverture |
+| 1 Référentiels | ✅ fait — 32 fichiers dans `referentiels/`, `listes.py` réduit à un module d'accès, versions affichées à l'écran |
 | 2 Lits, admission | ✅ fait |
-| 3 Prescription | ✅ fait — impression en mise en page provisoire, PDF réel du prescrit toujours attendu |
-| 4 Contrôles de cohérence | ✅ fait (v1.7) |
+| 3 Prescription | ✅ fait — impression en mise en page **provisoire**, PDF réel du prescrit toujours attendu |
+| 4 Contrôles de cohérence | ✅ fait — câblés sur les six écritures qui portent des dates |
 | 5 Évolution | ✅ fait |
-| 6 Bilans | ◐ partiel — **albumine et glycémie manquantes**, microbiologie non faite |
-| 7 Rappels / FAST HUG | ❌ non fait — trois alertes existent mais **codées en dur dans l'écran** (violation R4) |
+| 6 Bilans | ✅ fait — albumine et glycémie présentes, microbiologie faite (bloc 14) |
+| 7 Rappels / FAST HUG | ✅ fait — moteur déclaratif, 16 rappels et la check-list en fichiers |
 | 8 Sortie | ✅ fait |
-| 9 Socle recherche | ❌ non fait — tables prêtes, aucun score calculé |
+| 9 Socle recherche | ✅ fait — SOFA, IGS II, mortalité prédite, jours sans ventilation, tous testés |
 | 10 Courbes | ✅ fait |
 | 11 Explorations | ✅ fait |
-| 12 Antécédents, CIM-10 | ◐ partiel — liste courte faite, recherche CIM-10 non faite |
-| 13 à 20 | ❌ non commencés |
+| 12 Antécédents, CIM-10 | ◐ recherche CIM-10 faite, mais sur un **sous-ensemble partiel** de 58 codes à vérifier et compléter |
+| 13 Export recherche | ✅ fait — pseudonymisation, dictionnaire, manifeste versionné, gel de base |
+| 14 Microbiologie | ◐ saisie et consommation faites ; la consommation est en **DOT**, la table des DDD de l'OMS reste à saisir |
+| 15 Définitions | ✅ fait — Berlin, KDIGO, qSOFA, Sepsis-3, avec leurs références |
+| 16 Taux ECDC | ✅ fait — dénominateur en jours-dispositif, délai de 48 h respecté |
+| 17 Cohortes | ✅ fait |
+| 18 STROBE / Table 1 | ✅ fait |
+| 19-20 | ❌ non commencés (v2 : multi-postes, reprise après incident) |
 
 ### Règles de modularité
 
 | Règle | État |
 |---|---|
-| R1 une seule couche écrit | ⚠️ à vérifier — `pancarte.imprimer()` (C3) écrit le snapshot |
-| R2 référentiels en fichiers | ❌ violée — 752 lignes de listes dans du `.py` |
-| R3 le rendu ne calcule rien | ✅ respectée — la pancarte reçoit `libelle_ligne()` déjà formé |
-| R4 aides déclaratives | ❌ violée — règles d'alerte en dur dans `rea_app.py` |
-| R5 export lit le schéma | — pas d'export encore |
+| R1 une seule couche écrit | ✅ respectée — seuls les services écrivent ; `pancarte.imprimer()` est un service, il appelle le rendu puis écrit, il ne rend pas lui-même |
+| R2 référentiels en fichiers | ✅ **levée** — plus aucune liste dans du `.py`, un test garde le fichier sous 250 lignes |
+| R3 le rendu ne calcule rien | ◐ respectée pour la mise en forme, mais `pancarte.generer_html()` lit encore la base directement au lieu de recevoir des données préparées. Gap connu, sans conséquence fonctionnelle, à reprendre si la pancarte est retouchée |
+| R4 aides déclaratives | ✅ **levée** — moteur générique, règles et barèmes en JSON, aucune règle dans le code |
+| R5 export lit le schéma | ✅ respectée — l'export lit `PRAGMA table_info` et non une liste de colonnes écrite à la main ; le dictionnaire se remplit tout seul |
 
-### §5 « à câbler tôt » — état après la v1.7
+### §5 « à câbler tôt » — état
 
 | Élément | État |
 |---|---|
-| Code ATC sur médicament | ✅ colonne posée (v1.7) |
-| Code LOINC sur analyte | ✅ colonne posée + mapping provisoire **à valider** (v1.7) |
-| Code CIM-10 diagnostics | ✅ colonne posée sur motifs et antécédents (v1.7) |
-| Unités UCUM | ✅ colonne posée + correspondance (v1.7) |
-| Dates pose/retrait dispositif | ✅ fait (v1.6) |
-| Créatinine de base | ✅ colonne posée (v1.7) |
-| Journal d'audit | ◐ table remplie, **pas consultable dans l'interface** |
+| Code ATC sur médicament | ✅ colonne posée — non renseignée à la saisie |
+| Code LOINC sur analyte | ✅ mapping présent mais **provisoire** (`LOINC_VALIDE = False`) |
+| Code CIM-10 diagnostics | ✅ colonne posée et **saisissable** (bloc 12) |
+| Unités UCUM | ✅ posées |
+| Dates pose/retrait dispositif | ✅ fait — c'est ce qui rend les taux ECDC calculables |
+| Créatinine de base | ✅ posée et saisie à l'admission — c'est elle qui rend KDIGO applicable |
+| Journal d'audit | ✅ rempli **et** consultable |
+| Type d'admission, maladie chronique IGS II | ✅ ajoutés — irrécupérables après coup, d'où leur saisie à l'admission |
 
-### Prochaines étapes dans l'ordre de ce document
+### Ce qui reste, et qui ne dépend plus de moi
 
-1. **Bloc 1** — sortir les référentiels du code (R2). Prérequis violé, et tout
-   ce qui suit s'appuie dessus.
-2. **Bloc 7** — moteur de règles déclaratif (R4), qui reprendra les trois
-   alertes aujourd'hui en dur.
-3. **Bloc 6 complété** — albumine et glycémie.
-4. **Bloc 9** — socle recherche, avec tests obligatoires sur chaque score.
-5. **Bloc 0 fini** — restauration de sauvegarde testée, journal consultable.
+1. **Le PDF réel du prescrit** — la mise en page imprimée restera provisoire
+   tant qu'il n'aura pas été fourni.
+2. **Validation par un senior** : bornes de normalité des bilans, barème IGS II,
+   seuils des rappels, correspondances LOINC. Tout est marqué non validé à
+   l'écran ; rien n'est à reprogrammer, seulement à relire et à signer.
+3. **La CIM-10 complète** et la **table des DDD de l'OMS** : deux fichiers à
+   remplir depuis leur source officielle, sans toucher au code.
+4. **Le dossier de protection des données** et le test sur patients réels.
 
 ---
 
-*Fin du document — Feuille de route v1.0*
+*Fin du document — Feuille de route v1.0, audit du 4 septembre 2026*
 *Toute décision prise en session est reportée ici et dans le SPEC avant la fin
 de la session.*

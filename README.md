@@ -5,16 +5,38 @@ Voir **[SPEC.md](SPEC.md)** — c'est le document de référence du projet,
 
 ## État actuel
 
-**v1 utilisable** : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
-impression), Explorations et actes (dispositifs invasifs avec compteurs de
-jours calculés), Bilans (saisie, cinétique par panneau, texte généré),
-Évolution (reprend dispositifs, explorations, bilans et prescrit), Sortie.
+**v2.0** — tous les blocs codables de la feuille de route sont faits.
 
-Voir le journal des versions dans SPEC.md pour le détail exact de ce qui est
-fait et ce qui ne l'est pas — en particulier la mise en page de la pancarte
-imprimée est **provisoire** (le PDF réel du prescrit n'a pas encore été
-fourni), la microbiologie et les statistiques ne sont pas commencées, et les
-bornes de normalité des bilans restent à valider par un senior.
+*Soin quotidien* : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
+impression), Explorations et actes (dispositifs invasifs avec compteurs de
+jours calculés), Bilans (saisie, cinétique, microbiologie, texte généré),
+Évolution (check-list FAST HUG, rappels, scores, quatre plans), Sortie.
+
+*Analyse* : écran **Recherche** — cohortes, tableau descriptif STROBE, taux
+d'infections liées aux dispositifs, consommation d'antibiotiques, export
+pseudonymisé avec dictionnaire des données, gel de base.
+
+*Administration* : sauvegardes et **restauration**, journal d'audit
+consultable, version de chaque référentiel, de chaque protocole et de chaque
+jeu de règles.
+
+Les listes codées (`referentiels/`), les règles d'aide et les barèmes de score
+(`regles/`) sont des **fichiers JSON versionnés** : les modifier ne demande pas
+de reprogrammer le logiciel.
+
+### Ce qui reste, et qui ne dépend pas du développement
+
+- la **mise en page imprimée du prescrit** est provisoire tant que le PDF réel
+  du service n'a pas été fourni ;
+- **à faire valider par un senior** : bornes de normalité des bilans, barème
+  IGS II, seuils des rappels, correspondances LOINC — tout est marqué non
+  validé à l'écran ;
+- **à compléter depuis leur source officielle** : la CIM-10 (58 codes de
+  démarrage seulement) et la table des DDD de l'OMS ;
+- le dossier de protection des données et le test sur patients réels.
+
+Le détail exact figure dans le journal des versions de SPEC.md et dans
+l'audit §10 de FEUILLE_DE_ROUTE.md.
 
 ## Installation (poste de développement)
 

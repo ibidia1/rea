@@ -796,6 +796,125 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.0 — 4 septembre 2026 — tous les blocs codables de la feuille de route**
+
+Cette version termine les blocs 0 à 18. Ce qui reste ne dépend plus du
+développement : un document attendu, des validations à signer, deux fichiers
+officiels à recopier.
+
+*Fondations remises d'aplomb (règles R2 et R4, violées jusqu'ici)*
+
+- **Les référentiels sont des fichiers** (`referentiels/`, 32 fichiers JSON
+  versionnés). `rea/listes.py` n'est plus qu'un module d'accès. Les 37 noms
+  qu'il exporte ont exactement les mêmes valeurs qu'avant — vérifié par
+  comparaison automatique — et les 146 tests d'alors passent inchangés.
+  **Ajouter un motif d'admission ne demande plus de reprogrammer le logiciel.**
+- **Les règles d'aide sont déclaratives** (`regles/`). Le moteur ne connaît
+  aucune règle : il lit des conditions et les évalue sur des faits. Changer un
+  seuil ne demande plus d'informaticien.
+- La **version de chaque référentiel et de chaque jeu de règles est affichée**
+  dans l'écran Administration (§4.5) : deux extractions faites à six mois
+  d'écart ne sont pas comparables sans le savoir.
+
+*Bloc 0 terminé*
+
+- **Restauration de sauvegarde** — écrite, testée, et accessible à l'écran.
+  Une sauvegarde jamais restaurée n'existe pas. L'état courant est sauvegardé
+  avant tout remplacement : restaurer par erreur reste réversible.
+- **Journal d'audit consultable** et filtrable. Il était rempli mais illisible,
+  donc inutilisable pour retracer qui a modifié quoi.
+- Deux sauvegardes prises dans la même seconde s'écrasaient — ce qui arrivait
+  systématiquement au filet posé avant une restauration. Corrigé.
+- Les **colonnes ajoutées au schéma sont rattrapées à l'ouverture** d'une base
+  ancienne. Sans cela, la première mise à jour après mise en service aurait
+  planté à la première écriture.
+
+*Bloc 4 — cohérence câblée partout*
+
+Les contrôles n'étaient branchés que sur les bilans ; ils le sont maintenant
+sur les six écritures qui portent des dates. Un avertissement « improbable »
+s'affiche et laisse passer ; un « impossible » — extubation avant
+l'intubation, sortie avant l'admission — demande un second clic. Rien n'est
+bloqué : le médecin garde le dernier mot, mais pas par inadvertance.
+
+*Bloc 7 — check-list quotidienne*
+
+FAST HUG (Vincent, *Crit Care Med* 2005), cochée à partir de ce qui est déjà
+saisi, avec trois états : fait, à vérifier, **non renseigné** — un point non
+renseigné n'est pas un point raté. Seize rappels livrés (durée des dispositifs,
+sédation prolongée, intubé sans SNG, escarres, valeurs biologiques critiques).
+Un test vérifie qu'**aucune règle ne parle de posologie** : la limite du §3.1
+devient exécutable, pas seulement écrite.
+
+*Bloc 9 — scores*
+
+SOFA quotidien avec sa courbe, IGS II et mortalité prédite, jours sans
+ventilation à J28. Trois précautions :
+
+- une variable manquante vaut zéro point **mais rend le score explicitement
+  incomplet**, avec la liste de ce qui manque ;
+- la mortalité prédite n'est calculée que sur un IGS II complet ;
+- le **barème IGS II est marqué non validé** : il a été saisi de mémoire et
+  doit être relu contre la publication d'origine avant tout usage statistique.
+
+La composante circulatoire du SOFA est limitée à la PAM : ses paliers
+supérieurs dépendent de la dose de vasopresseur, que le logiciel ne saisit pas
+et ne calcule pas (§3.1). C'est écrit à l'écran plutôt que masqué.
+
+Deux variables de l'IGS II qu'aucune autre donnée ne permettait de retrouver
+après coup sont désormais saisies à l'admission : **type d'admission** et
+**maladie chronique au sens du score**.
+
+*Blocs 12 à 18 — la couche recherche*
+
+- **Export pseudonymisé** : ni matricule, ni nom, ni date de naissance ;
+  identifiant d'étude et âge à la place. Le texte libre est retiré par défaut
+  — un commentaire peut contenir un nom, un lieu, un numéro de chambre — et
+  l'inclure inscrit un avertissement dans l'export lui-même. La politique de
+  pseudonymisation est **volontairement dans le code** et non dans un fichier :
+  tout le reste est paramétrable, pas ceci, car un fichier se modifie sans
+  trace. L'export emporte son **dictionnaire des données**, la version de
+  chaque référentiel, et trois codes de valeur manquante distincts (`.NR` non
+  renseigné, `.NA` non applicable, `.NF` non fait).
+- **Gel de base** avant analyse : une étude qui tourne pendant que les données
+  bougent n'est pas reproductible.
+- **Microbiologie** : prélèvements, résultats en attente affichés en premier
+  (c'est ce qu'on oublie), infections acquises. Consommation d'antibiotiques
+  en **jours de traitement pour 1000 journées** : la table des DDD de l'OMS
+  n'est pas recopiée de mémoire, le fichier l'attend.
+- **Définitions standard** : Berlin, KDIGO, qSOFA, Sepsis-3, avec référence.
+  Une définition qu'on ne peut pas appliquer rend **« non applicable » et
+  jamais « négatif »** : sans gaz du sang, on ne peut pas dire qu'il n'y a pas
+  de SDRA.
+- **Taux d'infections liées aux dispositifs** au dénominateur ECDC
+  (jours-dispositif). Sans jours enregistrés le taux est *incalculable*, pas
+  zéro. Une infection diagnostiquée avant 48 h n'est pas comptée comme acquise.
+- **Cohortes** et **Table 1 de STROBE** : chaque ligne déclare sur combien de
+  dossiers elle est calculée. Mortalité observée et rapport observé/attendu,
+  ce dernier seulement quand tous les séjours clos ont un IGS II complet.
+- **Codage CIM-10** avec recherche insensible aux accents, sur un
+  sous-ensemble de démarrage **explicitement partiel** (58 codes à vérifier).
+
+*Ce qu'un test de garde a rattrapé*
+
+Quatre tables déclaraient leurs colonnes de texte libre sous un nom
+inexistant : le texte continuait donc d'être exporté. Une faute de frappe
+invisible à la relecture, et une fuite réelle. Le test vérifie désormais que
+chaque colonne déclarée existe.
+
+*Ce qui ne dépend plus du développement*
+
+1. le **PDF réel du prescrit** — la mise en page imprimée reste provisoire ;
+2. les **validations d'un senior** : bornes des bilans, barème IGS II, seuils
+   des rappels, correspondances LOINC (tout est marqué non validé à l'écran) ;
+3. la **CIM-10 complète** et la **table des DDD** — deux fichiers à remplir
+   depuis leur source officielle, sans toucher au code ;
+4. le **dossier de protection des données** et le test sur patients réels.
+
+- 231 tests (pytest, +85), et vérification de bout en bout dans l'application
+  réelle : admission, codage CIM-10, prélèvement, cohorte, export
+
+
 **v1.9 — 3 septembre 2026**
 
 - **Poids idéal théorique** ajouté aux valeurs dérivées, formule de Devine
