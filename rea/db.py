@@ -10,6 +10,7 @@ qui journalisent l'action (SPEC §3, §10 — bloc 7).
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sqlite3
 import threading
@@ -18,6 +19,10 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config
+
+
+# Mots qui commencent une contrainte de table, pas une colonne.
+_MOTS_CLES_SQL = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
 
 
 def nouvel_id() -> str:
@@ -54,6 +59,8 @@ class Base:
         sql = (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
         with self._verrou:
             self.connexion.executescript(sql)
+        self._completer_colonnes_manquantes(sql)
+        with self._verrou:
             existe = self.connexion.execute(
                 "SELECT valeur FROM meta WHERE cle = 'version_schema'"
             ).fetchone()
@@ -62,6 +69,41 @@ class Base:
                     "INSERT INTO meta(cle, valeur) VALUES ('version_schema', ?)",
                     (config.__dict__.get("VERSION_SCHEMA", "1"),),
                 )
+
+    def _completer_colonnes_manquantes(self, sql: str) -> None:
+        """Ajoute aux tables existantes les colonnes apparues dans le schéma.
+
+        `CREATE TABLE IF NOT EXISTS` ne touche pas à une table déjà créée : sans
+        ce rattrapage, une base ouverte par une version plus ancienne du
+        logiciel resterait sans les nouvelles colonnes, et le programme
+        planterait à la première écriture. Le jour où le service tourne pour de
+        bon, on ne peut plus se permettre de repartir d'une base vide.
+
+        Seules les colonnes ajoutables sans risque le sont : SQLite refuse
+        d'ajouter une colonne NOT NULL sans valeur par défaut, et un tel ajout
+        n'aurait de toute façon pas de sens sur des lignes déjà écrites.
+        """
+        for bloc in re.finditer(
+            r"CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\((.*?)\n\);", sql, re.S
+        ):
+            table, corps = bloc.group(1), bloc.group(2)
+            existantes = self._colonnes(table)
+            if not existantes:
+                continue
+            for ligne in corps.splitlines():
+                ligne = ligne.split("--")[0].strip().rstrip(",")
+                if not ligne:
+                    continue
+                nom = ligne.split()[0]
+                if not nom.isidentifier() or nom.upper() in _MOTS_CLES_SQL:
+                    continue
+                if nom in existantes:
+                    continue
+                definition = ligne
+                if "NOT NULL" in definition.upper() and "DEFAULT" not in definition.upper():
+                    continue
+                with self._verrou:
+                    self.connexion.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
     # -- requêtes -----------------------------------------------------------
     def requete(self, sql: str, parametres: tuple = ()) -> list[dict]:

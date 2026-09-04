@@ -1,0 +1,29 @@
+{
+  "nom": "maladies_chroniques_igs2",
+  "libelle": "Maladie chronique (IGS II)",
+  "version": "2026-09-04.1",
+  "date": "2026-09-04",
+  "note": "Trois catégories seulement, celles de l'IGS II, et exclusives : elles ne remplacent pas les conditions chroniques ANZICS saisies par ailleurs, qui n'ont ni les mêmes bornes ni le même usage.",
+  "valeurs": [
+    [
+      "non_renseigne",
+      "Non renseigné"
+    ],
+    [
+      "aucune",
+      "Aucune"
+    ],
+    [
+      "cancer_metastatique",
+      "Cancer métastatique"
+    ],
+    [
+      "hemopathie_maligne",
+      "Hémopathie maligne"
+    ],
+    [
+      "sida",
+      "SIDA"
+    ]
+  ]
+}

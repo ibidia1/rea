@@ -42,6 +42,18 @@ def checklist() -> dict:
     return {}
 
 
+def bareme(code: str) -> dict:
+    """Le barème d'un score (`score_sofa`, `score_igs2`), ou {} s'il manque."""
+    for fichier in _fichiers():
+        if fichier.get("variables") and fichier.get("code") == code:
+            return fichier
+    return {}
+
+
+def baremes() -> tuple[dict, ...]:
+    return tuple(f for f in _fichiers() if f.get("variables"))
+
+
 def inventaire() -> tuple[dict, ...]:
     """Quels jeux de règles, dans quelle version, signés par qui."""
     return tuple(
@@ -52,7 +64,7 @@ def inventaire() -> tuple[dict, ...]:
             "valide": bool(f.get("valide")),
             "signe_par": f.get("signe_par"),
             "source": f.get("source", ""),
-            "nb": len(f.get("regles", f.get("items", ()))),
+            "nb": len(f.get("regles", f.get("items", f.get("variables", ())))),
         }
         for f in _fichiers()
     )

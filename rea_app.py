@@ -13,7 +13,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from rea import analytes as cat, config, listes
+from rea import analytes as cat, config, listes, referentiels
 from rea.db import obtenir_base
 from rea.domaine import calculs
 from rea.domaine import coherence
@@ -27,6 +27,7 @@ from rea.services import explorations as explorations_service
 from rea.services import lits as lits_service
 from rea.services import pancarte as pancarte_service
 from rea.services import prescriptions as prescriptions_service
+from rea.services import scores as scores_service
 from rea.services import sejours as sejours_service
 from rea.ui import administration as administration_ui
 from rea.ui import theme
@@ -373,6 +374,18 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
                 provenance_detail = st.text_input("Préciser le service / l'établissement")
             est_readmission = st.checkbox("Réadmission")
             motif_readmission = st.text_input("Motif de réadmission") if est_readmission else ""
+            # Deux variables de l'IGS II qu'aucune autre donnée du dossier ne
+            # permet de retrouver après coup.
+            types_admission = referentiels.charger("types_admission")
+            type_admission = st.selectbox(
+                "Type d'admission", listes.codes(types_admission),
+                format_func=lambda c: listes.libelle(types_admission, c),
+            )
+            maladies = referentiels.charger("maladies_chroniques_igs2")
+            maladie_chronique_igs2 = st.selectbox(
+                "Maladie chronique (IGS II)", listes.codes(maladies),
+                format_func=lambda c: listes.libelle(maladies, c),
+            )
 
         st.markdown("**Motif d'admission**")
         traumatique = st.radio("Type", ["Traumatique", "Non traumatique"], horizontal=True) == "Traumatique"
@@ -445,6 +458,8 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             poids_kg=poids_kg,
             taille_cm=taille_cm,
             creatinine_base=creatinine_base,
+            type_admission=type_admission,
+            maladie_chronique_igs2=maladie_chronique_igs2,
             utilisateur_id=utilisateur_id,
         )
         if traumatique and regions_choisies:
@@ -853,6 +868,85 @@ def panneau_aides(sejour: dict, date_jour_str: str) -> None:
         "`regles/*.json`, sans reprogrammer le logiciel. Aucun ne propose de "
         "posologie (SPEC §3.1)."
     )
+    panneau_scores(sejour, date_jour_str)
+
+
+def _bloc_score(score, complement: str = "") -> None:
+    if score.complet:
+        manque = ""
+    else:
+        # La liste complète noierait le chiffre : on annonce combien il manque
+        # et on donne les premières, le détail restant lisible au survol.
+        debut = ", ".join(score.manquantes[:3])
+        reste = len(score.manquantes) - 3
+        manque = (
+            "<br><span style='color:#94a3b8;font-size:0.78rem' title='"
+            + "; ".join(score.manquantes)
+            + f"'>Incomplet — {len(score.manquantes)} variables manquantes : {debut}"
+            + (f" et {reste} autres" if reste > 0 else "")
+            + "</span>"
+        )
+    non_valide = (
+        "" if score.valide
+        else "<br><span style='color:#94a3b8;font-size:0.78rem'>Barème non encore "
+             "relu par un senior contre la publication.</span>"
+    )
+    theme.bloc_html(
+        score.libelle,
+        f"<span style='font-size:1.6rem;font-weight:600'>{score.total}</span>"
+        f"{complement}{manque}{non_valide}",
+        theme.BLEU if score.complet else theme.GRIS,
+    )
+
+
+def panneau_scores(sejour: dict, date_jour_str: str) -> None:
+    """SOFA du jour, IGS II d'admission, jours sans ventilation.
+
+    Un score décrit, il ne décide pas — et un score incomplet le dit.
+    """
+    with st.expander("📊 Scores de gravité"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            _bloc_score(scores_service.sofa(base, sejour["id"], date_jour_str))
+            st.caption(
+                "Composante circulatoire limitée à la PAM : les paliers "
+                "supérieurs dépendent de la dose de vasopresseur, que le "
+                "logiciel ne saisit pas."
+            )
+        with c2:
+            score = scores_service.igs2(base, sejour["id"])
+            mortalite = scores_service.mortalite_predite(base, sejour["id"])
+            complement = (
+                f"<br>Mortalité prédite : {mortalite * 100:.0f} %"
+                if mortalite is not None else ""
+            )
+            _bloc_score(score, complement)
+            st.caption(
+                "Calculé sur les valeurs du jour d'admission ; la règle du "
+                "score demande les plus défavorables des 24 premières heures."
+            )
+        with c3:
+            jsv = scores_service.jours_sans_ventilation(base, sejour["id"])
+            theme.bloc_html(
+                "Jours sans ventilation (J28)",
+                f"<span style='font-size:1.6rem;font-weight:600'>{jsv}</span>"
+                if jsv is not None else
+                "<span style='color:#94a3b8'>Pas encore calculable — "
+                "période de 28 jours non écoulée.</span>",
+                theme.BLEU if jsv is not None else theme.GRIS,
+            )
+            st.caption("Un patient décédé compte 0, quelle qu'ait été sa durée de ventilation.")
+
+        serie = scores_service.evolution_sofa(base, sejour["id"])
+        if len(serie) >= 2:
+            import pandas as pd
+
+            st.caption("SOFA jour par jour — c'est sa variation qui informe.")
+            st.line_chart(
+                pd.DataFrame({"SOFA": [v for _d, v in serie]},
+                             index=[d for d, _v in serie]),
+                height=180,
+            )
 
 
 def onglet_evolution(sejour: dict) -> None:

@@ -1,0 +1,79 @@
+{
+  "code": "sofa",
+  "libelle": "SOFA",
+  "titre": "Score SOFA (Sequential Organ Failure Assessment)",
+  "version": "2026-09-04.1",
+  "date_version": "2026-09-04",
+  "valide": false,
+  "signe_par": null,
+  "source": "Vincent J-L, Moreno R, Takala J, et al. The SOFA (Sepsis-related Organ Failure Assessment) score to describe organ dysfunction/failure. Intensive Care Med 1996;22(7):707-10.",
+  "note": "Barème à relire ligne à ligne face à la publication avant de cocher « valide ». La composante cardiovasculaire n'est ici calculée que sur la pression artérielle moyenne : les paliers 2 à 4 dépendent de la dose de vasopresseur en µg/kg/min, que le logiciel ne saisit pas et ne calcule pas (SPEC §3.1). Un SOFA calculé sans elle sous-estime la défaillance circulatoire, et c'est dit à l'écran.",
+  "variables": [
+    {
+      "fait": "pao2_fio2",
+      "libelle": "Respiration (PaO₂/FiO₂)",
+      "paliers": [
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 100}, {"fait": "ventile", "op": "vrai"}], "points": 4},
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 200}, {"fait": "ventile", "op": "vrai"}], "points": 3},
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 300}], "points": 2},
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 400}], "points": 1},
+        {"si": [{"fait": "pao2_fio2", "op": ">=", "valeur": 400}], "points": 0}
+      ]
+    },
+    {
+      "fait": "plaquettes",
+      "libelle": "Coagulation (plaquettes ×10³/µL)",
+      "paliers": [
+        {"si": [{"fait": "plaquettes", "op": "<", "valeur": 20}], "points": 4},
+        {"si": [{"fait": "plaquettes", "op": "<", "valeur": 50}], "points": 3},
+        {"si": [{"fait": "plaquettes", "op": "<", "valeur": 100}], "points": 2},
+        {"si": [{"fait": "plaquettes", "op": "<", "valeur": 150}], "points": 1},
+        {"si": [{"fait": "plaquettes", "op": ">=", "valeur": 150}], "points": 0}
+      ]
+    },
+    {
+      "fait": "bilirubine",
+      "libelle": "Foie (bilirubine µmol/L)",
+      "paliers": [
+        {"si": [{"fait": "bilirubine", "op": ">", "valeur": 204}], "points": 4},
+        {"si": [{"fait": "bilirubine", "op": ">=", "valeur": 102}], "points": 3},
+        {"si": [{"fait": "bilirubine", "op": ">=", "valeur": 33}], "points": 2},
+        {"si": [{"fait": "bilirubine", "op": ">=", "valeur": 20}], "points": 1},
+        {"si": [{"fait": "bilirubine", "op": "<", "valeur": 20}], "points": 0}
+      ]
+    },
+    {
+      "fait": "pam",
+      "libelle": "Circulation (PAM mmHg)",
+      "note": "Paliers 2 à 4 non calculables sans la dose de vasopresseur.",
+      "paliers": [
+        {"si": [{"fait": "pam", "op": "<", "valeur": 70}], "points": 1},
+        {"si": [{"fait": "pam", "op": ">=", "valeur": 70}], "points": 0}
+      ]
+    },
+    {
+      "fait": "glasgow",
+      "libelle": "Neurologie (Glasgow)",
+      "paliers": [
+        {"si": [{"fait": "glasgow", "op": "<", "valeur": 6}], "points": 4},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 9}], "points": 3},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 12}], "points": 2},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 14}], "points": 1},
+        {"si": [{"fait": "glasgow", "op": "=", "valeur": 15}], "points": 0}
+      ]
+    },
+    {
+      "fait": "creatinine",
+      "libelle": "Rein (créatinine µmol/L ou diurèse)",
+      "paliers": [
+        {"si": [{"fait": "diurese_24h", "op": "<", "valeur": 200}], "points": 4},
+        {"si": [{"fait": "creatinine", "op": ">", "valeur": 440}], "points": 4},
+        {"si": [{"fait": "diurese_24h", "op": "<", "valeur": 500}], "points": 3},
+        {"si": [{"fait": "creatinine", "op": ">=", "valeur": 300}], "points": 3},
+        {"si": [{"fait": "creatinine", "op": ">=", "valeur": 171}], "points": 2},
+        {"si": [{"fait": "creatinine", "op": ">=", "valeur": 110}], "points": 1},
+        {"si": [{"fait": "creatinine", "op": "<", "valeur": 110}], "points": 0}
+      ]
+    }
+  ]
+}

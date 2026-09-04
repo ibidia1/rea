@@ -83,6 +83,13 @@ CREATE TABLE IF NOT EXISTS sejour (
     -- (feuille de route §5, exploitée au bloc 15).
     creatinine_base     REAL,
     motif_readmission   TEXT,
+    -- Deux variables de l'IGS II qu'aucune autre donnée ne permet de
+    -- reconstituer après coup : le type d'admission (une chirurgie programmée
+    -- ne pèse pas le même poids qu'une admission médicale) et la maladie
+    -- chronique au sens du score, dont les trois catégories ne recouvrent pas
+    -- celles des conditions chroniques ANZICS saisies par ailleurs.
+    type_admission      TEXT,
+    maladie_chronique_igs2 TEXT,
 
     -- Question filtre : conditionne toute la suite de l'écran d'admission
     traumatique         INTEGER,                   -- NULL = non renseigné

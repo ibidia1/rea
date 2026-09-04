@@ -69,6 +69,8 @@ def creer_sejour(
     creatinine_base: float | None = None,
     poids_kg: float | None = None,
     taille_cm: float | None = None,
+    type_admission: str | None = None,
+    maladie_chronique_igs2: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     numero = base.une_ligne(
@@ -83,6 +85,8 @@ def creer_sejour(
             "lit_admission": lit_admission,
             "provenance_type": provenance_type,
             "provenance_detail": provenance_detail,
+            "type_admission": type_admission,
+            "maladie_chronique_igs2": maladie_chronique_igs2,
             "est_readmission": int(est_readmission),
             "motif_readmission": motif_readmission,
             "traumatique": None if traumatique is None else int(traumatique),
