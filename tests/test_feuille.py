@@ -20,6 +20,11 @@ J1 = "2026-09-04"
 J2 = "2026-09-03"
 
 
+def _colonne(heure: int) -> int:
+    """La colonne d'une heure dans la grille imprimée, qui commence à 8 h."""
+    return feuille.ORDRE_HEURES.index(heure)
+
+
 @pytest.fixture()
 def dossier(base):
     pid = sejours.creer_patient(
@@ -109,7 +114,9 @@ def test_un_rond_par_prise_a_la_bonne_heure(base, dossier):
     cases = re.findall(r'<div style="display:flex;align-items:center;'
                        r'justify-content:center">(.*?)</div>', ligne["grille"].html)
     heures_avec_rond = {i for i, c in enumerate(cases) if "○" in c}
-    assert heures_avec_rond == {0, 6, 12, 18}
+    # La grille imprimée commence à 8 h : 0, 6, 12, 18 h occupent d'autres
+    # colonnes que leur propre numéro (voir feuille.ORDRE_HEURES).
+    assert heures_avec_rond == {_colonne(0), _colonne(6), _colonne(12), _colonne(18)}
 
 
 def test_la_prise_de_minuit_n_est_pas_perdue(base, dossier):
@@ -120,7 +127,9 @@ def test_la_prise_de_minuit_n_est_pas_perdue(base, dossier):
                                 dose=1, unite="g", rythme="x3/j", date_debut=J2)
     grille = feuille.contexte(base, sid, AUJ)["ivRows"][0]["grille"].html
     cases = re.findall(r'justify-content:center">(.*?)</div>', grille)
-    assert {i for i, c in enumerate(cases) if "○" in c} == {0, 8, 16}
+    assert {i for i, c in enumerate(cases) if "○" in c} == {
+        _colonne(0), _colonne(8), _colonne(16)
+    }
 
 
 def test_une_perfusion_continue_n_a_pas_de_rond(base, dossier):
@@ -143,7 +152,7 @@ def test_les_examens_demandes_la_veille_sont_a_leur_ligne(base, dossier):
     assert "NFS" in libelles and "Ionogramme" in libelles
     ligne = next(l for l in contexte["bilanPrescRows"] if l["libelle"] == "NFS")
     cases = re.findall(r'justify-content:center">(.*?)</div>', ligne["grille"].html)
-    assert {i for i, c in enumerate(cases) if "◻" in c} == {6}
+    assert {i for i, c in enumerate(cases) if "◻" in c} == {_colonne(6)}
 
 
 def test_les_cases_a_demander_demain_sont_cochees(base, dossier):
@@ -272,3 +281,131 @@ def test_un_groupe_non_renseigne_ne_devient_pas_une_valeur(base):
     sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
                                lit_admission=2)
     assert feuille.contexte(base, sid, AUJ)["groupe_sanguin"] == ""
+
+
+# -- remarques du service, 5 septembre ---------------------------------------
+
+def test_la_grille_commence_a_8h(base, dossier):
+    """La relève du matin ouvre la feuille ; minuit en tête n'aidait personne."""
+    _pid, sid = dossier
+    contexte = feuille.contexte(base, sid, AUJ)
+    assert contexte["hours"][0] == "8"
+    assert contexte["hours"][-1] == "7"
+
+
+def test_dose_affiche_le_nombre_de_comprimes_en_po(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PO", produit="Oméprazole", dose=40, unite="mg",
+        nb_ampoules=1, rythme="x1/j", date_debut=J2,
+    )
+    dose = feuille.contexte(base, sid, AUJ)["poRows"][0]["dose"]
+    assert "1 cp" in dose
+    assert "40 mg" in dose
+
+
+def test_dose_affiche_le_nombre_d_ampoules_ailleurs_qu_en_po(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="SC", produit="Énoxaparine", dose=4000, unite="UI",
+        nb_ampoules=1, rythme="x1/j", date_debut=J2,
+    )
+    dose = feuille.contexte(base, sid, AUJ)["scRows"][0]["dose"]
+    assert "1 amp" in dose
+
+
+def test_dose_privilegie_la_vitesse_sur_le_reste(base, dossier):
+    """Sur une seringue électrique, la vitesse est le seul nombre qu'un
+    infirmier règle : elle doit passer avant tout le reste."""
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Noradrénaline",
+        dilution="8 mg/50 cc", vitesse=12, rythme="continu", date_debut=J2,
+    )
+    dose = feuille.contexte(base, sid, AUJ)["pseRows"][0]["dose"]
+    assert "12 cc/h" in dose
+
+
+def test_abords_abrege_le_kt_central_avec_son_site(base, dossier):
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="kt_central", date_pose=J2,
+                      site="Sous-clavière gauche")
+    texte = next(a["texte"] for a in feuille.contexte(base, sid, AUJ)["abords"]
+                if "KTVC" in a["texte"])
+    assert "sous-C G" in texte
+    assert "Cathéter veineux central" not in texte      # la forme longue a disparu ici
+
+
+def test_abords_abrege_la_sonde_urinaire_sans_calibre(base, dossier):
+    """« Sondé » devient SV, sans préciser le numéro — ça ne change pas
+    grand-chose et ça prend de la place."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sonde_urinaire", date_pose=J2,
+                      details={"taille_sonde": 16})
+    texte = next(a["texte"] for a in feuille.contexte(base, sid, AUJ)["abords"]
+                if "SV" in a["texte"])
+    assert "16" not in texte
+
+
+def test_abords_abrege_la_sng_avec_narine_et_fixation(base, dossier):
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sng", date_pose=J2,
+                      site="Narine droite", details={"fixation_cm": 55})
+    texte = next(a["texte"] for a in feuille.contexte(base, sid, AUJ)["abords"]
+                if "SNG" in a["texte"])
+    assert "ND" in texte and "55cm" in texte
+
+
+def test_sedation_posee_apparait_aussi_en_pse_avec_sa_vitesse(base, dossier):
+    """Elle reste dans les abords (lecture neurologique) mais doit aussi
+    apparaître en P.S.E. : c'est une consigne infirmière au même titre
+    qu'une autre seringue électrique."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sedation", date_pose=J2,
+                      details={"molecules": "Midazolam", "vitesse": 5})
+    contexte = feuille.contexte(base, sid, AUJ)
+    ligne_pse = contexte["pseRows"][0]
+    assert "Midazolam" in ligne_pse["produit"].html
+    assert "5 cc/h" in ligne_pse["dose"]
+    # toujours visible dans les abords, avec son compteur de jours
+    assert any("Sédation" in a["texte"] for a in contexte["abords"])
+
+
+def test_sedation_partage_le_quota_de_lignes_pse(base, dossier):
+    """La ligne de sédation compte dans les six lignes prévues du bloc P.S.E ;
+    elle ne s'ajoute pas par-dessus."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sedation", date_pose=J2,
+                      details={"molecules": "Propofol", "vitesse": 8})
+    for i in range(6):
+        prescriptions.ajouter_ligne(
+            base, sejour_id=sid, voie="PSE", produit=f"Produit {i}",
+            vitesse=1, rythme="continu", date_debut=J2,
+        )
+    contexte = feuille.contexte(base, sid, AUJ)
+    assert len(contexte["pseRows"]) == 6
+    assert "⚠" in contexte["pied"]
+
+
+def test_bloc_peu_rempli_recoit_un_texte_plus_grand(base, dossier):
+    """La moitié des cases vides ou plus : le texte grandit, la place ne
+    manquant pas."""
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Ceftriaxone", dose=2, unite="g",
+        rythme="x1/j", date_debut=J2,
+    )
+    style = feuille.contexte(base, sid, AUJ)["styleDynamique"].html
+    assert "txt-produit-iv" in style
+    assert "13.5px" in style
+
+
+def test_bloc_presque_plein_garde_la_taille_normale(base, dossier):
+    _pid, sid = dossier
+    for i in range(7):
+        prescriptions.ajouter_ligne(
+            base, sejour_id=sid, voie="IV", produit=f"Produit {i}", dose=1,
+            unite="mg", rythme="x1/j", date_debut=J2,
+        )
+    style = feuille.contexte(base, sid, AUJ)["styleDynamique"].html
+    assert "txt-produit-iv" not in style

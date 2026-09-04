@@ -978,7 +978,11 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             if "dilution" in champs:
                 dilution = st.text_input("Dilution (ex. 0,5 mg/cc)")
             if "nb_ampoules" in champs:
-                nb_ampoules = st.number_input("Nombre d'ampoules", min_value=0.0, step=1.0, value=0.0)
+                # PO se compte en comprimés, les autres voies en ampoules — le
+                # mot change, la valeur reste un nombre saisi par le médecin,
+                # jamais déduit du dosage (SPEC §3.1).
+                etiquette_unites = "Nombre de comprimés" if voie == "PO" else "Nombre d'ampoules"
+                nb_ampoules = st.number_input(etiquette_unites, min_value=0.0, step=1.0, value=0.0)
             if "vitesse" in champs:
                 vitesse = st.number_input("Vitesse (cc/h)", min_value=0.0, step=1.0, value=0.0)
             if "volume_dilution" in champs:

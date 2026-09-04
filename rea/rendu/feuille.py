@@ -56,6 +56,11 @@ LIGNES_MICROBIO = 6
 NB_JOURS_BIOLOGIE = 3       # deux jours remplis + le jour en cours, laissé libre
 NB_CRENEAUX_PAR_JOUR = 4
 
+# La journée du service commence à 8 h, pas à minuit : la relève du matin
+# ouvre la feuille, et la colonne « 0 » en tête n'a jamais rien voulu dire
+# pour personne. La grille imprimée suit cet ordre plutôt que 0-23.
+ORDRE_HEURES = tuple(range(8, 24)) + tuple(range(0, 8))
+
 
 # --------------------------------------------------------------------------
 # Petits fragments de mise en forme
@@ -71,9 +76,10 @@ def _grille_heures(heures: set[int], *, symbole: str = "○") -> Brut:
     # Sans ce repli, la prise de minuit d'un ×4/j n'apparaîtrait nulle part.
     heures = {h % 24 for h in heures}
     cases = []
-    for heure in range(24):
+    for heure in ORDRE_HEURES:
         contenu = (
-            f'<span style="font-size:11px;line-height:1;color:#14595c">{symbole}</span>'
+            f'<span style="font-size:15px;font-weight:700;line-height:1;'
+            f'color:#14595c">{symbole}</span>'
             if heure in heures else ""
         )
         cases.append(
@@ -103,8 +109,7 @@ def _cellules_valeurs(valeurs: list[str], colonnes: int) -> Brut:
 
 
 def _ligne_vide(numero: str = "") -> dict:
-    return {"numero": numero, "produit": "", "dose": "", "voie": "",
-            "grille": Brut("")}
+    return {"numero": numero, "produit": "", "dose": "", "grille": Brut("")}
 
 
 def _nombre(valeur) -> str:
@@ -121,25 +126,65 @@ def _nombre(valeur) -> str:
 # Les blocs
 # --------------------------------------------------------------------------
 
+def _ligne_sedation_pse(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+    """La sédation en cours, reportée dans le bloc P.S.E. en plus des abords.
+
+    Elle est déjà cochée dans les abords, avec son compteur de jours : c'est
+    la lecture neurologique. Mais la vitesse qui la fait couler est aussi une
+    consigne infirmière, au même titre qu'une noradrénaline ou un midazolam
+    prescrit en ligne — elle doit donc être là où les seringues électriques
+    se règlent, pas seulement dans la case des dispositifs.
+    """
+    etats = dispositifs_service.etats(base, sejour_id, date_jour)
+    sedation = next((e for e in etats if e.type == "sedation" and e.en_place), None)
+    if sedation is None:
+        return []
+    details = sedation.details or {}
+    produit = details.get("molecules") or "Sédation"
+    dose = f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else ""
+    return [{
+        "numero": "1",
+        "produit": Brut(
+            f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
+            "— sédation</span>"
+        ),
+        "dose": dose,
+        "grille": Brut(""),
+    }]
+
+
 def _lignes_prescription(base: Base, sejour_id: str, date_jour: str) -> dict:
     """Une ligne par prescription active, un rond par prise."""
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
     par_voie = prescriptions_service.lignes_par_voie(pancarte["lignes"])
     blocs: dict[str, list] = {}
     debordements: list[str] = []
+    taux_remplissage: dict[str, float] = {}
+
+    # La sédation posée comme dispositif occupe une ligne du bloc P.S.E. avant
+    # les lignes prescrites — elle vient du dossier, pas d'une prescription.
+    lignes_synthetiques = {"PSE": _ligne_sedation_pse(base, sejour_id, date_jour)}
 
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
+        synthetiques = lignes_synthetiques.get(voie, [])
+        rendues = list(synthetiques)
         # Les lignes arrêtées ce jour-là restent imprimées, barrées : une ligne
         # qui disparaît sans laisser de trace, c'est une administration
         # poursuivie par habitude, ou un arrêt que personne ne remarque.
         lignes = list(par_voie.get(voie, []))
-        rendues = []
-        for i, ligne in enumerate(lignes[:nb_lignes], start=1):
+        place_restante = max(nb_lignes - len(synthetiques), 0)
+        for ligne in lignes[:place_restante]:
             arretee = ligne["statut"] != "active"
             heures = () if arretee else dom.horaires_pour_rythme(
                 ligne.get("rythme"), ligne.get("horaires_override")
             )
             produit = ligne.get("produit") or ""
+            if voie == "ENTREES" and ligne.get("sous_type"):
+                # La colonne Voie a disparu (les blocs sont déjà organisés par
+                # voie) ; ce qu'elle portait d'utile pour les entrées —
+                # perfusion ou nutrition — reste lisible, accolé au produit.
+                sous_type = listes.libelle(listes.SOUS_TYPES_ENTREES, ligne["sous_type"])
+                produit = f"{produit} ({sous_type})"
             if arretee:
                 produit = Brut(
                     '<span class="arretee" style="text-decoration:line-through;'
@@ -148,34 +193,50 @@ def _lignes_prescription(base: Base, sejour_id: str, date_jour: str) -> dict:
                     "ARRÊTÉ</span>"
                 )
             rendues.append({
-                "numero": str(i),
+                "numero": str(len(rendues) + 1),
                 "produit": produit,
                 "dose": _dose(ligne),
-                "voie": listes.libelle(listes.SOUS_TYPES_ENTREES, ligne.get("sous_type"), "")
-                        if voie == "ENTREES" else "",
                 "grille": _grille_heures(set(heures)),
             })
-        if len(lignes) > nb_lignes:
+        total_demande = len(synthetiques) + len(lignes)
+        if total_demande > nb_lignes:
             debordements.append(
-                f"{listes.VOIES[voie]['titre']} : {len(lignes) - nb_lignes} ligne(s) "
+                f"{listes.VOIES[voie]['titre']} : {total_demande - nb_lignes} ligne(s) "
                 "de plus que la feuille"
             )
+        # Plus de la moitié des lignes prévues sont vides : un texte plus grand
+        # se lit mieux depuis le pied du lit, et la place ne manque pas.
+        taux_remplissage[nom_liste] = len(rendues) / nb_lignes if nb_lignes else 1.0
         while len(rendues) < nb_lignes:
             rendues.append(_ligne_vide(str(len(rendues) + 1)))
         blocs[nom_liste] = rendues
-    return {"blocs": blocs, "debordements": debordements}
+    return {"blocs": blocs, "debordements": debordements, "taux_remplissage": taux_remplissage}
 
 
 def _dose(ligne: dict) -> str:
-    """Ce que le médecin a saisi, restitué tel quel — jamais recalculé."""
+    """Ce que le médecin a saisi, restitué tel quel — jamais recalculé.
+
+    Une vitesse de seringue électrique prime sur tout le reste : c'est le
+    seul nombre qu'un infirmier règle sur la pompe. Sinon, le nombre de
+    comprimés ou d'ampoules par prise s'affiche à côté du dosage — le mot
+    suit la voie (comprimé en PO, ampoule ailleurs) — parce qu'un dosage en
+    milligrammes ne dit pas combien de boîtes ouvrir.
+    """
+    if ligne.get("vitesse"):
+        morceaux = [f"{_nombre(ligne['vitesse'])} cc/h"]
+        if ligne.get("dilution"):
+            morceaux.append(str(ligne["dilution"]))
+        return " · ".join(morceaux)
+
     morceaux = []
     if ligne.get("dose"):
         morceaux.append(_nombre(ligne["dose"]) + (f" {ligne['unite']}" if ligne.get("unite") else ""))
-    if ligne.get("vitesse"):
-        morceaux.append(f"{_nombre(ligne['vitesse'])} cc/h")
+    if ligne.get("nb_ampoules"):
+        mot = "cp" if ligne.get("voie") == "PO" else "amp"
+        morceaux.append(f"{_nombre(ligne['nb_ampoules'])} {mot}")
     if ligne.get("volume_24h"):
         morceaux.append(f"{_nombre(ligne['volume_24h'])} mL")
-    if ligne.get("dilution"):
+    if ligne.get("dilution") and not morceaux:
         morceaux.append(str(ligne["dilution"]))
     return " · ".join(morceaux)
 
@@ -294,6 +355,48 @@ def _rapport_pf(base: Base, sejour_id: str, jours: list[str]) -> Brut:
     return _cellules_valeurs(cellules, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR)
 
 
+def _texte_abrege_dispositif(etat) -> str:
+    """La forme compacte d'un dispositif pour la ligne « Abords » imprimée.
+
+    Les écrans du logiciel gardent le libellé complet (`etat.texte`) — c'est
+    seulement sur le papier, où la ligne est haute de deux centimètres, que la
+    place manque. Les abréviations viennent d'un fichier
+    (`referentiels/feuille_abreviations.json`), pas du code : le service peut
+    en changer sans reprogrammer.
+    """
+    abrev_types = referentiels.charger("feuille_abreviations", "types")
+    abrev_sites = referentiels.charger("feuille_abreviations", "sites")
+    nom = abrev_types.get(etat.type, listes.libelle_dispositif(etat.type))
+    site = abrev_sites.get(etat.site, etat.site) if etat.site else None
+    details = etat.details or {}
+
+    parametres: list[str] = []
+    if etat.type == "intubation":
+        if details.get("taille_sonde"):
+            parametres.append(_nombre(details["taille_sonde"]))
+        if details.get("reperage_cm"):
+            parametres.append(f"{_nombre(details['reperage_cm'])}cm")
+    elif etat.type == "tracheotomie" and details.get("taille_sonde"):
+        parametres.append(f"n°{_nombre(details['taille_sonde'])}")
+    elif etat.type == "sng" and details.get("fixation_cm"):
+        if site:
+            parametres.append(site)
+        parametres.append(f"{_nombre(details['fixation_cm'])}cm")
+    elif etat.type == "kt_central" and details.get("nb_voies"):
+        if site:
+            parametres.append(site)
+        parametres.append(f"{_nombre(details['nb_voies'])} voies")
+    elif site:
+        parametres.append(site)
+
+    texte = nom
+    if parametres:
+        texte += f" ({', '.join(parametres)})"
+    if etat.jour:
+        texte += f" J{etat.jour}"
+    return texte
+
+
 def _abords(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     """Les dispositifs en place, cochés, avec leur compteur de jours.
 
@@ -306,7 +409,7 @@ def _abords(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
         coche = "☑" if etat.en_place else "☐"
         style = ("font-weight:600;color:#16201f" if etat.en_place
                  else "color:#6d7c7b")
-        lignes.append({"texte": f"{coche} {etat.texte}", "style": style})
+        lignes.append({"texte": f"{coche} {_texte_abrege_dispositif(etat)}", "style": style})
     if not lignes:
         lignes.append({"texte": "☐ Aucun dispositif enregistré",
                        "style": "color:#6d7c7b"})
@@ -383,7 +486,7 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
                       if allergies else "ALLERGIE : non renseignée"),
         "scores": _scores(base, sejour_id, date_jour),
         "abords": _abords(base, sejour_id, date_jour),
-        "hours": [str(h) for h in range(24)],
+        "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
         **prescrit["blocs"],
         "bilanPrescRows": _bilans_a_faire(base, sejour_id, date_jour),
@@ -406,8 +509,34 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
         "infRows": _microbiologie(base, sejour_id),
         "examensDemain": _examens_demain(base, sejour_id, date_jour),
         "pied": _pied(prescrit["debordements"]),
+        "styleDynamique": _style_remplissage(prescrit["taux_remplissage"]),
     }
     return ctx
+
+
+_SLUGS_BLOCS = {
+    "entRows": "ent", "pseRows": "pse", "ivRows": "iv", "scRows": "sc",
+    "poRows": "po", "aeroRows": "aero", "kineRows": "kine", "soinsRows": "soins",
+}
+# (taux de remplissage maximal, taille de police) — la première ligne qui
+# s'applique gagne. Un bloc largement vide n'a aucune raison de garder la
+# petite taille prévue pour un bloc plein : la place est là, autant s'en servir.
+_PALIERS_REMPLISSAGE = ((0.34, 13.5), (0.6, 11.5))
+_TAILLE_DEFAUT = 9.5
+
+
+def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
+    """Agrandit le texte des blocs dont la moitié des lignes ou plus restent
+    vides — lisible depuis le pied du lit, sans rien déborder de la page."""
+    regles = []
+    for nom_liste, taux in taux_remplissage.items():
+        slug = _SLUGS_BLOCS.get(nom_liste)
+        if not slug:
+            continue
+        taille = next((v for seuil, v in _PALIERS_REMPLISSAGE if taux <= seuil), _TAILLE_DEFAUT)
+        if taille != _TAILLE_DEFAUT:
+            regles.append(f".txt-produit-{slug},.txt-dose-{slug}{{font-size:{taille}px}}")
+    return Brut("".join(regles))
 
 
 def _lignes_manuscrites(codes) -> list[dict]:

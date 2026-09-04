@@ -1,32 +1,50 @@
 {
   "code": "rappels_biologie",
   "titre": "Rappels sur les résultats de biologie",
-  "version": "2026-09-04.1",
-  "date_version": "2026-09-04",
+  "version": "2026-09-05.2",
+  "date_version": "2026-09-05",
   "valide": false,
   "signe_par": null,
-  "note": "Ces rappels signalent une valeur et posent une question. Ils ne proposent aucune dose, aucune correction chiffrée et aucune adaptation posologique : le logiciel calcule des dates, des heures et des volumes, jamais une dose (SPEC §3.1). Les seuils sont à valider par un senior avant de cocher « valide ».",
+  "note": "Ces rappels signalent une valeur et posent une question. Ils ne proposent aucune dose, aucune correction chiffrée et aucune adaptation posologique : le logiciel calcule des dates, des heures et des volumes, jamais une dose (SPEC §3.1). Les seuils sont à valider par un senior avant de cocher « valide ». Les seuils des deux règles liées aux plaquettes sous énoxaparine ou IPP viennent d'une remarque du service, pas d'une publication : à confirmer par un senior avant de les considérer comme validées.",
   "regles": [
     {
       "code": "hypokaliemie",
       "libelle": "Kaliémie basse",
       "message": "Kaliémie à {kaliemie} mmol/L — contrôle et surveillance du rythme prévus ?",
       "gravite": "alerte",
-      "conditions": [{"fait": "kaliemie", "op": "<", "valeur": 3.0}]
+      "conditions": [
+        {
+          "fait": "kaliemie",
+          "op": "<",
+          "valeur": 3.0
+        }
+      ]
     },
     {
       "code": "hyperkaliemie",
       "libelle": "Kaliémie élevée",
       "message": "Kaliémie à {kaliemie} mmol/L — ECG et surveillance du rythme prévus ?",
       "gravite": "alerte",
-      "conditions": [{"fait": "kaliemie", "op": ">=", "valeur": 6.0}]
+      "conditions": [
+        {
+          "fait": "kaliemie",
+          "op": ">=",
+          "valeur": 6.0
+        }
+      ]
     },
     {
       "code": "hyponatremie_severe",
       "libelle": "Natrémie basse",
       "message": "Natrémie à {natremie} mmol/L — vitesse de correction à surveiller.",
       "gravite": "alerte",
-      "conditions": [{"fait": "natremie", "op": "<", "valeur": 125}]
+      "conditions": [
+        {
+          "fait": "natremie",
+          "op": "<",
+          "valeur": 125
+        }
+      ]
     },
     {
       "code": "clairance_basse",
@@ -34,28 +52,52 @@
       "message": "Clairance estimée à {clairance} mL/min — les prescriptions concernées sont à revoir par le prescripteur. Le logiciel n'adapte aucune posologie.",
       "gravite": "attention",
       "source": "Estimation Cockcroft-Gault, à interpréter avec prudence en réanimation (fonction rénale instable).",
-      "conditions": [{"fait": "clairance", "op": "<", "valeur": 30}]
+      "conditions": [
+        {
+          "fait": "clairance",
+          "op": "<",
+          "valeur": 30
+        }
+      ]
     },
     {
       "code": "hypoglycemie",
       "libelle": "Glycémie basse",
       "message": "Glycémie à {glycemie} — contrôle rapproché prévu ?",
       "gravite": "alerte",
-      "conditions": [{"fait": "glycemie_du_jour", "op": "<", "valeur": 3.9}]
+      "conditions": [
+        {
+          "fait": "glycemie_du_jour",
+          "op": "<",
+          "valeur": 3.9
+        }
+      ]
     },
     {
       "code": "anemie_profonde",
       "libelle": "Hémoglobine basse",
       "message": "Hémoglobine à {hemoglobine} g/dL — seuil transfusionnel du service à repasser.",
       "gravite": "attention",
-      "conditions": [{"fait": "hemoglobine", "op": "<", "valeur": 7.0}]
+      "conditions": [
+        {
+          "fait": "hemoglobine",
+          "op": "<",
+          "valeur": 7.0
+        }
+      ]
     },
     {
       "code": "thrombopenie",
       "libelle": "Plaquettes basses",
       "message": "Plaquettes à {plaquettes} — la prophylaxie thrombo-embolique et les gestes invasifs sont à repasser.",
       "gravite": "attention",
-      "conditions": [{"fait": "plaquettes", "op": "<", "valeur": 50}]
+      "conditions": [
+        {
+          "fait": "plaquettes",
+          "op": "<",
+          "valeur": 50
+        }
+      ]
     },
     {
       "code": "pao2_fio2_bas",
@@ -63,14 +105,62 @@
       "message": "PaO₂/FiO₂ à {pao2_fio2} — critère d'hypoxémie sévère (définition de Berlin).",
       "gravite": "alerte",
       "source": "ARDS Definition Task Force. Acute respiratory distress syndrome: the Berlin Definition. JAMA 2012;307(23):2526-33.",
-      "conditions": [{"fait": "pao2_fio2", "op": "<", "valeur": 100}]
+      "conditions": [
+        {
+          "fait": "pao2_fio2",
+          "op": "<",
+          "valeur": 100
+        }
+      ]
     },
     {
       "code": "bilan_ancien",
       "libelle": "Aucun bilan récent",
       "message": "Aucun résultat de biologie saisi depuis {jours_depuis_bilan} jours.",
       "gravite": "info",
-      "conditions": [{"fait": "jours_depuis_bilan", "op": ">=", "valeur": 3}]
+      "conditions": [
+        {
+          "fait": "jours_depuis_bilan",
+          "op": ">=",
+          "valeur": 3
+        }
+      ]
+    },
+    {
+      "code": "thrombopenie_sous_hbpm",
+      "libelle": "Anticoagulation préventive sous thrombopénie",
+      "message": "Plaquettes à {plaquettes} sous héparine de bas poids moléculaire — rapport bénéfice/risque et surveillance d'une TIH à repasser.",
+      "gravite": "alerte",
+      "source": "Signalé par le service : l'énoxaparine expose au risque hémorragique et à la thrombopénie induite par l'héparine (TIH) quand les plaquettes sont déjà basses.",
+      "conditions": [
+        {
+          "fait": "plaquettes",
+          "op": "<",
+          "valeur": 100
+        },
+        {
+          "fait": "thromboprophylaxie_prescrite",
+          "op": "vrai"
+        }
+      ]
+    },
+    {
+      "code": "thrombopenie_sous_ipp",
+      "libelle": "IPP sous thrombopénie",
+      "message": "Plaquettes à {plaquettes} sous inhibiteur de la pompe à protons — cause médicamenteuse à évoquer parmi les autres.",
+      "gravite": "attention",
+      "source": "Signalé par le service : les IPP sont une cause rare mais décrite de thrombopénie médicamenteuse.",
+      "conditions": [
+        {
+          "fait": "plaquettes",
+          "op": "<",
+          "valeur": 100
+        },
+        {
+          "fait": "prophylaxie_ulcere_prescrite",
+          "op": "vrai"
+        }
+      ]
     }
   ]
 }

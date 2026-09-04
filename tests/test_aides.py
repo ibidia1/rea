@@ -62,3 +62,52 @@ def test_aucun_fait_ne_vaut_zero_par_defaut(base):
     logiciel n'a rien à dire."""
     sid = _sejour(base)
     assert aides.rappels(base, sid, "2026-09-01") == []
+
+
+def test_rappel_thrombopenie_sous_enoxaparine(base):
+    """Remarque du service : énoxaparine + plaquettes basses, à repasser."""
+    sid = _sejour(base)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure="2026-09-02T06:00",
+                                 valeurs={"plq": 80})
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="SC", produit="Énoxaparine 4000 UI",
+        date_debut="2026-09-01",
+    )
+    codes = [r["code"] for r in aides.rappels(base, sid, "2026-09-02")]
+    assert "thrombopenie_sous_hbpm" in codes
+
+
+def test_pas_de_rappel_hbpm_si_plaquettes_normales(base):
+    sid = _sejour(base)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure="2026-09-02T06:00",
+                                 valeurs={"plq": 220})
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="SC", produit="Énoxaparine 4000 UI",
+        date_debut="2026-09-01",
+    )
+    codes = [r["code"] for r in aides.rappels(base, sid, "2026-09-02")]
+    assert "thrombopenie_sous_hbpm" not in codes
+
+
+def test_rappel_thrombopenie_sous_ipp(base):
+    sid = _sejour(base)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure="2026-09-02T06:00",
+                                 valeurs={"plq": 70})
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PO", produit="Oméprazole 40 mg",
+        date_debut="2026-09-01",
+    )
+    codes = [r["code"] for r in aides.rappels(base, sid, "2026-09-02")]
+    assert "thrombopenie_sous_ipp" in codes
+
+
+def test_pas_de_rappel_medicament_sans_le_medicament(base):
+    """Plaquettes basses seules : le rappel générique s'applique, pas ceux
+    liés à un médicament absent."""
+    sid = _sejour(base)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure="2026-09-02T06:00",
+                                 valeurs={"plq": 40})
+    codes = [r["code"] for r in aides.rappels(base, sid, "2026-09-02")]
+    assert "thrombopenie" in codes
+    assert "thrombopenie_sous_hbpm" not in codes
+    assert "thrombopenie_sous_ipp" not in codes

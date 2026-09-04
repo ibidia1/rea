@@ -796,6 +796,52 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.3 — 5 septembre 2026 — neuf remarques du service sur la feuille imprimée**
+
+Toutes issues d'une relecture de la feuille par le service.
+
+1. **La grille horaire commence à 8 h**, pas à minuit — c'est l'heure où la
+   relève ouvre la feuille. `ORDRE_HEURES = (8..23, 0..7)` commande à la fois
+   l'en-tête et le placement des ronds, recto comme verso.
+2. **La colonne « Voie » a disparu** : chaque bloc est déjà organisé par voie,
+   elle ne disait rien de plus. Ce qu'elle portait d'utile pour les entrées
+   (perfusion / nutrition) est reporté entre parenthèses à côté du produit.
+   La largeur libérée agrandit Dose.
+3. **La dose affiche le nombre de comprimés ou d'ampoules** à côté du dosage
+   — « 40 mg · 1 cp », « 4000 UI · 1 amp » — sauf en seringue électrique, où
+   la vitesse (le seul nombre qu'un infirmier règle) prime sur tout le reste.
+   `nb_ampoules` est désormais saisissable en PO (comprimés) et SC
+   (ampoules), en plus de PSE ; toujours une valeur saisie, jamais déduite du
+   dosage (SPEC §3.1).
+4. **Le rond à cocher est plus grand** (11px → 15px, gras) : visible depuis
+   le pied du lit.
+5. **Le nom du médicament s'imprime en bleu**, plus gras — la seule couleur
+   du tableau qui ne soit ni le noir du texte ni le vert d'en-tête du service.
+6. **Les abords et dispositifs sont abrégés** : KTVC (sous-C G, 3 voies),
+   KTA (radiale G), SNG (ND, 55cm), SV (sans le calibre — ça ne change pas
+   grand-chose), Trachéo, Drain thx… Un nouveau référentiel
+   (`feuille_abreviations.json`) porte ces raccourcis : le service peut en
+   changer sans toucher au code. Les écrans du logiciel gardent le libellé
+   complet, seule la feuille imprimée est compressée.
+7. **La sédation apparaît aussi en P.S.E., vitesse comprise** — en plus des
+   abords, où son compteur de jours reste affiché. C'est à la fois une
+   lecture neurologique et une consigne infirmière ; elle partage le quota de
+   lignes du bloc P.S.E., elle ne s'ajoute pas par-dessus.
+8. **Le texte grossit dans un bloc largement vide** : moins d'un tiers de
+   lignes utilisées → 13,5 px, moins de 60 % → 11,5 px, sinon la taille
+   normale. Un style calculé par patient est injecté au début de la feuille ;
+   la maquette elle-même ne change pas.
+9. **Rappel si les plaquettes sont basses sous énoxaparine ou IPP** — deux
+   règles ajoutées à `regles/rappels_biologie.json`, sur signalement du
+   service : risque hémorragique et TIH pour l'héparine de bas poids
+   moléculaire, cause médicamenteuse à évoquer pour un inhibiteur de la
+   pompe à protons. Comme toute règle tout juste ajoutée, marquées non
+   validées tant qu'un senior ne les a pas confirmées.
+
+- 280 tests (pytest, +15), vérifiés aussi sur un dossier réaliste couvrant les
+  neuf remarques, dans l'application réelle
+
+
 **v2.2 — 5 septembre 2026 — corriger une admission, revoir les fiches imprimées**
 
 Deux manques signalés à l'usage : aucune façon de corriger une erreur de

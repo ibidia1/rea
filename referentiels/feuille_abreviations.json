@@ -1,0 +1,51 @@
+{
+  "nom": "feuille_abreviations",
+  "libelle": "Abréviations des dispositifs sur la feuille imprimée",
+  "version": "2026-09-05.1",
+  "date": "2026-09-05",
+  "note": "Sert uniquement à la case « Abords & dispositifs » de la feuille imprimée, où la place manque. Les écrans du logiciel gardent le libellé complet — seule la feuille papier est compressée. Modifiable sans toucher au code si le service préfère d'autres raccourcis.",
+  "valeurs": {
+    "types": {
+      "intubation": "Intubé",
+      "sedation": "Sédation",
+      "tracheotomie": "Trachéo",
+      "sng": "SNG",
+      "gastrostomie": "Gastrostomie",
+      "sonde_urinaire": "SV",
+      "ktsp": "KTSP",
+      "kt_central": "KTVC",
+      "picc": "PICC",
+      "kta": "KTA",
+      "voie_peripherique": "VVP",
+      "drain_thoracique": "Drain thx",
+      "drain_abdominal": "Drain abd",
+      "dve": "DVE",
+      "eer": "EER"
+    },
+    "sites": {
+      "Narine droite": "ND",
+      "Narine gauche": "NG",
+      "Bouche": "buccale",
+      "Jugulaire interne droite": "JI D",
+      "Jugulaire interne gauche": "JI G",
+      "Sous-clavière droite": "sous-C D",
+      "Sous-clavière gauche": "sous-C G",
+      "Fémorale droite": "fém D",
+      "Fémorale gauche": "fém G",
+      "Bras droit": "bras D",
+      "Bras gauche": "bras G",
+      "Radiale droite": "radiale D",
+      "Radiale gauche": "radiale G",
+      "Humérale droite": "humérale D",
+      "Humérale gauche": "humérale G",
+      "Membre supérieur droit": "MSD",
+      "Membre supérieur gauche": "MSG",
+      "Membre inférieur droit": "MID",
+      "Membre inférieur gauche": "MIG",
+      "Droit": "D",
+      "Gauche": "G",
+      "Bilatéral": "bilat",
+      "Droite": "D"
+    }
+  }
+}
