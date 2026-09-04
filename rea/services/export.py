@@ -260,6 +260,8 @@ def _referentiel_de(colonne: str) -> str:
 
 
 def _note_de(table: str, colonne: str) -> str:
+    if colonne == "groupe_sanguin":
+        return "Groupe ABO et rhésus ; vide = non renseigné."
     if colonne == "identifiant_etude":
         return "Identifiant pseudonyme stable ; la table de correspondance reste dans le service."
     if colonne == "supprime":

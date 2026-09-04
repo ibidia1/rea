@@ -1,8 +1,8 @@
 {
   "nom": "examens_a_demander",
   "libelle": "Examens à demander pour le lendemain",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
+  "version": "2026-09-05.1",
+  "date": "2026-09-05",
   "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
   "valeurs": [
     [
@@ -52,6 +52,18 @@
     [
       "pdp",
       "PDP"
+    ],
+    [
+      "rx_thorax",
+      "Radiographie de thorax"
+    ],
+    [
+      "ecg",
+      "ECG"
+    ],
+    [
+      "echo_tdm",
+      "Échographie / TDM"
     ]
   ]
 }

@@ -32,7 +32,9 @@ def test_pancarte_signale_les_allergies(base):
         base, patient_id=pid, categorie="allergie", libelle="Pénicilline", statut="present"
     )
     html = pancarte.generer_html(base, sid, "2026-09-01")
-    assert "ALLERGIE" in html
+    # La feuille du service porte un encadré « Allergies » en rouge ; ce qui
+    # compte est que l'allergène y soit écrit en toutes lettres.
+    assert "Allergies" in html
     assert "Pénicilline" in html
 
 
@@ -44,7 +46,12 @@ def test_pancarte_barre_une_ligne_arretee(base):
     )
     pr.arreter_ligne(base, ligne_id, date_arret="2026-08-30")
     html = pancarte.generer_html(base, sid, "2026-08-30")
+    # La ligne reste imprimée mais barrée : une ligne qui disparaît sans trace,
+    # c'est soit une administration poursuivie par habitude, soit un arrêt que
+    # personne ne remarque.
     assert 'class="arretee"' in html
+    assert "Kardégic" in html
+    assert "ARRÊTÉ" in html
 
 
 def test_evolution_texte_reprend_le_traitement_actif(base):

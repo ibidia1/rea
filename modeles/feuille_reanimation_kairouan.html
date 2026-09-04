@@ -1,0 +1,243 @@
+<!--
+  Gabarit de la feuille de réanimation — Hôpital Ibn El Jazzar, Kairouan.
+
+  Mise en page fournie par le service (Claude Design, « Feuille Réanimation
+  Kairouan.dc.html »), reprise ICI SANS RETOUCHE. C'est un fichier, pas du
+  code : le jour où le service change la feuille, il remplace ce fichier et
+  le logiciel suit, sans reprogrammation (feuille de route, règles R2 et R3).
+
+  Le programme n'y fait que deux choses :
+    {{ variable }}                       remplacé par une valeur
+    <sc-for list="{{ liste }}" as="x">   répété pour chaque élément
+
+  Ce qui reste vide reste vide : les cases prévues pour l'écriture manuelle
+  du service (bilans de garde, constantes horaires) ne sont jamais remplies
+  par le logiciel.
+-->
+<section class="page" id="recto" data-screen-label="Recto — Patient &amp; prescription" style="box-sizing:border-box;height:297mm;min-height:297mm;padding:24px 26px 16px;background:#fbfbf8;color:#16201f;font-family:'Inter Tight',Helvetica,Arial,sans-serif;display:flex;flex-direction:column;gap:7px">
+
+  <div style="flex:none;display:flex;align-items:stretch;gap:14px;border-bottom:2.5px solid #16201f;padding-bottom:7px">
+    <div style="width:88px;height:60px;flex:none;border:1px dashed #8a9998;display:flex;align-items:center;justify-content:center;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#6d7c7b;letter-spacing:.06em;line-height:1.3">LOGO<br>HÔPITAL</div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#14595c;white-space:nowrap">Hôpital Universitaire Ibn El Jazzar — Kairouan</div>
+      <div style="font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">Service d'Anesthésie-Réanimation</div>
+      <div style="font-size:21px;font-weight:700;letter-spacing:-.01em;margin-top:1px;white-space:nowrap">Fiche de réanimation</div>
+    </div>
+    <div style="flex:none;display:flex;align-items:flex-end;gap:9px;font-size:11px">
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:96px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Date</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ date_fr }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:56px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Lit n°</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ lit }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:56px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">J hosp.</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ jour_hosp }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:74px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Dossier n°</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ dossier }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:78px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Groupe sanguin</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ groupe_sanguin }}</span></div></div>
+    </div>
+  </div>
+
+  <div style="flex:none;display:flex;align-items:center;border:1.5px solid #16201f;font-size:10px;color:#33403f">
+    <div style="flex:none;background:#14595c;color:#fff;font-size:8.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;padding:5px 8px;align-self:stretch;display:flex;align-items:center">Abords &amp; dispositifs</div>
+    <div style="flex:1;display:flex;flex-wrap:wrap;align-items:center;gap:3px 14px;padding:4px 10px">
+      <sc-for list="{{ abords }}" as="a" hint-placeholder-count="8"><span style="{{ a.style }}">{{ a.texte }}</span></sc-for>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;gap:10px;min-height:0">
+
+    <div style="width:400px;flex:none;display:flex;flex-direction:column;border:1.5px solid #16201f;min-height:0">
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:4px 8px;flex:none">Données patient</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;padding:2px 8px;font-size:11px;flex:none">
+        <div style="grid-column:1 / -1;padding:3px 0;border-bottom:1px dotted #a9b6b5;color:#5e6d6c">Nom &amp; prénom <span style="color:#16201f;font-weight:600">{{ nom_patient }}</span></div>
+        <div style="padding:3px 6px 3px 0;border-bottom:1px dotted #a9b6b5;border-right:1px dotted #a9b6b5;color:#5e6d6c">Âge <span style="color:#16201f;font-weight:600">{{ age }}</span></div>
+        <div style="padding:3px 0 3px 6px;border-bottom:1px dotted #a9b6b5;color:#5e6d6c">Poids idéal théorique <span style="color:#16201f;font-weight:600">{{ poids_ideal }}</span></div>
+      </div>
+      <div style="padding:6px 8px 0;flex:none">
+        <div style="font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#5e6d6c;margin-bottom:4px">Scores</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px">
+          <sc-for list="{{ scores }}" as="s" hint-placeholder-count="2"><div style="border:1px solid #a9b6b5;padding:3px 5px"><div style="font-size:9px;color:#5e6d6c">{{ s }}</div><div style="height:15px"></div></div></sc-for>
+        </div>
+      </div>
+      <div style="margin:7px 8px 0;border:1.5px solid #a33b2a;display:flex;align-items:center;gap:8px;padding:4px 7px;flex:none">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#a33b2a">Allergies</span>
+        <span style="flex:1;height:15px;border-bottom:1px dotted #a9b6b5;font-size:10px;font-weight:600;color:#a33b2a">{{ allergies }}</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:7px 8px 8px;gap:7px">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div style="font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#5e6d6c;margin-bottom:3px">Motif — Transport — ATCD — Ttt habituel</div>
+          <div style="flex:1;border:1px solid #a9b6b5;background-image:repeating-linear-gradient(to bottom,transparent 0 20px,#d3dcdb 20px 21px)"></div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div style="font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#5e6d6c;margin-bottom:3px">Diagnostic principal / associés — Évolution</div>
+          <div style="flex:1;border:1px solid #a9b6b5;background-image:repeating-linear-gradient(to bottom,transparent 0 20px,#d3dcdb 20px 21px)"></div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div style="font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#5e6d6c;margin-bottom:3px">Conduite à tenir / avis spécialisés</div>
+          <div style="flex:1;border:1px solid #a9b6b5;background-image:repeating-linear-gradient(to bottom,transparent 0 20px,#d3dcdb 20px 21px)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;border:1.5px solid #16201f;min-width:0;min-height:0">
+      <div style="display:flex;height:26px;flex:none;border-bottom:1.5px solid #16201f;background:#eef2f1;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase">
+        <div style="width:22px;flex:none;box-sizing:border-box;border-right:1px solid #c3cfce"></div>
+        <div style="flex:none;width:242px;box-sizing:border-box;display:flex;align-items:center;padding:0 8px;border-right:1px solid #c3cfce">Médicament (DCI)</div>
+        <div style="flex:none;width:58px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-right:1px solid #c3cfce">Dose</div>
+        <div style="flex:none;width:42px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-right:1.5px solid #16201f">Voie</div>
+        <div style="flex:1;display:grid;grid-template-columns:repeat(24,1fr)">
+          <sc-for list="{{ hours }}" as="h" hint-placeholder-count="24"><div style="display:flex;align-items:center;justify-content:center;font-size:11px;border-left:1px solid #a9b6b5">{{ h }}</div></sc-for>
+        </div>
+      </div>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">Entrées — apports &amp; nutrition</div>
+      <sc-for list="{{ entRows }}" as="n" hint-placeholder-count="3"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;flex:none;display:flex;align-items:baseline;gap:10px;justify-content:space-between;white-space:nowrap;overflow:hidden"><span>P.S.E — Seringues électriques</span><span style="letter-spacing:.04em;font-weight:500;font-size:8.5px;text-transform:none">dilution en colonne « dose » · débit ml/h dans les cases</span></div>
+      <sc-for list="{{ pseRows }}" as="n" hint-placeholder-count="6"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">I.V — Directe, perfusion &amp; solutés</div>
+      <sc-for list="{{ ivRows }}" as="n" hint-placeholder-count="8"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">S/C — Sous-cutané</div>
+      <sc-for list="{{ scRows }}" as="n" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">P.O — Voie orale / entérale</div>
+      <sc-for list="{{ poRows }}" as="n" hint-placeholder-count="5"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">Aérosols</div>
+      <sc-for list="{{ aeroRows }}" as="n" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">Kinésithérapie</div>
+      <sc-for list="{{ kineRows }}" as="n" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">Soins locaux</div>
+      <sc-for list="{{ soinsRows }}" as="n" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.numero }}</div><div style="width:242px;flex:none;box-sizing:border-box;padding:0 5px;display:flex;align-items:center;font-size:9.5px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.produit }}</div><div style="width:58px;flex:none;box-sizing:border-box;padding:0 3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1px solid #c3cfce">{{ n.dose }}</div><div style="width:42px;flex:none;box-sizing:border-box;padding:0 2px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.05;overflow:hidden;border-right:1.5px solid #16201f">{{ n.voie }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+
+      <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;flex:none;display:flex;align-items:baseline;gap:10px;justify-content:space-between;white-space:nowrap;overflow:hidden"><span>Bilans &amp; examens à faire</span><span style="letter-spacing:.04em;font-weight:500;font-size:8.5px;text-transform:none">cocher l'heure de réalisation (bilan, Rx thorax du soir…)</span></div>
+      <sc-for list="{{ bilanPrescRows }}" as="n" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:22px;flex:none;border-right:1px solid #c3cfce"></div><div style="width:242px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:#33403f;border-right:1px solid #c3cfce">{{ n.libelle }}</div><div style="width:58px;box-sizing:border-box;flex:none;display:flex;align-items:center;justify-content:center;font-size:8.5px;color:#5e6d6c;border-right:1px solid #c3cfce">{{ n.origine }}</div><div style="width:42px;flex:none;border-right:1.5px solid #16201f"></div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ n.grille }}</div></div></sc-for>
+    </div>
+  </div>
+
+  <div style="flex:none;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6d7c7b">
+    <span style="white-space:nowrap">{{ pied }}</span>
+    <span style="white-space:nowrap"><br></span>
+  </div>
+</section>
+
+<section class="page" id="verso" data-screen-label="Verso — Surveillance &amp; bilans" style="box-sizing:border-box;height:297mm;min-height:297mm;padding:24px 26px 16px;background:#fbfbf8;color:#16201f;font-family:'Inter Tight',Helvetica,Arial,sans-serif;display:flex;flex-direction:column;gap:7px">
+
+  <div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;border-bottom:2.5px solid #16201f;padding-bottom:7px">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#14595c;white-space:nowrap;line-height:1.3">Service d'Anesthésie-Réanimation — Ibn El Jazzar, Kairouan</div>
+      <div style="font-size:18px;font-weight:700;letter-spacing:-.01em;line-height:1.1;white-space:nowrap">Surveillance clinique et biologique</div>
+    </div>
+    <div style="display:flex;gap:8px;font-size:11px">
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:210px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Nom &amp; prénom</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ nom_patient }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:96px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Date</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ date_fr }}</span></div></div>
+      <div style="border:1px solid #16201f;padding:4px 10px 3px;min-width:56px"><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5e6d6c">Lit n°</div><div style="height:16px;border-bottom:1px dotted #8a9998"><span style="font-size:11px;font-weight:600">{{ lit }}</span></div></div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;border:1.5px solid #16201f;min-height:0">
+    <div style="display:flex;height:26px;flex:none;border-bottom:1.5px solid #16201f;background:#eef2f1">
+      <div style="width:186px;flex:none;box-sizing:border-box;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;border-right:1.5px solid #16201f">Heure</div>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(24,1fr)">
+        <sc-for list="{{ hours }}" as="h" hint-placeholder-count="24"><div style="display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;border-left:1px solid #a9b6b5">{{ h }}</div></sc-for>
+      </div>
+    </div>
+
+    <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">CONSTANTES VITALES</div>
+    <sc-for list="{{ survRowsA }}" as="r" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:186px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ r.valeurs }}</div></div></sc-for>
+
+    <div style="display:flex;flex:2;min-height:0;border-bottom:1px solid #c3cfce">
+      <div style="width:186px;box-sizing:border-box;flex:none;display:flex;border-right:1.5px solid #16201f">
+        <div style="width:100px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1px dotted #a9b6b5">PA (mmHg)</div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div style="flex:1;display:flex;align-items:center;padding:0 8px;font-size:9.5px;line-height:1;font-weight:600;border-bottom:1px dotted #a9b6b5">PAS</div>
+          <div style="flex:1;display:flex;align-items:center;padding:0 8px;font-size:9.5px;line-height:1;font-weight:600">PAD</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div style="flex:1;border-bottom:1px dotted #a9b6b5;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))"></div>
+        <div style="flex:1;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))"></div>
+      </div>
+    </div>
+
+    <sc-for list="{{ survRowsB }}" as="r" hint-placeholder-count="3"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:186px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ r.valeurs }}</div></div></sc-for>
+
+    <div style="display:flex;flex:2;min-height:0;border-bottom:1px solid #c3cfce">
+      <div style="width:186px;box-sizing:border-box;flex:none;display:flex;border-right:1.5px solid #16201f">
+        <div style="width:100px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1px dotted #a9b6b5">Pupilles</div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div style="flex:1;display:flex;align-items:center;padding:0 8px;font-size:9.5px;line-height:1;font-weight:600;border-bottom:1px dotted #a9b6b5">D</div>
+          <div style="flex:1;display:flex;align-items:center;padding:0 8px;font-size:9.5px;line-height:1;font-weight:600">G</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div style="flex:1;border-bottom:1px dotted #a9b6b5;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))"></div>
+        <div style="flex:1;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))"></div>
+      </div>
+    </div>
+
+    <sc-for list="{{ survRowsC }}" as="r" hint-placeholder-count="3"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:186px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ r.valeurs }}</div></div></sc-for>
+
+    <div style="background:#14595c;color:#fff;font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;flex:none">Sorties &amp; drains</div>
+    <sc-for list="{{ bilanRows }}" as="r" hint-placeholder-count="5"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #c3cfce"><div style="width:186px;box-sizing:border-box;flex:none;padding:0 8px;display:flex;align-items:center;font-size:9.5px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/6)),repeating-linear-gradient(to right,#c3cfce 0 1px,transparent 1px calc(100%/24))">{{ r.valeurs }}</div></div></sc-for>
+  </div>
+
+  <div style="flex:none;height:392px;display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:9px">
+
+    <div style="display:flex;flex-direction:column;border:1.5px solid #16201f;min-height:0">
+      <div style="background:#14595c;color:#fff;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:3px 7px;flex:none">Récapitulatif — Hématologie &amp; chimie</div>
+      <div style="display:flex;height:30px;flex:none;background:#eef2f1;border-bottom:1px solid #16201f;font-size:8.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#5e6d6c">
+        <div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;border-right:1.5px solid #16201f">Paramètre</div>
+        <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr)">
+          <sc-for list="{{ days }}" as="d" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;border-left:1.5px solid #16201f"><div style="height:14px;display:flex;align-items:center;justify-content:center;white-space:nowrap;font-size:8px;border-bottom:1px solid #a9b6b5">{{ d }}</div><div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr)"><sc-for list="{{ slots }}" as="s" hint-placeholder-count="4"><div style="display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:500;border-left:1px solid #c3cfce">{{ s }}</div></sc-for></div></div></sc-for>
+        </div>
+      </div>
+      <sc-for list="{{ bioHemato }}" as="r" hint-placeholder-count="5"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb;background:#f7e7e3"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;color:#8c3a2b;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#c9a89f 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+      <sc-for list="{{ bioIono }}" as="r" hint-placeholder-count="3"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb;background:#e4edf5"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;color:#2b5a7a;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#9fb4c4 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+      <sc-for list="{{ bioRenal }}" as="r" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb;background:#e4f0ea"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;color:#2f6b56;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#a2bdb0 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+      <sc-for list="{{ bioHepat }}" as="r" hint-placeholder-count="2"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb;background:#f5eeda"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;color:#8a6b2f;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#c6b58c 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+      <sc-for list="{{ bioAutres }}" as="r" hint-placeholder-count="1"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#a9b6b5 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:9px;min-height:0">
+      <div style="flex:1;display:flex;flex-direction:column;border:1.5px solid #16201f;min-height:0">
+        <div style="background:#14595c;color:#fff;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:3px 7px;flex:none">Gaz du sang &amp; ventilation</div>
+        <div style="display:flex;height:30px;flex:none;background:#eef2f1;border-bottom:1px solid #16201f;font-size:8.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#5e6d6c">
+          <div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;border-right:1.5px solid #16201f">Paramètre</div>
+          <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr)">
+            <sc-for list="{{ days }}" as="d" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;border-left:1.5px solid #16201f"><div style="height:14px;display:flex;align-items:center;justify-content:center;white-space:nowrap;font-size:8px;border-bottom:1px solid #a9b6b5">{{ d }}</div><div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr)"><sc-for list="{{ slots }}" as="s" hint-placeholder-count="4"><div style="display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:500;border-left:1px solid #c3cfce">{{ s }}</div></sc-for></div></div></sc-for>
+          </div>
+        </div>
+        <sc-for list="{{ gdsGaz }}" as="r" hint-placeholder-count="7"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#a9b6b5 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+        <div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb;background:#e9e2f0;border-bottom:2px solid #16201f"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:700;color:#5b3d84;border-right:1.5px solid #16201f">PaO₂ / FiO₂</div><div style="flex:1;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#b3a3c6 0 1px,transparent 1px calc(100%/12));position:relative">{{ pfRow }}</div></div>
+        <sc-for list="{{ gdsVent }}" as="r" hint-placeholder-count="4"><div style="display:flex;flex:1;min-height:0;border-bottom:1px solid #d3dcdb"><div style="width:104px;box-sizing:border-box;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.libelle }}</div><div style="flex:1;position:relative;background-image:repeating-linear-gradient(to right,#16201f 0 1px,transparent 1px calc(100%/3)),repeating-linear-gradient(to right,#a9b6b5 0 1px,transparent 1px calc(100%/12))">{{ r.valeurs }}</div></div></sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:9px;min-height:0">
+      <div style="flex:none;display:flex;flex-direction:column;border:1.5px solid #16201f">
+        <div style="background:#14595c;color:#fff;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:3px 7px">Bilans infectieux</div>
+        <div style="display:flex;height:18px;flex:none;background:#eef2f1;border-bottom:1px solid #16201f;font-size:8.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#5e6d6c">
+          <div style="width:104px;flex:none;display:flex;align-items:center;padding:0 6px;border-right:1.5px solid #16201f">Prélèvement</div>
+          <div style="width:62px;flex:none;display:flex;align-items:center;justify-content:center;border-right:1px solid #a9b6b5">Date</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center">Résultat</div>
+        </div>
+        <sc-for list="{{ infRows }}" as="r" hint-placeholder-count="6"><div style="display:flex;height:21px;flex:none;border-bottom:1px solid #d3dcdb"><div style="width:104px;flex:none;display:flex;align-items:center;padding:0 6px;font-size:9px;line-height:1;white-space:nowrap;overflow:hidden;font-weight:600;border-right:1.5px solid #16201f">{{ r.prelevement }}</div><div style="width:62px;box-sizing:border-box;flex:none;display:flex;align-items:center;justify-content:center;font-size:8.5px;border-right:1px solid #a9b6b5">{{ r.date }}</div><div style="flex:1;box-sizing:border-box;display:flex;align-items:center;padding:0 6px;font-size:8.5px;line-height:1;overflow:hidden">{{ r.resultat }}</div></div></sc-for>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;border:1.5px solid #16201f;min-height:0">
+        <div style="background:#14595c;color:#fff;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:3px 7px;flex:none">Autres bilans / examens</div>
+        <div style="flex:1;background-image:repeating-linear-gradient(to bottom,transparent 0 20px,#d3dcdb 20px 21px);min-height:0"></div>
+      </div>
+      <div style="flex:none;display:flex;flex-direction:column;border:1.5px solid #16201f">
+        <div style="background:#14595c;color:#fff;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;padding:3px 7px">À demander pour demain</div>
+        <div style="padding:4px 6px;font-size:8.5px;color:#33403f;display:grid;grid-template-columns:repeat(3,1fr);gap:2px 6px;white-space:nowrap">
+          <sc-for list="{{ examensDemain }}" as="e" hint-placeholder-count="12"><span style="{{ e.style }}">{{ e.case }} {{ e.libelle }}</span></sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:none;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6d7c7b">
+    <span style="white-space:nowrap"><br></span>
+    <span style="white-space:nowrap">Équipe jour : ....................  Équipe nuit : ....................</span>
+  </div>
+</section>

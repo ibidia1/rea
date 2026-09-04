@@ -1,0 +1,234 @@
+{
+  "nom": "feuille_lignes",
+  "libelle": "Lignes fixes de la feuille de réanimation imprimée",
+  "version": "2026-09-05.2",
+  "date": "2026-09-05",
+  "note": "Quels paramètres occupent les lignes pré-imprimées de la feuille, et combien de lignes chaque bloc comporte. Le nombre de lignes vient de la maquette du service (modeles/feuille_reanimation_kairouan.html) : le changer ici sans changer la maquette déborderait de la page. Les codes renvoient au catalogue d'analytes (rea/analytes.py) ; un code inconnu affiche son libellé tel quel. Les codes de la section « gaz » et « ventilation » sont ceux des colonnes de la table gaz_du_sang ; ceux des autres sections sont des identifiants d'analyte. Une case de « à demander pour demain » peut couvrir plusieurs examens (Urée/Créat, CRP/PCT, ECBU/PDP) : elle est cochée dès que l'un d'eux est demandé.",
+  "valeurs": {
+    "hemato": [
+      [
+        "hb",
+        "Hb"
+      ],
+      [
+        "plq",
+        "Plaquettes"
+      ],
+      [
+        "gb",
+        "GB"
+      ],
+      [
+        "tp",
+        "TP"
+      ],
+      [
+        "inr",
+        "INR"
+      ]
+    ],
+    "iono": [
+      [
+        "na",
+        "Na⁺"
+      ],
+      [
+        "k",
+        "K⁺"
+      ],
+      [
+        "cl",
+        "Cl⁻"
+      ]
+    ],
+    "renal": [
+      [
+        "uree",
+        "Urée"
+      ],
+      [
+        "creat",
+        "Créatinine"
+      ]
+    ],
+    "hepat": [
+      [
+        "asat",
+        "ASAT"
+      ],
+      [
+        "alat",
+        "ALAT"
+      ]
+    ],
+    "autres": [
+      [
+        "crp",
+        "CRP"
+      ]
+    ],
+    "gaz": [
+      [
+        "ph",
+        "pH"
+      ],
+      [
+        "pao2",
+        "PaO₂"
+      ],
+      [
+        "paco2",
+        "PaCO₂"
+      ],
+      [
+        "hco3",
+        "HCO₃⁻"
+      ],
+      [
+        "lactate",
+        "Lactates"
+      ],
+      [
+        "spo2",
+        "SpO₂"
+      ],
+      [
+        "fr",
+        "FR"
+      ]
+    ],
+    "ventilation": [
+      [
+        "mode_ventilatoire",
+        "Mode"
+      ],
+      [
+        "fio2",
+        "FiO₂"
+      ],
+      [
+        "pep",
+        "PEP"
+      ],
+      [
+        "debit_o2",
+        "Débit O₂"
+      ]
+    ],
+    "surveillance_a": [
+      [
+        "fc",
+        "FC"
+      ],
+      [
+        "spo2",
+        "SpO₂"
+      ]
+    ],
+    "surveillance_b": [
+      [
+        "temperature",
+        "T°"
+      ],
+      [
+        "fr",
+        "FR"
+      ],
+      [
+        "glasgow",
+        "Glasgow"
+      ]
+    ],
+    "surveillance_c": [
+      [
+        "diurese",
+        "Diurèse"
+      ],
+      [
+        "drain_1",
+        "Drain 1"
+      ],
+      [
+        "drain_2",
+        "Drain 2"
+      ]
+    ],
+    "examens_demain": [
+      [
+        [
+          "nfs"
+        ],
+        "NFS"
+      ],
+      [
+        [
+          "ionogramme"
+        ],
+        "Iono"
+      ],
+      [
+        [
+          "uree",
+          "creatinine"
+        ],
+        "Urée/Créat"
+      ],
+      [
+        [
+          "gds"
+        ],
+        "GDS/Lactates"
+      ],
+      [
+        [
+          "crp",
+          "procalcitonine"
+        ],
+        "CRP/PCT"
+      ],
+      [
+        [
+          "tp_inr"
+        ],
+        "TP/TCA"
+      ],
+      [
+        [
+          "bilan_hepatique"
+        ],
+        "Bilan hépatique"
+      ],
+      [
+        [
+          "hemoculture"
+        ],
+        "Hémocultures"
+      ],
+      [
+        [
+          "ecbu",
+          "pdp"
+        ],
+        "ECBU / PDP"
+      ],
+      [
+        [
+          "rx_thorax"
+        ],
+        "Rx thorax"
+      ],
+      [
+        [
+          "ecg"
+        ],
+        "ECG"
+      ],
+      [
+        [
+          "echo_tdm"
+        ],
+        "Écho / TDM"
+      ]
+    ]
+  }
+}

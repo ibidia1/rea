@@ -52,62 +52,16 @@ def _css(format_page: str) -> str:
 
 
 def generer_html(base: Base, sejour_id: str, date_jour: str) -> str:
-    sejour = sejours_service.sejour_avec_patient(base, sejour_id)
-    pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
-    allergies = sejours_service.allergies_du_patient(base, sejour["patient_id"])
-    age = age_ans(sejour["date_naissance"])
-    jour_hosp = jour_hospitalisation(sejour["date_admission"], date_jour)
+    """La feuille du service, remplie.
 
-    m = [f"<style>{_css(config.FORMAT_PAGE)}</style>"]
-    m.append('<div class="brouillon">Mise en page provisoire — sera reprise sur le PDF du prescrit réel</div>')
-    m.append('<div class="entete">')
-    m.append(
-        f"<div><h1>{_e(sejour['nom_affichage'])}</h1>"
-        f"Lit {_e(sejour['lit_admission'])} · "
-        f"{_e(age) if age is not None else '?'} ans · matricule {_e(sejour['matricule'])}</div>"
-    )
-    m.append(f'<div class="jour">{_e(format_date_fr(date_jour))} — J{jour_hosp}</div>')
-    m.append("</div>")
+    La mise en page vient de `modeles/feuille_reanimation_kairouan.html`, la
+    maquette A3 fournie par le service : ce module ne la redessine pas, il
+    demande son remplissage à la couche de rendu (règle R3). Remplacer la
+    maquette suffit à changer la feuille.
+    """
+    from ..rendu import feuille
 
-    if allergies:
-        libelles = ", ".join(_e(a["libelle"]) for a in allergies)
-        m.append(f'<div class="allergie">⚠ ALLERGIE : {libelles}</div>')
-
-    for code_voie in listes.ORDRE_VOIES:
-        lignes = pancarte["lignes_par_voie"].get(code_voie, [])
-        if not lignes:
-            continue
-        titre = listes.VOIES[code_voie]["titre"]
-        m.append('<table class="voie">')
-        m.append(f"<caption>{_e(titre)}</caption>")
-        for ligne in lignes:
-            etiquette = dom.etiquette_jour(ligne, date_jour)
-            classes = []
-            if ligne["statut"] == "arretee":
-                classes.append("arretee")
-            if etiquette.echue:
-                classes.append("echue")
-            classe_attr = f' class="{" ".join(classes)}"' if classes else ""
-            m.append(f"<tr><td{classe_attr}>{_e(dom.libelle_ligne(ligne, date_jour))}</td></tr>")
-        m.append("</table>")
-
-    if pancarte["bilans_demandes"]:
-        m.append('<div class="bilans"><b>Bilans demandés :</b> ')
-        for b in pancarte["bilans_demandes"]:
-            libelle = listes.libelle(listes.EXAMENS_A_DEMANDER, b["examen_code"])
-            m.append(f'<span>☐ {_e(libelle)} ({_e(b["heure_prelevement"])})</span>')
-        m.append("</div>")
-
-    m.append(
-        f'<div class="entrees-total">Entrées calculées sur 24 h : '
-        f'{pancarte["bilan_entrees"].total_ml:.0f} mL</div>'
-    )
-
-    for titre in ("Constantes horaires", "Diurèse / drains", "Observations"):
-        m.append(f'<div class="zone-manuscrite"><div class="titre">{titre}</div></div>')
-
-    m.append(f'<div class="pied">Généré le {_e(format_date_fr(date_jour))} — format {_e(config.FORMAT_PAGE)}</div>')
-    return "\n".join(m)
+    return feuille.generer(base, sejour_id, date_jour)
 
 
 def imprimer(base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None) -> dict:
