@@ -38,6 +38,26 @@ de reprogrammer le logiciel.
 Le détail exact figure dans le journal des versions de SPEC.md et dans
 l'audit §10 de FEUILLE_DE_ROUTE.md.
 
+## Installation sur le poste du service (Windows)
+
+Pas de commande à taper : deux fichiers à double-cliquer, à la racine du
+dépôt.
+
+1. **`installer.bat`** — une seule fois. Installe Python si besoin (le
+   fichier le signale et donne le lien), puis tout ce que le logiciel
+   demande. Compter quelques minutes, avec une connexion internet.
+2. **`lancer_reanimation.bat`** — à chaque utilisation. Ouvre le logiciel
+   dans le navigateur. **Ne pas fermer la fenêtre noire** pendant l'usage :
+   la fermer arrête le logiciel pour tout le poste.
+
+Pour une icône sur le bureau : clic droit sur `lancer_reanimation.bat` →
+*Envoyer vers* → *Bureau (créer un raccourci)*. Le raccourci peut être
+renommé et son icône changée (clic droit → *Propriétés* → *Changer l'icône*)
+sans toucher au fichier d'origine.
+
+Le logiciel tourne alors **entièrement en local** : aucune donnée ne sort du
+poste (voir *Emplacement des données* ci-dessous et SPEC §2.2).
+
 ## Installation (poste de développement)
 
 ```bash
