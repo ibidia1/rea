@@ -19,6 +19,7 @@ from rea.domaine import calculs
 from rea.domaine import coherence
 from rea.domaine import prescription as dom
 from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
+from rea.services import aides as aides_service
 from rea.services import bilans as bilans_service
 from rea.services import dispositifs as dispositifs_service
 from rea.services import evolution as evolution_service
@@ -62,6 +63,28 @@ with st.sidebar:
 
 def _aujourdhui() -> str:
     return date.today().isoformat()
+
+
+def _controle(cle: str, avertissements: list) -> bool:
+    """Affiche les avertissements de cohérence et dit si l'on peut enregistrer.
+
+    Un avertissement n'est jamais un blocage définitif (bloc 4) : un
+    « improbable » s'affiche et laisse passer, un « impossible » — sortie
+    avant l'admission, extubation avant l'intubation — demande un second
+    clic. Le médecin garde le dernier mot, mais pas par inadvertance.
+    """
+    if not avertissements:
+        st.session_state.pop(f"forcer_{cle}", None)
+        return True
+    for a in avertissements:
+        (st.error if a.gravite == "impossible" else st.warning)(a.message, icon="⚠️")
+    if not any(a.gravite == "impossible" for a in avertissements):
+        return True
+    if st.session_state.pop(f"forcer_{cle}", False):
+        return True
+    st.session_state[f"forcer_{cle}"] = True
+    st.info("Cliquer à nouveau sur le bouton pour enregistrer malgré tout.")
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -391,6 +414,13 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
         if not non_identifie and not matricule:
             st.error("Le matricule est obligatoire.")
             return
+        if not _controle(
+            "admission",
+            coherence.verifier_sejour(
+                date_admission=date_admission, date_naissance=date_naissance
+            ),
+        ):
+            return
         pid = sejours_service.creer_patient(
             base,
             matricule=matricule,
@@ -677,7 +707,16 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             if st.form_submit_button("Ajouter à la pancarte"):
                 if not produit:
                     st.error("Le produit est obligatoire.")
-                else:
+                elif _controle(
+                    f"ligne_{voie}",
+                    coherence.verifier_prescription(
+                        date_debut=date_debut,
+                        duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
+                        dose=dose or None, vitesse=vitesse or None,
+                        volume_24h=volume_24h or None,
+                        date_admission=sejour["date_admission"],
+                    ),
+                ):
                     prescriptions_service.ajouter_ligne(
                         base, sejour_id=sejour["id"], voie=voie, produit=produit,
                         date_debut=str(date_debut),
@@ -751,9 +790,75 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
     )
 
 
+_STYLE_ETAT = {
+    "ok": ("✅", theme.VERT),
+    "a_verifier": ("⬜", theme.ORANGE),
+    "non_renseigne": ("·", theme.GRIS),
+}
+_STYLE_GRAVITE = {
+    "alerte": theme.ROUGE,
+    "attention": theme.ORANGE,
+    "info": theme.BLEU,
+}
+
+
+def panneau_aides(sejour: dict, date_jour_str: str) -> None:
+    """Check-list du jour et rappels — des questions, jamais des consignes.
+
+    Le logiciel coche ce qu'il sait lire de ce qui est déjà saisi, laisse
+    « non renseigné » ce qu'il ne sait pas, et ne prescrit rien.
+    """
+    items = aides_service.checklist(base, sejour["id"], date_jour_str)
+    rappels = aides_service.rappels(base, sejour["id"], date_jour_str)
+    if not items and not rappels:
+        return
+
+    gauche, droite = st.columns([1.1, 1], gap="large")
+    with gauche:
+        if items:
+            lignes = []
+            for i in items:
+                marque, couleur = _STYLE_ETAT.get(i.etat, ("·", theme.GRIS))
+                titre = f"<b>{i.lettre}</b> · {i.libelle}"
+                question = (
+                    f"<br><span style='color:#94a3b8'>{i.question}</span>"
+                    if i.etat != "ok" and i.question else ""
+                )
+                lignes.append(
+                    f"<span style='color:{couleur}'>{marque}</span> {titre}{question}"
+                )
+            reste = sum(1 for i in items if i.etat != "ok")
+            theme.bloc_html(
+                f"Check-list du jour — {len(items) - reste}/{len(items)}",
+                "<br>".join(lignes),
+                theme.VERT if reste == 0 else theme.ORANGE,
+            )
+    with droite:
+        if rappels:
+            for r in rappels:
+                note = "" if r["valide"] else (
+                    "<br><span style='color:#94a3b8;font-size:0.78rem'>"
+                    "Règle de service non encore signée par un senior.</span>"
+                )
+                theme.bloc_html(
+                    r["libelle"], r["message"] + note,
+                    _STYLE_GRAVITE.get(r["gravite"], theme.GRIS),
+                )
+        else:
+            theme.bloc_html(
+                "Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT
+            )
+    st.caption(
+        "Ces rappels sont déclaratifs : leurs seuils se modifient dans "
+        "`regles/*.json`, sans reprogrammer le logiciel. Aucun ne propose de "
+        "posologie (SPEC §3.1)."
+    )
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
+    panneau_aides(sejour, date_jour_str)
     entree = evolution_service.obtenir_ou_creer(
         base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id
     )
@@ -873,7 +978,14 @@ def onglet_sortie(sejour: dict) -> None:
         complication_texte = st.text_input("Préciser") if complication_statut == "presente" else ""
         ordonnance = st.text_area("Ordonnance de sortie")
         consultation = st.text_input("Consultation externe")
-        if st.form_submit_button("Clôturer le séjour"):
+        if st.form_submit_button("Clôturer le séjour") and _controle(
+            "sortie",
+            coherence.verifier_sejour(
+                date_admission=sejour["date_admission"],
+                date_sortie=date_heure_sortie,
+                date_naissance=sejour.get("date_naissance"),
+            ),
+        ):
             sejours_service.cloturer_sejour(
                 base, sejour["id"], date_heure_sortie=date_heure_sortie, mode_sortie=mode_sortie,
                 destination=destination or None, meme_etablissement=meme_etablissement,
@@ -1249,6 +1361,13 @@ def onglet_actes(sejour: dict) -> None:
                     if c2.button(
                         config_type.get("verbe_retrait", "Retirer"),
                         key=f"retrait_{ligne['id']}", use_container_width=True,
+                    ) and _controle(
+                        f"retrait_{ligne['id']}",
+                        coherence.verifier_dispositif(
+                            date_pose=etat_disp.date_pose,
+                            date_retrait=date_retrait,
+                            date_admission=sejour["date_admission"],
+                        ),
                     ):
                         dispositifs_service.retirer(
                             base, ligne["id"], date_retrait=str(date_retrait),
@@ -1288,7 +1407,12 @@ def onglet_actes(sejour: dict) -> None:
                 else:
                     details[champ] = st.number_input(etiquette, min_value=0.0, step=1.0, value=0.0)
             commentaire = st.text_input("Commentaire (facultatif)")
-            if st.form_submit_button("Enregistrer"):
+            if st.form_submit_button("Enregistrer") and _controle(
+                f"pose_{type_}",
+                coherence.verifier_dispositif(
+                    date_pose=date_pose, date_admission=sejour["date_admission"]
+                ),
+            ):
                 dispositifs_service.poser(
                     base, sejour_id=sejour["id"], type_=type_, date_pose=str(date_pose),
                     site=site, details={k: v for k, v in details.items() if v},

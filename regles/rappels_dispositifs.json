@@ -1,0 +1,69 @@
+{
+  "code": "rappels_dispositifs",
+  "titre": "Rappels sur les dispositifs invasifs",
+  "version": "2026-09-04.1",
+  "date_version": "2026-09-04",
+  "valide": false,
+  "signe_par": null,
+  "note": "Les seuils sont des repères de service, à fixer par le chef de service : ils se changent dans ce fichier, sans toucher au logiciel. Un rappel pose une question, il ne prescrit rien et ne retire rien.",
+  "regles": [
+    {
+      "code": "kt_central_duree",
+      "libelle": "Cathéter central en place depuis longtemps",
+      "message": "Cathéter veineux central en place depuis {jours_kt_central} jours — est-il encore nécessaire ?",
+      "gravite": "attention",
+      "source": "Le retrait dès que le dispositif n'est plus utile est la seule mesure qui supprime le risque d'infection liée au cathéter (recommandations de prévention des ILC).",
+      "conditions": [{"fait": "jours_kt_central", "op": ">=", "valeur": 7}]
+    },
+    {
+      "code": "sonde_urinaire_duree",
+      "libelle": "Sonde urinaire en place depuis longtemps",
+      "message": "Sonde urinaire en place depuis {jours_sonde_urinaire} jours — le sondage est-il encore justifié ?",
+      "gravite": "attention",
+      "source": "La durée de sondage est le premier facteur de risque d'infection urinaire nosocomiale.",
+      "conditions": [{"fait": "jours_sonde_urinaire", "op": ">=", "valeur": 5}]
+    },
+    {
+      "code": "kta_duree",
+      "libelle": "Cathéter artériel en place depuis longtemps",
+      "message": "Cathéter artériel en place depuis {jours_kta} jours — le monitorage invasif est-il encore utile ?",
+      "gravite": "info",
+      "conditions": [{"fait": "jours_kta", "op": ">=", "valeur": 7}]
+    },
+    {
+      "code": "intubation_sans_sng",
+      "libelle": "Patient intubé sans sonde nasogastrique",
+      "message": "Patient intubé depuis {jours_intubation} jours sans sonde nasogastrique notée — nutrition et vidange gastrique prévues ?",
+      "gravite": "attention",
+      "conditions": [
+        {"fait": "jours_intubation", "op": ">=", "valeur": 2},
+        {"fait": "sng_en_place", "op": "faux"}
+      ]
+    },
+    {
+      "code": "sedation_prolongee",
+      "libelle": "Sédation prolongée",
+      "message": "Sédation en cours depuis {jours_sedation} jours — une fenêtre d'allègement a-t-elle été tentée aujourd'hui ?",
+      "gravite": "attention",
+      "source": "L'interruption quotidienne de la sédation raccourcit la durée de ventilation.",
+      "conditions": [{"fait": "jours_sedation", "op": ">=", "valeur": 3}]
+    },
+    {
+      "code": "ventilation_prolongee",
+      "libelle": "Ventilation prolongée sans trachéotomie",
+      "message": "Intubation au {jours_intubation}e jour sans trachéotomie — la question de la trachéotomie a-t-elle été posée ?",
+      "gravite": "info",
+      "conditions": [
+        {"fait": "jours_intubation", "op": ">=", "valeur": 10},
+        {"fait": "tracheotomie_en_place", "op": "faux"}
+      ]
+    },
+    {
+      "code": "escarre_presente",
+      "libelle": "Escarre constituée",
+      "message": "{nb_escarres} escarre(s) notée(s) — protocole de soins et repositionnement à jour ?",
+      "gravite": "attention",
+      "conditions": [{"fait": "nb_escarres", "op": ">=", "valeur": 1}]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "nom": "familles_medicaments",
+  "libelle": "Familles de médicaments reconnues dans le prescrit",
+  "version": "2026-09-04.1",
+  "date": "2026-09-04",
+  "note": "Fragments de noms cherchés, en minuscules et sans accents, dans le libellé du produit prescrit. Sert uniquement à cocher la check-list quotidienne : aucune dose, aucune interaction, aucune contre-indication n'est déduite de ces listes. À compléter avec les noms commerciaux réellement utilisés dans le service.",
+  "valeurs": {
+    "analgesie": [
+      "paracetamol",
+      "perfalgan",
+      "morphine",
+      "fentanyl",
+      "sufentanil",
+      "remifentanil",
+      "nefopam",
+      "acupan",
+      "tramadol",
+      "ketamine",
+      "nalbuphine",
+      "oxycodone"
+    ],
+    "thromboprophylaxie": [
+      "enoxaparine",
+      "lovenox",
+      "heparine",
+      "calciparine",
+      "tinzaparine",
+      "innohep",
+      "fondaparinux",
+      "arixtra",
+      "nadroparine",
+      "fraxiparine",
+      "hbpm",
+      "contention",
+      "bas de contention",
+      "compression"
+    ],
+    "prophylaxie_ulcere": [
+      "omeprazole",
+      "esomeprazole",
+      "pantoprazole",
+      "inexium",
+      "mopral",
+      "inipomp",
+      "ipp",
+      "ranitidine",
+      "sucralfate"
+    ],
+    "sedation": [
+      "midazolam",
+      "hypnovel",
+      "propofol",
+      "diprivan",
+      "dexmedetomidine",
+      "dexdor",
+      "thiopental"
+    ],
+    "nutrition": [
+      "nutrison",
+      "isosource",
+      "fresubin",
+      "sondalis",
+      "smofkabiven",
+      "kabiven",
+      "olimel",
+      "periolimel",
+      "nutrition"
+    ],
+    "insuline": [
+      "insuline",
+      "actrapid",
+      "umuline",
+      "novorapid",
+      "humalog",
+      "lantus"
+    ]
+  }
+}

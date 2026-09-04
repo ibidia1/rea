@@ -17,7 +17,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from .. import config, protocoles, referentiels
+from .. import aides, config, protocoles, referentiels
 from ..db import Base
 from . import theme
 
@@ -35,7 +35,9 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
         f"une sauvegarde automatique toutes les {config.INTERVALLE_SAUVEGARDE_MINUTES} min"
     )
 
-    onglets = st.tabs(["Sauvegardes", "Journal", "Référentiels", "Protocoles"])
+    onglets = st.tabs(
+        ["Sauvegardes", "Journal", "Référentiels", "Protocoles", "Règles d'aide"]
+    )
     with onglets[0]:
         _sauvegardes(base)
     with onglets[1]:
@@ -44,6 +46,8 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
         _referentiels()
     with onglets[3]:
         _protocoles()
+    with onglets[4]:
+        _regles()
 
 
 # --------------------------------------------------------------------------
@@ -229,3 +233,21 @@ def _protocoles() -> None:
             ],
             theme.VERT if p.valide else theme.ORANGE,
         )
+
+
+def _regles() -> None:
+    st.caption(
+        "Les rappels et la check-list quotidienne sont déclaratifs : ils vivent "
+        f"dans `{aides.DOSSIER}`, avec leurs seuils et leurs sources. Les modifier "
+        "ne demande pas de reprogrammer le logiciel — c'est la règle R4 de la "
+        "feuille de route. Aucun ne propose de posologie (SPEC §3.1)."
+    )
+    for jeu in aides.inventaire():
+        etat = (
+            f"✅ validé — signé par {jeu['signe_par']}" if jeu["valide"] and jeu["signe_par"]
+            else "🚧 en service mais non signé — à valider par un senior"
+        )
+        lignes = [f"Version {jeu['version']} · {jeu['nb']} règles", etat]
+        if jeu["source"]:
+            lignes.append(jeu["source"])
+        theme.bloc(jeu["titre"], lignes, theme.VERT if jeu["valide"] else theme.ORANGE)
