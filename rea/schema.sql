@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS sejour (
     -- celles des conditions chroniques ANZICS saisies par ailleurs.
     type_admission      TEXT,
     maladie_chronique_igs2 TEXT,
+    -- Diagnostic principal codé CIM-10 (bloc 12). Sur le séjour et non sur le
+    -- motif : un séjour traumatique n'a pas de ligne de motif, et il doit
+    -- pouvoir être codé comme les autres.
+    code_icd10          TEXT,
 
     -- Question filtre : conditionne toute la suite de l'écran d'admission
     traumatique         INTEGER,                   -- NULL = non renseigné

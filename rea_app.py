@@ -25,11 +25,13 @@ from rea.services import dispositifs as dispositifs_service
 from rea.services import evolution as evolution_service
 from rea.services import explorations as explorations_service
 from rea.services import lits as lits_service
+from rea.services import microbiologie as micro_service
 from rea.services import pancarte as pancarte_service
 from rea.services import prescriptions as prescriptions_service
 from rea.services import scores as scores_service
 from rea.services import sejours as sejours_service
 from rea.ui import administration as administration_ui
+from rea.ui import recherche as recherche_ui
 from rea.ui import theme
 from rea.ui import utilisateur as utilisateur_ui
 
@@ -53,6 +55,10 @@ with st.sidebar:
     if st.button("🛏 Tableau des lits", use_container_width=True):
         st.session_state.pop("sejour_id", None)
         st.session_state.pop("ecran", None)
+        st.rerun()
+    if st.button("📈 Recherche", use_container_width=True):
+        st.session_state.pop("sejour_id", None)
+        st.session_state["ecran"] = "recherche"
         st.rerun()
     if st.button("⚙ Administration", use_container_width=True):
         st.session_state.pop("sejour_id", None)
@@ -563,6 +569,8 @@ def onglet_identite(sejour: dict) -> None:
             theme.GRIS,
         )
 
+    _codage_cim10(sejour)
+
     with st.form("ajout_antecedent"):
         col1, col2 = st.columns(2)
         with col1:
@@ -595,6 +603,52 @@ def onglet_identite(sejour: dict) -> None:
                     libelle=libelle_libre, precision=precision or None, utilisateur_id=utilisateur_id,
                 )
             st.rerun()
+
+
+def _codage_cim10(sejour: dict) -> None:
+    """Codage CIM-10 du diagnostic principal (bloc 12).
+
+    Le code est saisi une fois, à froid, et sert ensuite à toutes les
+    extractions : sans lui, chaque étude recommence le codage à la main sur
+    des libellés libres, et deux études du même service ne comptent pas les
+    mêmes patients.
+    """
+    actuel = sejour.get("code_icd10")
+    with st.expander(
+        f"🔖 Codage CIM-10 — {actuel or 'non codé'}", expanded=not actuel
+    ):
+        if actuel:
+            libelle_actuel = listes.libelle(referentiels.charger("cim10"), actuel)
+            st.markdown(f"**{actuel}** — {libelle_actuel}")
+        requete = st.text_input(
+            "Rechercher un code ou un libellé",
+            placeholder="ex. « pneumo », « J18 », « traumatique »",
+            key=f"cim_{sejour['id']}",
+        )
+        resultats = referentiels.rechercher("cim10", requete) if requete else ()
+        if requete and not resultats:
+            st.caption(
+                "Aucun code trouvé. La liste livrée est un sous-ensemble de "
+                "démarrage : compléter `referentiels/cim10.json` avec le code "
+                "manquant, relevé sur le volume officiel."
+            )
+        for code, libelle_code in resultats:
+            colonne_texte, colonne_bouton = st.columns([5, 1])
+            colonne_texte.markdown(
+                f"<span style='color:{theme.BLEU};font-weight:600'>{code}</span> "
+                f"{libelle_code}", unsafe_allow_html=True,
+            )
+            if colonne_bouton.button("Choisir", key=f"cim_{sejour['id']}_{code}",
+                                     use_container_width=True):
+                sejours_service.definir_code_icd10(
+                    base, sejour["id"], code, utilisateur_id=utilisateur_id
+                )
+                st.rerun()
+        st.caption(
+            f"Référentiel CIM-10 version {referentiels.version('cim10')} — "
+            "sous-ensemble partiel, chaque code est à vérifier sur le volume "
+            "officiel avant usage statistique."
+        )
 
 
 def onglet_prescrit(sejour: dict) -> None:
@@ -1160,6 +1214,9 @@ def onglet_bilans(sejour: dict) -> None:
     saisie_bilan(sejour)
 
     st.divider()
+    panneau_microbiologie(sejour)
+
+    st.divider()
     vue_cinetique(sejour)
 
     st.subheader("Texte généré")
@@ -1170,6 +1227,112 @@ def onglet_bilans(sejour: dict) -> None:
         value=texte or "(aucun bilan ce jour-là)",
         height=200,
     )
+
+
+def panneau_microbiologie(sejour: dict) -> None:
+    """Prélèvements et infections acquises (bloc 14).
+
+    Un prélèvement dont le résultat n'est jamais revenu est ce qu'on oublie le
+    plus sûrement : les prélèvements en attente sont donc affichés en premier
+    et en orange, tant qu'ils ne sont pas complétés.
+    """
+    st.markdown("##### 🦠 Microbiologie")
+    lignes = micro_service.du_sejour(base, sejour["id"])
+    attente = [l for l in lignes if l["resultat"] == "en_cours"]
+
+    gauche, droite = st.columns([1, 1.2], gap="large")
+    with gauche:
+        with st.form(f"micro_{sejour['id']}"):
+            c1, c2 = st.columns(2)
+            date_prelevement = c1.date_input("Date", value=date.today(),
+                                             key="micro_date")
+            type_prelevement = c2.selectbox(
+                "Prélèvement", listes.codes(listes.PRELEVEMENTS),
+                format_func=lambda c: listes.libelle(listes.PRELEVEMENTS, c),
+            )
+            if st.form_submit_button("Enregistrer le prélèvement"):
+                micro_service.enregistrer(
+                    base, sejour_id=sejour["id"], date_prelevement=str(date_prelevement),
+                    type_prelevement=type_prelevement, utilisateur_id=utilisateur_id,
+                )
+                st.rerun()
+
+        with st.expander("Déclarer une infection acquise"):
+            with st.form(f"nosoco_{sejour['id']}"):
+                type_infection = st.selectbox(
+                    "Type", listes.codes(listes.INFECTIONS_NOSOCOMIALES),
+                    format_func=lambda c: listes.libelle(listes.INFECTIONS_NOSOCOMIALES, c),
+                )
+                date_diagnostic = st.date_input("Date du diagnostic", value=date.today())
+                germe_nosoco = st.text_input("Germe (si connu)")
+                if st.form_submit_button("Déclarer"):
+                    micro_service.declarer_infection_nosocomiale(
+                        base, sejour_id=sejour["id"], type_=type_infection,
+                        date_diagnostic=str(date_diagnostic),
+                        germe=germe_nosoco or None, utilisateur_id=utilisateur_id,
+                    )
+                    st.rerun()
+            st.caption(
+                "Seules les infections diagnostiquées au moins 48 h après "
+                "l'admission comptent dans les taux du service : avant, "
+                "l'infection est réputée importée."
+            )
+
+    with droite:
+        if attente:
+            for ligne in attente:
+                with st.form(f"resultat_{ligne['id']}"):
+                    st.markdown(
+                        f"**{listes.libelle(listes.PRELEVEMENTS, ligne['type_prelevement'])}** "
+                        f"du {format_date_fr(ligne['date_prelevement'])} — en attente"
+                    )
+                    c1, c2 = st.columns([1, 1.4])
+                    resultat = c1.selectbox(
+                        "Résultat", listes.codes(listes.RESULTATS_MICROBIO),
+                        format_func=lambda c: listes.libelle(listes.RESULTATS_MICROBIO, c),
+                        key=f"res_{ligne['id']}",
+                    )
+                    germe = c2.text_input("Germe", key=f"germe_{ligne['id']}")
+                    antibiogramme = st.text_area(
+                        "Antibiogramme", key=f"atb_{ligne['id']}", height=70
+                    )
+                    if st.form_submit_button("Enregistrer le résultat"):
+                        micro_service.completer(
+                            base, ligne["id"],
+                            {"resultat": resultat, "germe": germe or None,
+                             "antibiogramme": antibiogramme or None},
+                            utilisateur_id=utilisateur_id,
+                        )
+                        st.rerun()
+        rendus = [l for l in lignes if l["resultat"] != "en_cours"]
+        if rendus:
+            theme.bloc(
+                "Résultats rendus",
+                [
+                    f"{format_date_fr(l['date_prelevement'])} · "
+                    f"{listes.libelle(listes.PRELEVEMENTS, l['type_prelevement'])} — "
+                    f"{listes.libelle(listes.RESULTATS_MICROBIO, l['resultat'])}"
+                    + (f" : {l['germe']}" if l["germe"] else "")
+                    for l in rendus
+                ],
+                theme.VIOLET,
+            )
+        infections = micro_service.infections_du_sejour(base, sejour["id"])
+        if infections:
+            theme.bloc(
+                "Infections déclarées",
+                [
+                    f"{format_date_fr(i['date_diagnostic'])} · "
+                    f"{listes.libelle(listes.INFECTIONS_NOSOCOMIALES, i['type'])}"
+                    + (f" ({i['germe']})" if i["germe"] else "")
+                    + ("" if micro_service.acquise_en_reanimation(sejour, i)
+                       else " — présente à l'admission, non comptée comme acquise")
+                    for i in infections
+                ],
+                theme.ROUGE,
+            )
+        if not lignes and not micro_service.infections_du_sejour(base, sejour["id"]):
+            st.caption("Aucun prélèvement enregistré pour ce séjour.")
 
 
 def saisie_bilan(sejour: dict) -> None:
@@ -1624,6 +1787,8 @@ def ecran_fiche(sejour_id: str) -> None:
 # --------------------------------------------------------------------------
 if st.session_state.get("ecran") == "administration":
     administration_ui.ecran(base, utilisateur_id)
+elif st.session_state.get("ecran") == "recherche":
+    recherche_ui.ecran(base, utilisateur_id)
 elif st.session_state.get("sejour_id"):
     ecran_fiche(st.session_state["sejour_id"])
 else:

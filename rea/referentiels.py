@@ -129,3 +129,32 @@ def recharger() -> None:
     fonction sert aux tests et à l'écran d'administration.
     """
     _fichier.cache_clear()
+
+
+def rechercher(nom: str, texte: str, limite: int = 25) -> tuple:
+    """Recherche libre dans un référentiel de paires (code, libellé).
+
+    Cherche dans le code et dans le libellé, sans tenir compte des accents ni
+    de la casse : un utilisateur qui tape « pneumo » ou « J18 » doit tomber sur
+    la même ligne.
+    """
+    import unicodedata
+
+    def _pliage(valeur: str) -> str:
+        return "".join(
+            c for c in unicodedata.normalize("NFD", valeur.lower())
+            if unicodedata.category(c) != "Mn"
+        )
+
+    requete = _pliage(texte.strip())
+    if not requete:
+        return ()
+    mots = requete.split()
+    resultats = []
+    for entree in charger(nom):
+        cible = _pliage(" ".join(str(x) for x in entree))
+        if all(mot in cible for mot in mots):
+            resultats.append(entree)
+        if len(resultats) >= limite:
+            break
+    return tuple(resultats)

@@ -403,3 +403,12 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
         lignes.append(f"Consultation : {sejour['consultation_externe']}")
 
     return "\n".join(lignes)
+
+
+def definir_code_icd10(
+    base: Base, sejour_id: str, code: str, *, utilisateur_id: str | None = None
+) -> None:
+    """Code CIM-10 du diagnostic principal du séjour (bloc 12)."""
+    base.mettre_a_jour(
+        "sejour", sejour_id, {"code_icd10": code}, utilisateur_id=utilisateur_id
+    )
