@@ -674,7 +674,10 @@ def onglet_prescrit(sejour: dict) -> None:
                 base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id
             )
             st.session_state["derniere_impression"] = snap["html"]
-            st.success(f"Pancarte enregistrée — version {snap['version']}.")
+            st.session_state["nom_impression"] = (
+                f"feuille-lit{sejour['lit_admission']}-{date_jour_str}.html"
+            )
+            st.success(f"Feuille enregistrée — version {snap['version']}.")
         demandes = pancarte["bilans_demandes"]
         theme.bloc(
             "Bilans demandés",
@@ -818,8 +821,24 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
                 st.rerun()
 
     if st.session_state.get("derniere_impression"):
-        with st.expander("Aperçu de la dernière impression", expanded=True):
-            st.components.v1.html(st.session_state["derniere_impression"], height=600, scrolling=True)
+        # La feuille est en A3 paysage : l'aperçu dans un cadre étroit ne
+        # remplace pas une impression. Le téléchargement ouvre la feuille dans
+        # un vrai onglet, où Ctrl+P sort la bonne page.
+        st.download_button(
+            "⬇ Ouvrir la feuille pour l'imprimer (A3 paysage)",
+            data=st.session_state["derniere_impression"],
+            file_name=st.session_state.get("nom_impression", "feuille.html"),
+            mime="text/html",
+            use_container_width=True,
+        )
+        st.caption(
+            "Ouvrir le fichier téléchargé, puis imprimer : A3, paysage, "
+            "marges nulles, sans mise à l'échelle."
+        )
+        with st.expander("Aperçu de la dernière impression"):
+            st.components.v1.html(
+                st.session_state["derniere_impression"], height=900, scrolling=True
+            )
 
 
 def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,

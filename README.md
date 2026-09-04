@@ -5,7 +5,9 @@ Voir **[SPEC.md](SPEC.md)** — c'est le document de référence du projet,
 
 ## État actuel
 
-**v2.0** — tous les blocs codables de la feuille de route sont faits.
+**v2.1** — tous les blocs codables de la feuille de route sont faits, et la
+feuille imprimée est celle du service (maquette A3 de Kairouan, dans
+`modeles/` : c'est un fichier, il se remplace sans reprogrammer).
 
 *Soin quotidien* : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
 impression), Explorations et actes (dispositifs invasifs avec compteurs de
@@ -26,8 +28,6 @@ de reprogrammer le logiciel.
 
 ### Ce qui reste, et qui ne dépend pas du développement
 
-- la **mise en page imprimée du prescrit** est provisoire tant que le PDF réel
-  du service n'a pas été fourni ;
 - **à faire valider par un senior** : bornes de normalité des bilans, barème
   IGS II, seuils des rappels, correspondances LOINC — tout est marqué non
   validé à l'écran ;

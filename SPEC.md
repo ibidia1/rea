@@ -796,6 +796,68 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.1 — 5 septembre 2026 — la feuille du service**
+
+Le document attendu depuis le début est arrivé : la maquette A3 de la feuille
+de réanimation du service (Hôpital Ibn El Jazzar, Kairouan). La mise en page
+imprimée n'est donc plus provisoire.
+
+*La maquette reste un fichier, pas du code*
+
+`modeles/feuille_reanimation_kairouan.html` est la maquette du service, reprise
+sans retouche de dessin. Le programme n'y injecte que des valeurs, par trois
+constructions et pas une de plus (`{{ valeur }}`, `{{ valeur.champ }}`,
+`<sc-for>`). Le jour où le service change sa feuille, il remplace ce fichier —
+il n'y a rien à reprogrammer. C'est la règle R3 tenue jusqu'au bout : la couche
+de rendu met en forme, elle ne calcule rien.
+
+L'ancienne mise en page A4 écrite en Python est supprimée.
+
+*Ce que la feuille apporte, et qu'une feuille vierge n'apporte pas*
+
+- Les **bilans des deux jours précédents** sont reportés, colonne par jour.
+- La **colonne du jour reste vide** : les bilans de la garde s'y écrivent à la
+  main pendant la nuit et sont ressaisis le lendemain matin. Le logiciel ne
+  prend jamais cette place, même s'il connaît déjà une valeur du jour.
+- Les **examens demandés la veille** sont inscrits à leur ligne, avec une case
+  à l'heure de réalisation.
+- Un **rond par prise** est posé sur la ligne du médicament, à l'heure calculée
+  d'après le rythme. Le rond est vide : c'est l'infirmier qui le coche. Le
+  logiciel dit *quand*, il ne dit jamais que c'est fait.
+- Les **dispositifs sont cochés avec leur compteur de jours**, calculé.
+- Les cases **« à demander pour demain »** sont pré-cochées d'après la saisie ;
+  trois d'entre elles couvrent deux examens (Urée/Créat, CRP/PCT, ECBU/PDP) et
+  se cochent dès que l'un des deux est demandé.
+
+*Ce que la feuille laisse délibérément vide*
+
+Les constantes horaires, les sorties et drains, les zones de texte : elles se
+relèvent au lit du malade, sur le papier. Le logiciel étiquette ces lignes, il
+ne les remplit pas.
+
+*Ce qui a été corrigé en chemin*
+
+- Le service note « 24 h » pour minuit et la grille imprimée va de 0 à 23 : la
+  prise de minuit d'un ×4/j n'apparaissait nulle part. Repliée sur 0.
+- Une ligne **arrêtée ce jour-là** reste imprimée, **barrée** et marquée
+  « ARRÊTÉ ». Une ligne qui disparaît sans trace, c'est soit une
+  administration poursuivie par habitude, soit un arrêt que personne ne
+  remarque.
+- Les boucles imbriquées du gabarit (créneaux dans les jours) étaient mal
+  appariées : la moitié du tableau de biologie aurait disparu sans erreur.
+- Un **débordement** est signalé en pied de page : la feuille a un nombre de
+  lignes fixe, et une ligne prescrite qui n'y tient pas doit se voir.
+
+*Impression*
+
+Deux pages A3 paysage, sans script ni police téléchargée : le poste du service
+peut être hors ligne. Un bouton télécharge la feuille, qui s'imprime depuis le
+navigateur (A3, paysage, marges nulles, sans mise à l'échelle).
+
+- 251 tests (pytest, +19), et vérification de la feuille remplie sur un dossier
+  complet ainsi que de l'impression depuis l'application
+
+
 **v2.0 — 4 septembre 2026 — tous les blocs codables de la feuille de route**
 
 Cette version termine les blocs 0 à 18. Ce qui reste ne dépend plus du
