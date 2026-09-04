@@ -1,0 +1,33 @@
+{
+  "nom": "prelevements",
+  "libelle": "Types de prélèvement microbiologique",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "hemoculture",
+      "Hémoculture"
+    ],
+    [
+      "ecbu",
+      "ECBU"
+    ],
+    [
+      "lcr",
+      "Ponction lombaire"
+    ],
+    [
+      "pdp",
+      "PDP"
+    ],
+    [
+      "catheter",
+      "Prélèvement de cathéter"
+    ],
+    [
+      "autre",
+      "Autre"
+    ]
+  ]
+}

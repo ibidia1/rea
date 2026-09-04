@@ -1,0 +1,37 @@
+{
+  "nom": "provenances",
+  "libelle": "Provenance à l'admission",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "avec_detail": [
+    "service",
+    "autre_hopital"
+  ],
+  "valeurs": [
+    [
+      "urgences",
+      "Urgences"
+    ],
+    [
+      "service",
+      "Service (préciser)"
+    ],
+    [
+      "bloc",
+      "Bloc opératoire"
+    ],
+    [
+      "consultation_ar",
+      "Consultation externe A-R"
+    ],
+    [
+      "autre_hopital",
+      "Autre hôpital"
+    ],
+    [
+      "domicile",
+      "Domicile"
+    ]
+  ]
+}

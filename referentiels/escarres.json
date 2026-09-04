@@ -1,0 +1,46 @@
+{
+  "nom": "escarres",
+  "libelle": "Localisations et grades d'escarre",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Grades NPUAP/EPUAP.",
+  "valeurs": {
+    "localisations": [
+      "Sacrum",
+      "Talon droit",
+      "Talon gauche",
+      "Trochanter droit",
+      "Trochanter gauche",
+      "Ischion droit",
+      "Ischion gauche",
+      "Occiput",
+      "Oreille droite",
+      "Oreille gauche",
+      "Coude droit",
+      "Coude gauche",
+      "Malléole droite",
+      "Malléole gauche",
+      "Narine (sonde)",
+      "Commissure labiale (sonde)",
+      "Autre"
+    ],
+    "grades": [
+      [
+        1,
+        "Grade 1 — érythème qui ne blanchit pas"
+      ],
+      [
+        2,
+        "Grade 2 — perte cutanée partielle (phlyctène)"
+      ],
+      [
+        3,
+        "Grade 3 — perte cutanée totale, graisse visible"
+      ],
+      [
+        4,
+        "Grade 4 — perte tissulaire totale, os ou tendon visible"
+      ]
+    ]
+  }
+}

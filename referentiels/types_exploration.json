@@ -1,0 +1,252 @@
+{
+  "nom": "types_exploration",
+  "libelle": "Types d'exploration et valeurs chiffrées",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Format d'une valeur : [clé, libellé, unité, type]. Types : nombre / texte / trois_etats.",
+  "valeurs": {
+    "dtc": {
+      "libelle": "DTC (Doppler transcrânien)",
+      "valeurs": [
+        [
+          "ip_droit",
+          "IP droit",
+          "",
+          "nombre"
+        ],
+        [
+          "ip_gauche",
+          "IP gauche",
+          "",
+          "nombre"
+        ],
+        [
+          "vm_droite",
+          "Vm droite",
+          "cm/s",
+          "nombre"
+        ],
+        [
+          "vm_gauche",
+          "Vm gauche",
+          "cm/s",
+          "nombre"
+        ]
+      ]
+    },
+    "tdm_cerebrale": {
+      "libelle": "TDM cérébrale",
+      "valeurs": [
+        [
+          "lesion",
+          "Lésion",
+          "",
+          "trois_etats"
+        ],
+        [
+          "type_lesion",
+          "Type de lésion",
+          "",
+          "texte"
+        ]
+      ]
+    },
+    "ett": {
+      "libelle": "ETT",
+      "valeurs": [
+        [
+          "fevg",
+          "FEVG",
+          "%",
+          "nombre"
+        ],
+        [
+          "itv_sa",
+          "ITV sous-aortique",
+          "cm",
+          "nombre"
+        ],
+        [
+          "debit_cardiaque",
+          "Débit cardiaque",
+          "L/min",
+          "nombre"
+        ],
+        [
+          "vci",
+          "Diamètre VCI",
+          "mm",
+          "nombre"
+        ],
+        [
+          "vci_compliance",
+          "VCI compliante",
+          "",
+          "trois_etats"
+        ],
+        [
+          "paps",
+          "PAPS",
+          "mmHg",
+          "nombre"
+        ],
+        [
+          "e_sur_a",
+          "E/A",
+          "",
+          "nombre"
+        ],
+        [
+          "e_sur_e_prime",
+          "E/e′",
+          "",
+          "nombre"
+        ],
+        [
+          "tapse",
+          "TAPSE",
+          "mm",
+          "nombre"
+        ],
+        [
+          "rapport_vd_vg",
+          "Rapport VD/VG",
+          "",
+          "nombre"
+        ],
+        [
+          "epanchement",
+          "Épanchement péricardique",
+          "",
+          "trois_etats"
+        ],
+        [
+          "valvulopathie",
+          "Valvulopathie",
+          "",
+          "texte"
+        ]
+      ]
+    },
+    "ecg": {
+      "libelle": "ECG",
+      "valeurs": [
+        [
+          "rythme",
+          "Rythme",
+          "",
+          "texte"
+        ],
+        [
+          "fc",
+          "Fréquence",
+          "/min",
+          "nombre"
+        ],
+        [
+          "pr",
+          "PR",
+          "ms",
+          "nombre"
+        ],
+        [
+          "qrs",
+          "Durée QRS",
+          "ms",
+          "nombre"
+        ],
+        [
+          "qtc",
+          "QTc",
+          "ms",
+          "nombre"
+        ],
+        [
+          "axe",
+          "Axe",
+          "°",
+          "nombre"
+        ],
+        [
+          "trouble_repolarisation",
+          "Trouble de repolarisation",
+          "",
+          "trois_etats"
+        ],
+        [
+          "territoire",
+          "Territoire",
+          "",
+          "texte"
+        ]
+      ]
+    },
+    "echo_pleuro_pulmonaire": {
+      "libelle": "Échographie pleuro-pulmonaire",
+      "valeurs": [
+        [
+          "epanchement_droit",
+          "Épanchement droit",
+          "",
+          "trois_etats"
+        ],
+        [
+          "epanchement_gauche",
+          "Épanchement gauche",
+          "",
+          "trois_etats"
+        ],
+        [
+          "condensation",
+          "Condensation",
+          "",
+          "trois_etats"
+        ],
+        [
+          "lignes_b",
+          "Lignes B",
+          "",
+          "trois_etats"
+        ]
+      ]
+    },
+    "radio_thorax": {
+      "libelle": "Radiographie thoracique",
+      "valeurs": [
+        [
+          "foyer",
+          "Foyer",
+          "",
+          "trois_etats"
+        ],
+        [
+          "siege_foyer",
+          "Siège du foyer",
+          "",
+          "texte"
+        ]
+      ]
+    },
+    "eeg": {
+      "libelle": "EEG",
+      "valeurs": []
+    },
+    "fibroscopie": {
+      "libelle": "Fibroscopie bronchique",
+      "valeurs": [
+        [
+          "indication",
+          "Indication",
+          "",
+          "texte"
+        ],
+        [
+          "prelevement",
+          "Prélèvement associé",
+          "",
+          "texte"
+        ]
+      ]
+    }
+  }
+}

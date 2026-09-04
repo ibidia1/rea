@@ -13,20 +13,25 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from rea import analytes as cat, config, listes
+from rea import analytes as cat, config, listes, referentiels
 from rea.db import obtenir_base
 from rea.domaine import calculs
 from rea.domaine import coherence
 from rea.domaine import prescription as dom
 from rea.domaine.dates import age_ans, format_date_fr, jour_hospitalisation, lendemain
+from rea.services import aides as aides_service
 from rea.services import bilans as bilans_service
 from rea.services import dispositifs as dispositifs_service
 from rea.services import evolution as evolution_service
 from rea.services import explorations as explorations_service
 from rea.services import lits as lits_service
+from rea.services import microbiologie as micro_service
 from rea.services import pancarte as pancarte_service
 from rea.services import prescriptions as prescriptions_service
+from rea.services import scores as scores_service
 from rea.services import sejours as sejours_service
+from rea.ui import administration as administration_ui
+from rea.ui import recherche as recherche_ui
 from rea.ui import theme
 from rea.ui import utilisateur as utilisateur_ui
 
@@ -49,6 +54,15 @@ with st.sidebar:
     st.divider()
     if st.button("🛏 Tableau des lits", use_container_width=True):
         st.session_state.pop("sejour_id", None)
+        st.session_state.pop("ecran", None)
+        st.rerun()
+    if st.button("📈 Recherche", use_container_width=True):
+        st.session_state.pop("sejour_id", None)
+        st.session_state["ecran"] = "recherche"
+        st.rerun()
+    if st.button("⚙ Administration", use_container_width=True):
+        st.session_state.pop("sejour_id", None)
+        st.session_state["ecran"] = "administration"
         st.rerun()
     st.caption(f"Réanimation polyvalente · {config.NB_LITS} lits")
     st.caption("SPEC.md — voir le dépôt pour l'état d'avancement")
@@ -56,6 +70,28 @@ with st.sidebar:
 
 def _aujourdhui() -> str:
     return date.today().isoformat()
+
+
+def _controle(cle: str, avertissements: list) -> bool:
+    """Affiche les avertissements de cohérence et dit si l'on peut enregistrer.
+
+    Un avertissement n'est jamais un blocage définitif (bloc 4) : un
+    « improbable » s'affiche et laisse passer, un « impossible » — sortie
+    avant l'admission, extubation avant l'intubation — demande un second
+    clic. Le médecin garde le dernier mot, mais pas par inadvertance.
+    """
+    if not avertissements:
+        st.session_state.pop(f"forcer_{cle}", None)
+        return True
+    for a in avertissements:
+        (st.error if a.gravite == "impossible" else st.warning)(a.message, icon="⚠️")
+    if not any(a.gravite == "impossible" for a in avertissements):
+        return True
+    if st.session_state.pop(f"forcer_{cle}", False):
+        return True
+    st.session_state[f"forcer_{cle}"] = True
+    st.info("Cliquer à nouveau sur le bouton pour enregistrer malgré tout.")
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -292,6 +328,7 @@ def _carte_lit(lit_info: dict, resumes: dict) -> None:
 
     if st.button("Ouvrir", key=f"lit_{numero}", use_container_width=True):
         st.session_state["sejour_id"] = sejour_id
+        st.session_state.pop("ecran", None)
         st.rerun()
 
 
@@ -343,6 +380,18 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
                 provenance_detail = st.text_input("Préciser le service / l'établissement")
             est_readmission = st.checkbox("Réadmission")
             motif_readmission = st.text_input("Motif de réadmission") if est_readmission else ""
+            # Deux variables de l'IGS II qu'aucune autre donnée du dossier ne
+            # permet de retrouver après coup.
+            types_admission = referentiels.charger("types_admission")
+            type_admission = st.selectbox(
+                "Type d'admission", listes.codes(types_admission),
+                format_func=lambda c: listes.libelle(types_admission, c),
+            )
+            maladies = referentiels.charger("maladies_chroniques_igs2")
+            maladie_chronique_igs2 = st.selectbox(
+                "Maladie chronique (IGS II)", listes.codes(maladies),
+                format_func=lambda c: listes.libelle(maladies, c),
+            )
 
         st.markdown("**Motif d'admission**")
         traumatique = st.radio("Type", ["Traumatique", "Non traumatique"], horizontal=True) == "Traumatique"
@@ -384,6 +433,13 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
         if not non_identifie and not matricule:
             st.error("Le matricule est obligatoire.")
             return
+        if not _controle(
+            "admission",
+            coherence.verifier_sejour(
+                date_admission=date_admission, date_naissance=date_naissance
+            ),
+        ):
+            return
         pid = sejours_service.creer_patient(
             base,
             matricule=matricule,
@@ -408,6 +464,8 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             poids_kg=poids_kg,
             taille_cm=taille_cm,
             creatinine_base=creatinine_base,
+            type_admission=type_admission,
+            maladie_chronique_igs2=maladie_chronique_igs2,
             utilisateur_id=utilisateur_id,
         )
         if traumatique and regions_choisies:
@@ -420,6 +478,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
         st.session_state.pop("mode", None)
         st.session_state.pop("lit_admission_choisi", None)
         st.session_state["sejour_id"] = sid
+        st.session_state.pop("ecran", None)
         st.success("Séjour créé.")
         st.rerun()
 
@@ -431,16 +490,16 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
 def _ligne_poids(sejour: dict) -> str:
     """Poids réel et poids idéal côte à côte : le réel entre dans la
     clairance, l'idéal sert de référence."""
-    if not sejour["poids_kg"]:
+    if not sejour.get("poids_kg"):
         return (
             "<span style='color:#B4442E'>Poids non renseigné — "
             "clairance incalculable</span>"
         )
     texte = f"Poids {_format_valeur(sejour['poids_kg'])} kg"
-    if sejour["taille_cm"]:
+    if sejour.get("taille_cm"):
         texte += f" · {_format_valeur(sejour['taille_cm'])} cm"
     ideal = calculs.poids_ideal_devine(
-        taille_cm=sejour["taille_cm"], sexe=sejour["sexe"]
+        taille_cm=sejour.get("taille_cm"), sexe=sejour.get("sexe")
     )
     if ideal.disponible:
         texte += (
@@ -451,7 +510,7 @@ def _ligne_poids(sejour: dict) -> str:
 
 
 def onglet_identite(sejour: dict) -> None:
-    age = age_ans(sejour["date_naissance"])
+    age = age_ans(sejour.get("date_naissance"))
     c_identite, c_motif, c_antecedents = st.columns(3)
 
     with c_identite:
@@ -510,6 +569,8 @@ def onglet_identite(sejour: dict) -> None:
             theme.GRIS,
         )
 
+    _codage_cim10(sejour)
+
     with st.form("ajout_antecedent"):
         col1, col2 = st.columns(2)
         with col1:
@@ -542,6 +603,52 @@ def onglet_identite(sejour: dict) -> None:
                     libelle=libelle_libre, precision=precision or None, utilisateur_id=utilisateur_id,
                 )
             st.rerun()
+
+
+def _codage_cim10(sejour: dict) -> None:
+    """Codage CIM-10 du diagnostic principal (bloc 12).
+
+    Le code est saisi une fois, à froid, et sert ensuite à toutes les
+    extractions : sans lui, chaque étude recommence le codage à la main sur
+    des libellés libres, et deux études du même service ne comptent pas les
+    mêmes patients.
+    """
+    actuel = sejour.get("code_icd10")
+    with st.expander(
+        f"🔖 Codage CIM-10 — {actuel or 'non codé'}", expanded=not actuel
+    ):
+        if actuel:
+            libelle_actuel = listes.libelle(referentiels.charger("cim10"), actuel)
+            st.markdown(f"**{actuel}** — {libelle_actuel}")
+        requete = st.text_input(
+            "Rechercher un code ou un libellé",
+            placeholder="ex. « pneumo », « J18 », « traumatique »",
+            key=f"cim_{sejour['id']}",
+        )
+        resultats = referentiels.rechercher("cim10", requete) if requete else ()
+        if requete and not resultats:
+            st.caption(
+                "Aucun code trouvé. La liste livrée est un sous-ensemble de "
+                "démarrage : compléter `referentiels/cim10.json` avec le code "
+                "manquant, relevé sur le volume officiel."
+            )
+        for code, libelle_code in resultats:
+            colonne_texte, colonne_bouton = st.columns([5, 1])
+            colonne_texte.markdown(
+                f"<span style='color:{theme.BLEU};font-weight:600'>{code}</span> "
+                f"{libelle_code}", unsafe_allow_html=True,
+            )
+            if colonne_bouton.button("Choisir", key=f"cim_{sejour['id']}_{code}",
+                                     use_container_width=True):
+                sejours_service.definir_code_icd10(
+                    base, sejour["id"], code, utilisateur_id=utilisateur_id
+                )
+                st.rerun()
+        st.caption(
+            f"Référentiel CIM-10 version {referentiels.version('cim10')} — "
+            "sous-ensemble partiel, chaque code est à vérifier sur le volume "
+            "officiel avant usage statistique."
+        )
 
 
 def onglet_prescrit(sejour: dict) -> None:
@@ -669,7 +776,16 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             if st.form_submit_button("Ajouter à la pancarte"):
                 if not produit:
                     st.error("Le produit est obligatoire.")
-                else:
+                elif _controle(
+                    f"ligne_{voie}",
+                    coherence.verifier_prescription(
+                        date_debut=date_debut,
+                        duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
+                        dose=dose or None, vitesse=vitesse or None,
+                        volume_24h=volume_24h or None,
+                        date_admission=sejour["date_admission"],
+                    ),
+                ):
                     prescriptions_service.ajouter_ligne(
                         base, sejour_id=sejour["id"], voie=voie, produit=produit,
                         date_debut=str(date_debut),
@@ -743,9 +859,154 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
     )
 
 
+_STYLE_ETAT = {
+    "ok": ("✅", theme.VERT),
+    "a_verifier": ("⬜", theme.ORANGE),
+    "non_renseigne": ("·", theme.GRIS),
+}
+_STYLE_GRAVITE = {
+    "alerte": theme.ROUGE,
+    "attention": theme.ORANGE,
+    "info": theme.BLEU,
+}
+
+
+def panneau_aides(sejour: dict, date_jour_str: str) -> None:
+    """Check-list du jour et rappels — des questions, jamais des consignes.
+
+    Le logiciel coche ce qu'il sait lire de ce qui est déjà saisi, laisse
+    « non renseigné » ce qu'il ne sait pas, et ne prescrit rien.
+    """
+    items = aides_service.checklist(base, sejour["id"], date_jour_str)
+    rappels = aides_service.rappels(base, sejour["id"], date_jour_str)
+    if not items and not rappels:
+        return
+
+    gauche, droite = st.columns([1.1, 1], gap="large")
+    with gauche:
+        if items:
+            lignes = []
+            for i in items:
+                marque, couleur = _STYLE_ETAT.get(i.etat, ("·", theme.GRIS))
+                titre = f"<b>{i.lettre}</b> · {i.libelle}"
+                question = (
+                    f"<br><span style='color:#94a3b8'>{i.question}</span>"
+                    if i.etat != "ok" and i.question else ""
+                )
+                lignes.append(
+                    f"<span style='color:{couleur}'>{marque}</span> {titre}{question}"
+                )
+            reste = sum(1 for i in items if i.etat != "ok")
+            theme.bloc_html(
+                f"Check-list du jour — {len(items) - reste}/{len(items)}",
+                "<br>".join(lignes),
+                theme.VERT if reste == 0 else theme.ORANGE,
+            )
+    with droite:
+        if rappels:
+            for r in rappels:
+                note = "" if r["valide"] else (
+                    "<br><span style='color:#94a3b8;font-size:0.78rem'>"
+                    "Règle de service non encore signée par un senior.</span>"
+                )
+                theme.bloc_html(
+                    r["libelle"], r["message"] + note,
+                    _STYLE_GRAVITE.get(r["gravite"], theme.GRIS),
+                )
+        else:
+            theme.bloc_html(
+                "Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT
+            )
+    st.caption(
+        "Ces rappels sont déclaratifs : leurs seuils se modifient dans "
+        "`regles/*.json`, sans reprogrammer le logiciel. Aucun ne propose de "
+        "posologie (SPEC §3.1)."
+    )
+    panneau_scores(sejour, date_jour_str)
+
+
+def _bloc_score(score, complement: str = "") -> None:
+    if score.complet:
+        manque = ""
+    else:
+        # La liste complète noierait le chiffre : on annonce combien il manque
+        # et on donne les premières, le détail restant lisible au survol.
+        debut = ", ".join(score.manquantes[:3])
+        reste = len(score.manquantes) - 3
+        manque = (
+            "<br><span style='color:#94a3b8;font-size:0.78rem' title='"
+            + "; ".join(score.manquantes)
+            + f"'>Incomplet — {len(score.manquantes)} variables manquantes : {debut}"
+            + (f" et {reste} autres" if reste > 0 else "")
+            + "</span>"
+        )
+    non_valide = (
+        "" if score.valide
+        else "<br><span style='color:#94a3b8;font-size:0.78rem'>Barème non encore "
+             "relu par un senior contre la publication.</span>"
+    )
+    theme.bloc_html(
+        score.libelle,
+        f"<span style='font-size:1.6rem;font-weight:600'>{score.total}</span>"
+        f"{complement}{manque}{non_valide}",
+        theme.BLEU if score.complet else theme.GRIS,
+    )
+
+
+def panneau_scores(sejour: dict, date_jour_str: str) -> None:
+    """SOFA du jour, IGS II d'admission, jours sans ventilation.
+
+    Un score décrit, il ne décide pas — et un score incomplet le dit.
+    """
+    with st.expander("📊 Scores de gravité"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            _bloc_score(scores_service.sofa(base, sejour["id"], date_jour_str))
+            st.caption(
+                "Composante circulatoire limitée à la PAM : les paliers "
+                "supérieurs dépendent de la dose de vasopresseur, que le "
+                "logiciel ne saisit pas."
+            )
+        with c2:
+            score = scores_service.igs2(base, sejour["id"])
+            mortalite = scores_service.mortalite_predite(base, sejour["id"])
+            complement = (
+                f"<br>Mortalité prédite : {mortalite * 100:.0f} %"
+                if mortalite is not None else ""
+            )
+            _bloc_score(score, complement)
+            st.caption(
+                "Calculé sur les valeurs du jour d'admission ; la règle du "
+                "score demande les plus défavorables des 24 premières heures."
+            )
+        with c3:
+            jsv = scores_service.jours_sans_ventilation(base, sejour["id"])
+            theme.bloc_html(
+                "Jours sans ventilation (J28)",
+                f"<span style='font-size:1.6rem;font-weight:600'>{jsv}</span>"
+                if jsv is not None else
+                "<span style='color:#94a3b8'>Pas encore calculable — "
+                "période de 28 jours non écoulée.</span>",
+                theme.BLEU if jsv is not None else theme.GRIS,
+            )
+            st.caption("Un patient décédé compte 0, quelle qu'ait été sa durée de ventilation.")
+
+        serie = scores_service.evolution_sofa(base, sejour["id"])
+        if len(serie) >= 2:
+            import pandas as pd
+
+            st.caption("SOFA jour par jour — c'est sa variation qui informe.")
+            st.line_chart(
+                pd.DataFrame({"SOFA": [v for _d, v in serie]},
+                             index=[d for d, _v in serie]),
+                height=180,
+            )
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
+    panneau_aides(sejour, date_jour_str)
     entree = evolution_service.obtenir_ou_creer(
         base, sejour["id"], date_jour_str, utilisateur_id=utilisateur_id
     )
@@ -847,7 +1108,7 @@ def onglet_evolution(sejour: dict) -> None:
 
 
 def onglet_sortie(sejour: dict) -> None:
-    if sejour["date_sortie"]:
+    if sejour.get("date_sortie"):
         st.success(f"Séjour clôturé le {format_date_fr(sejour['date_sortie'])}")
         st.text_area("Compte rendu de sortie", value=sejours_service.compte_rendu_sortie(base, sejour["id"]), height=250)
         return
@@ -865,7 +1126,14 @@ def onglet_sortie(sejour: dict) -> None:
         complication_texte = st.text_input("Préciser") if complication_statut == "presente" else ""
         ordonnance = st.text_area("Ordonnance de sortie")
         consultation = st.text_input("Consultation externe")
-        if st.form_submit_button("Clôturer le séjour"):
+        if st.form_submit_button("Clôturer le séjour") and _controle(
+            "sortie",
+            coherence.verifier_sejour(
+                date_admission=sejour["date_admission"],
+                date_sortie=date_heure_sortie,
+                date_naissance=sejour.get("date_naissance"),
+            ),
+        ):
             sejours_service.cloturer_sejour(
                 base, sejour["id"], date_heure_sortie=date_heure_sortie, mode_sortie=mode_sortie,
                 destination=destination or None, meme_etablissement=meme_etablissement,
@@ -946,6 +1214,9 @@ def onglet_bilans(sejour: dict) -> None:
     saisie_bilan(sejour)
 
     st.divider()
+    panneau_microbiologie(sejour)
+
+    st.divider()
     vue_cinetique(sejour)
 
     st.subheader("Texte généré")
@@ -956,6 +1227,112 @@ def onglet_bilans(sejour: dict) -> None:
         value=texte or "(aucun bilan ce jour-là)",
         height=200,
     )
+
+
+def panneau_microbiologie(sejour: dict) -> None:
+    """Prélèvements et infections acquises (bloc 14).
+
+    Un prélèvement dont le résultat n'est jamais revenu est ce qu'on oublie le
+    plus sûrement : les prélèvements en attente sont donc affichés en premier
+    et en orange, tant qu'ils ne sont pas complétés.
+    """
+    st.markdown("##### 🦠 Microbiologie")
+    lignes = micro_service.du_sejour(base, sejour["id"])
+    attente = [l for l in lignes if l["resultat"] == "en_cours"]
+
+    gauche, droite = st.columns([1, 1.2], gap="large")
+    with gauche:
+        with st.form(f"micro_{sejour['id']}"):
+            c1, c2 = st.columns(2)
+            date_prelevement = c1.date_input("Date", value=date.today(),
+                                             key="micro_date")
+            type_prelevement = c2.selectbox(
+                "Prélèvement", listes.codes(listes.PRELEVEMENTS),
+                format_func=lambda c: listes.libelle(listes.PRELEVEMENTS, c),
+            )
+            if st.form_submit_button("Enregistrer le prélèvement"):
+                micro_service.enregistrer(
+                    base, sejour_id=sejour["id"], date_prelevement=str(date_prelevement),
+                    type_prelevement=type_prelevement, utilisateur_id=utilisateur_id,
+                )
+                st.rerun()
+
+        with st.expander("Déclarer une infection acquise"):
+            with st.form(f"nosoco_{sejour['id']}"):
+                type_infection = st.selectbox(
+                    "Type", listes.codes(listes.INFECTIONS_NOSOCOMIALES),
+                    format_func=lambda c: listes.libelle(listes.INFECTIONS_NOSOCOMIALES, c),
+                )
+                date_diagnostic = st.date_input("Date du diagnostic", value=date.today())
+                germe_nosoco = st.text_input("Germe (si connu)")
+                if st.form_submit_button("Déclarer"):
+                    micro_service.declarer_infection_nosocomiale(
+                        base, sejour_id=sejour["id"], type_=type_infection,
+                        date_diagnostic=str(date_diagnostic),
+                        germe=germe_nosoco or None, utilisateur_id=utilisateur_id,
+                    )
+                    st.rerun()
+            st.caption(
+                "Seules les infections diagnostiquées au moins 48 h après "
+                "l'admission comptent dans les taux du service : avant, "
+                "l'infection est réputée importée."
+            )
+
+    with droite:
+        if attente:
+            for ligne in attente:
+                with st.form(f"resultat_{ligne['id']}"):
+                    st.markdown(
+                        f"**{listes.libelle(listes.PRELEVEMENTS, ligne['type_prelevement'])}** "
+                        f"du {format_date_fr(ligne['date_prelevement'])} — en attente"
+                    )
+                    c1, c2 = st.columns([1, 1.4])
+                    resultat = c1.selectbox(
+                        "Résultat", listes.codes(listes.RESULTATS_MICROBIO),
+                        format_func=lambda c: listes.libelle(listes.RESULTATS_MICROBIO, c),
+                        key=f"res_{ligne['id']}",
+                    )
+                    germe = c2.text_input("Germe", key=f"germe_{ligne['id']}")
+                    antibiogramme = st.text_area(
+                        "Antibiogramme", key=f"atb_{ligne['id']}", height=70
+                    )
+                    if st.form_submit_button("Enregistrer le résultat"):
+                        micro_service.completer(
+                            base, ligne["id"],
+                            {"resultat": resultat, "germe": germe or None,
+                             "antibiogramme": antibiogramme or None},
+                            utilisateur_id=utilisateur_id,
+                        )
+                        st.rerun()
+        rendus = [l for l in lignes if l["resultat"] != "en_cours"]
+        if rendus:
+            theme.bloc(
+                "Résultats rendus",
+                [
+                    f"{format_date_fr(l['date_prelevement'])} · "
+                    f"{listes.libelle(listes.PRELEVEMENTS, l['type_prelevement'])} — "
+                    f"{listes.libelle(listes.RESULTATS_MICROBIO, l['resultat'])}"
+                    + (f" : {l['germe']}" if l["germe"] else "")
+                    for l in rendus
+                ],
+                theme.VIOLET,
+            )
+        infections = micro_service.infections_du_sejour(base, sejour["id"])
+        if infections:
+            theme.bloc(
+                "Infections déclarées",
+                [
+                    f"{format_date_fr(i['date_diagnostic'])} · "
+                    f"{listes.libelle(listes.INFECTIONS_NOSOCOMIALES, i['type'])}"
+                    + (f" ({i['germe']})" if i["germe"] else "")
+                    + ("" if micro_service.acquise_en_reanimation(sejour, i)
+                       else " — présente à l'admission, non comptée comme acquise")
+                    for i in infections
+                ],
+                theme.ROUGE,
+            )
+        if not lignes and not micro_service.infections_du_sejour(base, sejour["id"]):
+            st.caption("Aucun prélèvement enregistré pour ce séjour.")
 
 
 def saisie_bilan(sejour: dict) -> None:
@@ -1019,11 +1396,11 @@ def saisie_bilan(sejour: dict) -> None:
             gaz[cle] = valeur
 
     # Valeurs dérivées, affichées dès que leurs ingrédients sont là.
-    age = age_ans(sejour["date_naissance"])
+    age = age_ans(sejour.get("date_naissance"))
     derivees = [
         v for v in calculs.toutes_les_valeurs(
-            resultats=valeurs, gaz=gaz, poids_kg=sejour["poids_kg"],
-            taille_cm=sejour["taille_cm"], age_ans=age, sexe=sejour["sexe"],
+            resultats=valeurs, gaz=gaz, poids_kg=sejour.get("poids_kg"),
+            taille_cm=sejour.get("taille_cm"), age_ans=age, sexe=sejour.get("sexe"),
         )
         if v.disponible
     ]
@@ -1037,7 +1414,7 @@ def saisie_bilan(sejour: dict) -> None:
             ],
             theme.BLEU,
         )
-    if not sejour["poids_kg"]:
+    if not sejour.get("poids_kg"):
         st.caption(
             "Poids non renseigné à l'admission : la clairance de la créatinine "
             "ne peut pas être calculée."
@@ -1241,6 +1618,13 @@ def onglet_actes(sejour: dict) -> None:
                     if c2.button(
                         config_type.get("verbe_retrait", "Retirer"),
                         key=f"retrait_{ligne['id']}", use_container_width=True,
+                    ) and _controle(
+                        f"retrait_{ligne['id']}",
+                        coherence.verifier_dispositif(
+                            date_pose=etat_disp.date_pose,
+                            date_retrait=date_retrait,
+                            date_admission=sejour["date_admission"],
+                        ),
                     ):
                         dispositifs_service.retirer(
                             base, ligne["id"], date_retrait=str(date_retrait),
@@ -1280,7 +1664,12 @@ def onglet_actes(sejour: dict) -> None:
                 else:
                     details[champ] = st.number_input(etiquette, min_value=0.0, step=1.0, value=0.0)
             commentaire = st.text_input("Commentaire (facultatif)")
-            if st.form_submit_button("Enregistrer"):
+            if st.form_submit_button("Enregistrer") and _controle(
+                f"pose_{type_}",
+                coherence.verifier_dispositif(
+                    date_pose=date_pose, date_admission=sejour["date_admission"]
+                ),
+            ):
                 dispositifs_service.poser(
                     base, sejour_id=sejour["id"], type_=type_, date_pose=str(date_pose),
                     site=site, details={k: v for k, v in details.items() if v},
@@ -1396,7 +1785,11 @@ def ecran_fiche(sejour_id: str) -> None:
 # --------------------------------------------------------------------------
 # Routage
 # --------------------------------------------------------------------------
-if st.session_state.get("sejour_id"):
+if st.session_state.get("ecran") == "administration":
+    administration_ui.ecran(base, utilisateur_id)
+elif st.session_state.get("ecran") == "recherche":
+    recherche_ui.ecran(base, utilisateur_id)
+elif st.session_state.get("sejour_id"):
     ecran_fiche(st.session_state["sejour_id"])
 else:
     ecran_lits()

@@ -1,0 +1,25 @@
+{
+  "nom": "antibiotiques_ddd",
+  "libelle": "Antibiotiques : codes ATC et DDD",
+  "version": "2026-09-04.0-vide",
+  "date": "2026-09-04",
+  "note": "VOLONTAIREMENT VIDE. Les doses définies journalières (DDD) sont publiées par le centre collaborateur de l'OMS pour la méthodologie des statistiques des médicaments et changent d'une version à l'autre ; les recopier de mémoire produirait des chiffres faux et invérifiables. Chaque entrée est à remplir depuis la table officielle en vigueur, en notant sa version. Tant que ce fichier est vide, le logiciel rend la consommation en jours de traitement (DOT) pour 1000 journées d'hospitalisation, qui ne demande aucune DDD et se compare d'une année sur l'autre sans dépendre d'une révision de barème.",
+  "source_a_utiliser": "WHO Collaborating Centre for Drug Statistics Methodology, ATC/DDD Index (préciser l'année de la version utilisée).",
+  "version_table_ddd": "",
+  "valeurs": {
+    "molecules": [],
+    "fragments_antibiotiques": [
+      "amoxicilline", "augmentin", "clamoxyl", "ceftriaxone", "rocephine",
+      "cefotaxime", "claforan", "ceftazidime", "fortum", "cefepime",
+      "imipeneme", "tienam", "meropeneme", "ertapeneme", "invanz",
+      "pipéracilline", "piperacilline", "tazocilline", "tazobactam",
+      "gentamicine", "amikacine", "amiklin", "tobramycine",
+      "ciprofloxacine", "ciflox", "levofloxacine", "tavanic", "ofloxacine",
+      "vancomycine", "teicoplanine", "targocid", "linezolide", "zyvoxid",
+      "metronidazole", "flagyl", "clindamycine", "dalacine",
+      "colistine", "colimycine", "fosfomycine", "rifampicine",
+      "cotrimoxazole", "bactrim", "oxacilline", "cloxacilline", "bristopen",
+      "daptomycine", "cubicin", "tigecycline", "azithromycine", "erythromycine"
+    ]
+  }
+}

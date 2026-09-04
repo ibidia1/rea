@@ -1,0 +1,100 @@
+{
+  "nom": "voies",
+  "libelle": "Voies d'administration et champs demandés",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Les champs déclarés ici décident de ce que le formulaire demande.",
+  "valeurs": {
+    "ordre": [
+      "PO",
+      "IV",
+      "PSE",
+      "SC",
+      "AEROSOL",
+      "SOINS",
+      "KINE",
+      "ENTREES"
+    ],
+    "voies": {
+      "PO": {
+        "libelle": "PO",
+        "titre": "Per os",
+        "champs": [
+          "produit",
+          "dose",
+          "unite",
+          "rythme"
+        ]
+      },
+      "IV": {
+        "libelle": "IV",
+        "titre": "Intraveineux",
+        "champs": [
+          "produit",
+          "dose",
+          "unite",
+          "rythme",
+          "condition",
+          "volume_dilution"
+        ]
+      },
+      "PSE": {
+        "libelle": "PSE",
+        "titre": "Seringue électrique",
+        "champs": [
+          "produit",
+          "dilution",
+          "nb_ampoules",
+          "vitesse"
+        ]
+      },
+      "SC": {
+        "libelle": "S/C",
+        "titre": "Sous-cutané",
+        "champs": [
+          "produit",
+          "dose",
+          "unite",
+          "rythme"
+        ]
+      },
+      "AEROSOL": {
+        "libelle": "Aérosol",
+        "titre": "Aérosols",
+        "champs": [
+          "produit",
+          "dose",
+          "unite",
+          "rythme"
+        ]
+      },
+      "SOINS": {
+        "libelle": "Soins",
+        "titre": "Soins locaux",
+        "champs": [
+          "produit",
+          "rythme"
+        ]
+      },
+      "KINE": {
+        "libelle": "Kiné",
+        "titre": "Kinésithérapie",
+        "champs": [
+          "produit",
+          "rythme"
+        ]
+      },
+      "ENTREES": {
+        "libelle": "Entrées",
+        "titre": "Entrées",
+        "champs": [
+          "produit",
+          "vitesse",
+          "additifs",
+          "volume_24h",
+          "sous_type"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "nom": "types_admission",
+  "libelle": "Type d'admission (IGS II)",
+  "version": "2026-09-04.1",
+  "date": "2026-09-04",
+  "note": "Catégories de l'IGS II. « Chirurgie programmée » désigne une intervention prévue au moins 24 h à l'avance.",
+  "valeurs": [
+    [
+      "non_renseigne",
+      "Non renseigné"
+    ],
+    [
+      "medicale",
+      "Médicale"
+    ],
+    [
+      "chirurgie_programmee",
+      "Chirurgie programmée"
+    ],
+    [
+      "chirurgie_non_programmee",
+      "Chirurgie non programmée"
+    ]
+  ]
+}

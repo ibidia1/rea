@@ -1,0 +1,242 @@
+{
+  "nom": "cim10",
+  "libelle": "CIM-10 — sous-ensemble de démarrage (réanimation)",
+  "version": "2026-09-04.1-partiel",
+  "date": "2026-09-04",
+  "note": "SOUS-ENSEMBLE PARTIEL, à vérifier et à compléter. La CIM-10 complète compte plus de 14 000 codes ; ce fichier n'en contient qu'une sélection de motifs fréquents en réanimation, saisie à la main. Chaque code doit être contrôlé sur le volume officiel avant usage statistique, et la liste complétée au fil des admissions. Le format est celui de tous les référentiels : ajouter une ligne suffit, sans toucher au code.",
+  "source_a_utiliser": "CIM-10, version française en vigueur (ATIH).",
+  "valeurs": [
+    [
+      "A41.9",
+      "Sepsis, sans précision"
+    ],
+    [
+      "A41.5",
+      "Sepsis à autres micro-organismes Gram négatif"
+    ],
+    [
+      "A48.0",
+      "Gangrène gazeuse"
+    ],
+    [
+      "A35",
+      "Tétanos"
+    ],
+    [
+      "B99",
+      "Maladie infectieuse, sans précision"
+    ],
+    [
+      "E10.1",
+      "Diabète de type 1 avec acidocétose"
+    ],
+    [
+      "E11.0",
+      "Diabète de type 2 avec coma hyperosmolaire"
+    ],
+    [
+      "E87.1",
+      "Hypo-osmolarité et hyponatrémie"
+    ],
+    [
+      "E87.5",
+      "Hyperkaliémie"
+    ],
+    [
+      "G04.9",
+      "Encéphalite, myélite et encéphalomyélite, sans précision"
+    ],
+    [
+      "G40.9",
+      "Épilepsie, sans précision"
+    ],
+    [
+      "G41.9",
+      "État de mal épileptique, sans précision"
+    ],
+    [
+      "G61.0",
+      "Syndrome de Guillain-Barré"
+    ],
+    [
+      "G70.0",
+      "Myasthénie"
+    ],
+    [
+      "I21.9",
+      "Infarctus aigu du myocarde, sans précision"
+    ],
+    [
+      "I26.9",
+      "Embolie pulmonaire sans mention de cœur pulmonaire aigu"
+    ],
+    [
+      "I46.9",
+      "Arrêt cardiaque, sans précision"
+    ],
+    [
+      "I50.9",
+      "Insuffisance cardiaque, sans précision"
+    ],
+    [
+      "I60.9",
+      "Hémorragie sous-arachnoïdienne, sans précision"
+    ],
+    [
+      "I61.9",
+      "Hémorragie intracérébrale, sans précision"
+    ],
+    [
+      "I63.9",
+      "Infarctus cérébral, sans précision"
+    ],
+    [
+      "I71.0",
+      "Dissection de l'aorte (toute portion)"
+    ],
+    [
+      "J15.9",
+      "Pneumopathie bactérienne, sans précision"
+    ],
+    [
+      "J18.9",
+      "Pneumopathie, sans précision"
+    ],
+    [
+      "J44.1",
+      "BPCO avec exacerbation aiguë, sans précision"
+    ],
+    [
+      "J46",
+      "État de mal asthmatique"
+    ],
+    [
+      "J69.0",
+      "Pneumopathie due à des aliments ou des vomissements"
+    ],
+    [
+      "J80",
+      "Syndrome de détresse respiratoire de l'adulte"
+    ],
+    [
+      "J96.0",
+      "Insuffisance respiratoire aiguë"
+    ],
+    [
+      "K25.4",
+      "Ulcère de l'estomac, chronique ou non précisé, avec hémorragie"
+    ],
+    [
+      "K65.0",
+      "Péritonite aiguë"
+    ],
+    [
+      "K72.0",
+      "Insuffisance hépatique aiguë et subaiguë"
+    ],
+    [
+      "K85.9",
+      "Pancréatite aiguë, sans précision"
+    ],
+    [
+      "K92.2",
+      "Hémorragie gastro-intestinale, sans précision"
+    ],
+    [
+      "N17.9",
+      "Insuffisance rénale aiguë, sans précision"
+    ],
+    [
+      "N39.0",
+      "Infection des voies urinaires, siège non précisé"
+    ],
+    [
+      "O15.9",
+      "Éclampsie, sans précision de période"
+    ],
+    [
+      "O72.1",
+      "Autres hémorragies immédiates du post-partum"
+    ],
+    [
+      "R57.0",
+      "Choc cardiogénique"
+    ],
+    [
+      "R57.1",
+      "Choc hypovolémique"
+    ],
+    [
+      "R57.9",
+      "Choc, sans précision"
+    ],
+    [
+      "S06.5",
+      "Hémorragie sous-durale traumatique"
+    ],
+    [
+      "S06.6",
+      "Hémorragie sous-arachnoïdienne traumatique"
+    ],
+    [
+      "S06.9",
+      "Lésion traumatique intracrânienne, sans précision"
+    ],
+    [
+      "S22.4",
+      "Fractures multiples de côtes"
+    ],
+    [
+      "S27.0",
+      "Pneumothorax traumatique"
+    ],
+    [
+      "S32.0",
+      "Fracture d'une vertèbre lombaire"
+    ],
+    [
+      "S72.0",
+      "Fracture du col du fémur"
+    ],
+    [
+      "T07",
+      "Lésions traumatiques multiples, sans précision"
+    ],
+    [
+      "T31.2",
+      "Brûlures intéressant 20-29 % de la surface corporelle"
+    ],
+    [
+      "T31.3",
+      "Brûlures intéressant 30-39 % de la surface corporelle"
+    ],
+    [
+      "T39.1",
+      "Intoxication par dérivés du 4-aminophénol"
+    ],
+    [
+      "T42.4",
+      "Intoxication par benzodiazépines"
+    ],
+    [
+      "T60.0",
+      "Effet toxique de pesticides organophosphorés et carbamates"
+    ],
+    [
+      "T65.0",
+      "Effet toxique du cyanure"
+    ],
+    [
+      "T58",
+      "Effet toxique du monoxyde de carbone"
+    ],
+    [
+      "T79.4",
+      "Choc traumatique"
+    ],
+    [
+      "Z51.5",
+      "Soins palliatifs"
+    ]
+  ]
+}

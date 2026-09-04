@@ -1,24 +1,34 @@
-"""Listes codées (SPEC §4).
+"""Listes codées (SPEC §4) — chargées depuis `referentiels/` (règle R2).
 
 Chaque valeur a un **code stable** et un libellé affiché. Le code est ce qui
 part en base et en export ; le libellé peut être réécrit sans casser les
 statistiques déjà produites. Rien dans le programme ne doit stocker un libellé.
+
+Ce module ne contient plus les listes elles-mêmes : elles vivent dans des
+fichiers JSON versionnés, modifiables sans toucher au code (feuille de route,
+règle R2). Il ne reste ici que les noms exportés, les quelques constantes qui
+relèvent d'une règle de conception plutôt que d'un choix de service, et les
+fonctions d'accès.
 """
 
 from __future__ import annotations
 
+from . import referentiels
+
+_charger = referentiels.charger
+
 # --------------------------------------------------------------------------
 # Utilisateurs (SPEC §1.2)
 # --------------------------------------------------------------------------
-ROLES = (
-    ("interne", "Interne"),
-    ("resident", "Résident"),
-    ("senior", "Senior"),
-)
+ROLES = _charger("roles")
 
 # --------------------------------------------------------------------------
 # Trois états explicites (règle de conception 7)
 # --------------------------------------------------------------------------
+# Ces trois-là ne sont pas un référentiel : c'est une règle de conception du
+# logiciel (« ne pas savoir » n'est pas « absent »). Les sortir en fichier
+# laisserait croire qu'on peut les modifier — on ne peut pas, tout le code de
+# lecture repose dessus.
 TROIS_ETATS = (
     ("non_renseigne", "Non renseigné"),
     ("aucune", "Aucune"),
@@ -29,418 +39,124 @@ TROIS_ETATS_PRESENCE = (
     ("present", "Présent"),
     ("absent", "Absent"),
 )
+OUI_NON = (
+    ("non_renseigne", "Non renseigné"),
+    ("oui", "Oui"),
+    ("non", "Non"),
+)
 
 # --------------------------------------------------------------------------
 # Identité et séjour (SPEC §4.1)
 # --------------------------------------------------------------------------
-SEXES = (
-    ("M", "Masculin"),
-    ("F", "Féminin"),
-    ("non_renseigne", "Non renseigné"),
-)
-
-PROVENANCES = (
-    ("urgences", "Urgences"),
-    ("service", "Service (préciser)"),
-    ("bloc", "Bloc opératoire"),
-    ("consultation_ar", "Consultation externe A-R"),
-    ("autre_hopital", "Autre hôpital"),
-    ("domicile", "Domicile"),
-)
+SEXES = _charger("sexes")
+PROVENANCES = _charger("provenances")
 # Provenances qui appellent un détail écrit (nom du service, de l'hôpital).
-PROVENANCES_AVEC_DETAIL = ("service", "autre_hopital")
-
-MODES_SORTIE = (
-    ("domicile", "Domicile"),
-    ("transfert_service", "Transfert vers un service (préciser)"),
-    ("transfert_hopital", "Transfert vers un autre hôpital"),
-    ("reeducation", "Rééducation"),
-    ("contre_avis", "Sortie contre avis médical"),
-    ("deces", "Décès"),
-)
+PROVENANCES_AVEC_DETAIL = referentiels.annexe("provenances", "avec_detail")
+MODES_SORTIE = _charger("modes_sortie")
 
 # --------------------------------------------------------------------------
 # Antécédents (SPEC §4.2)
 # --------------------------------------------------------------------------
-CATEGORIES_ANTECEDENT = (
-    ("personnel", "Personnel"),
-    ("familial", "Familial"),
-    ("chirurgical", "Chirurgical"),
-    ("allergie", "Allergie"),
-    ("habitude", "Habitude de vie"),
-)
-
+CATEGORIES_ANTECEDENT = _charger("categories_antecedent")
 # Liste courte en accès direct — à valider par un senior (SPEC §4.2).
-ANTECEDENTS_COURTS = (
-    ("hta", "HTA", "personnel"),
-    ("diabete_2", "Diabète type 2", "personnel"),
-    ("diabete_1", "Diabète type 1", "personnel"),
-    ("cardiopathie_ischemique", "Cardiopathie ischémique", "personnel"),
-    ("insuffisance_cardiaque", "Insuffisance cardiaque", "personnel"),
-    ("bpco", "BPCO", "personnel"),
-    ("asthme", "Asthme", "personnel"),
-    ("irc", "Insuffisance rénale chronique", "personnel"),
-    ("cirrhose", "Cirrhose", "personnel"),
-    ("avc", "AVC", "personnel"),
-    ("tabagisme", "Tabagisme", "habitude"),
-    ("ethylisme", "Éthylisme", "habitude"),
-    ("anticoagulant", "Anticoagulant au long cours", "personnel"),
-    ("antiagregant", "Antiagrégant", "personnel"),
-)
-
+ANTECEDENTS_COURTS = _charger("antecedents_courts")
 # Conditions chroniques alignées sur le dictionnaire ANZICS (SPEC §9.5).
-# Elles ne remplacent pas les antécédents : elles les résument en sept
-# catégories comparables à la littérature internationale.
-CONDITIONS_CHRONIQUES = (
-    ("respiratoire", "Insuffisance respiratoire chronique"),
-    ("cardiovasculaire", "Insuffisance cardiovasculaire chronique"),
-    ("renale", "Insuffisance rénale chronique"),
-    ("hepatique", "Insuffisance hépatique chronique"),
-    ("immunosuppression", "Immunosuppression"),
-    ("cancer", "Cancer (dont hémopathie)"),
-    ("diabete", "Diabète"),
-    ("aucune", "Aucune de ces conditions"),
-)
+CONDITIONS_CHRONIQUES = _charger("conditions_chroniques")
 
 # --------------------------------------------------------------------------
 # Motif traumatique (SPEC §4.3)
 # --------------------------------------------------------------------------
-REGIONS_TRAUMATIQUES = (
-    ("cranien", "Traumatisme crânien"),
-    ("thoracique", "Traumatisme thoracique"),
-    ("abdominal", "Traumatisme abdominal"),
-    ("pelvien", "Traumatisme pelvien"),
-    ("peripherique", "Traumatisme périphérique (massif facial, membres, rachis)"),
-)
-
-MECANISMES = (
-    ("avp_deux_roues", "AVP deux-roues"),
-    ("avp_quatre_roues", "AVP quatre-roues"),
-    ("avp_pieton", "AVP piéton"),
-    ("chute_hauteur", "Chute de sa hauteur"),
-    ("chute_lieu_eleve", "Chute d'un lieu élevé (préciser hauteur)"),
-    ("arme_blanche", "Agression par arme blanche"),
-    ("arme_a_feu", "Agression par arme à feu"),
-    ("contondante", "Agression contondante"),
-    ("accident_travail", "Accident de travail"),
-    ("accident_domestique", "Accident domestique"),
-    ("sport", "Sport"),
-    ("ecrasement", "Écrasement / ensevelissement"),
-    ("blast", "Blast / explosion"),
-    ("autre", "Autre"),
-    ("non_renseigne", "Non renseigné"),
-)
-MECANISMES_AVEC_DETAIL = ("chute_lieu_eleve", "autre")
+REGIONS_TRAUMATIQUES = _charger("regions_traumatiques")
+MECANISMES = _charger("mecanismes")
+MECANISMES_AVEC_DETAIL = referentiels.annexe("mecanismes", "avec_detail")
 
 # --------------------------------------------------------------------------
 # Motif non traumatique (SPEC §4.4)
 # --------------------------------------------------------------------------
 # Structure : groupe → (code, libellé, champs de précision attendus).
-MOTIFS_NON_TRAUMATIQUES: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = {
-    "Défaillance circulatoire": (
-        ("choc_septique", "Choc septique", ("porte_entree",)),
-        ("choc_hemorragique", "Choc hémorragique non traumatique", ()),
-        ("choc_cardiogenique", "Choc cardiogénique", ()),
-        ("choc_anaphylactique", "Choc anaphylactique", ()),
-        ("choc_obstructif", "Choc obstructif", ()),
-    ),
-    "Défaillance respiratoire": (
-        ("sdra", "SDRA", ()),
-        ("pneumopathie_grave", "Pneumopathie grave", ()),
-        ("decompensation_bpco", "Décompensation de BPCO", ()),
-        ("oap_cardiogenique", "OAP cardiogénique", ()),
-        ("embolie_pulmonaire", "Embolie pulmonaire", ()),
-        ("inhalation", "Inhalation", ()),
-        ("obstruction_vas", "Obstruction des voies aériennes", ()),
-    ),
-    "Défaillance neurologique": (
-        ("avc_ischemique", "AVC ischémique", ()),
-        ("avc_hemorragique", "AVC hémorragique", ()),
-        ("hemorragie_meningee", "Hémorragie méningée", ()),
-        ("etat_de_mal", "État de mal épileptique", ()),
-        ("meningo_encephalite", "Méningo-encéphalite", ()),
-        ("coma_metabolique", "Coma métabolique", ()),
-        ("coma_toxique", "Coma toxique", ()),
-    ),
-    "Postopératoire": (
-        ("postop_programme", "Surveillance postopératoire lourde programmée", ()),
-        ("postop_complication", "Complication postopératoire non programmée", ("texte",)),
-    ),
-    "Brûlures": (
-        ("brulure", "Brûlure", ("brulure",)),
-    ),
-    "Métabolique et rénal": (
-        ("acidocetose", "Acidocétose diabétique", ()),
-        ("coma_hyperosmolaire", "Coma hyperosmolaire", ()),
-        ("dysnatremie", "Dysnatrémie sévère", ()),
-        ("dyskaliemie", "Dyskaliémie sévère", ()),
-        ("ira_epuration", "Insuffisance rénale aiguë avec indication d'épuration", ()),
-    ),
-    "Intoxications et envenimations": (
-        ("intox_medicamenteuse", "Intoxication médicamenteuse", ()),
-        ("intox_organophosphores", "Organophosphorés", ()),
-        ("intox_co", "Monoxyde de carbone", ()),
-        ("intox_caustique", "Caustique", ()),
-        ("envenimation_scorpionique", "Envenimation scorpionique", ()),
-        ("envenimation_ophidienne", "Envenimation ophidienne", ()),
-    ),
-    "Obstétrical": (
-        ("preeclampsie", "Prééclampsie sévère", ()),
-        ("eclampsie", "Éclampsie", ()),
-        ("hellp", "HELLP syndrome", ()),
-        ("hemorragie_post_partum", "Hémorragie du post-partum", ()),
-        ("embolie_amniotique", "Embolie amniotique", ()),
-    ),
-    "Autre": (
-        ("post_arret_cardiaque", "Post-arrêt cardiaque", ()),
-        ("tetanos", "Tétanos", ()),
-        ("autre", "Autre", ("texte",)),
-    ),
-}
-
-PORTES_ENTREE_SEPSIS = (
-    ("pulmonaire", "Pulmonaire"),
-    ("digestive", "Digestive"),
-    ("urinaire", "Urinaire"),
-    ("cutanee", "Cutanée — parties molles"),
-    ("catheter", "Cathéter"),
-    ("meningee", "Méningée"),
-    ("indeterminee", "Indéterminée"),
+MOTIFS_NON_TRAUMATIQUES: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    _charger("motifs_non_traumatiques")
 )
-
-PROFONDEURS_BRULURE = (
-    ("second_degre_superficiel", "2e degré superficiel"),
-    ("second_degre_profond", "2e degré profond"),
-    ("troisieme_degre", "3e degré"),
-    ("mixte", "Mixte"),
-)
-AGENTS_BRULURE = (
-    ("thermique", "Thermique"),
-    ("electrique", "Électrique"),
-    ("chimique", "Chimique"),
-)
+PORTES_ENTREE_SEPSIS = _charger("portes_entree_sepsis")
+PROFONDEURS_BRULURE = _charger("profondeurs_brulure")
+AGENTS_BRULURE = _charger("agents_brulure")
 
 # --------------------------------------------------------------------------
 # Interventions (SPEC §4.6) — liste provisoire, question ouverte 10
 # --------------------------------------------------------------------------
-GESTES_CHIRURGICAUX = (
-    ("laparotomie", "Laparotomie exploratrice"),
-    ("splenectomie", "Splénectomie"),
-    ("hepatique", "Chirurgie hépatique d'hémostase"),
-    ("drainage_thoracique", "Drainage thoracique"),
-    ("thoracotomie", "Thoracotomie"),
-    ("craniectomie", "Craniectomie décompressive"),
-    ("evacuation_hematome", "Évacuation d'hématome intracrânien"),
-    ("dvE", "Dérivation ventriculaire externe"),
-    ("fixateur_externe", "Fixateur externe"),
-    ("osteosynthese", "Ostéosynthèse"),
-    ("parage", "Parage de plaie / excision-greffe"),
-    ("tracheotomie", "Trachéotomie"),
-    ("cesarienne", "Césarienne"),
-    ("hysterectomie_hemostase", "Hystérectomie d'hémostase"),
-    ("autre", "Autre (préciser)"),
-)
+GESTES_CHIRURGICAUX = _charger("gestes_chirurgicaux")
 
 # --------------------------------------------------------------------------
 # Prescription (SPEC §5.2)
 # --------------------------------------------------------------------------
 # Chaque voie déclare les champs que le formulaire doit demander — et donc
 # aussi ceux qu'il ne doit pas demander.
-VOIES: dict[str, dict] = {
-    "PO": {
-        "libelle": "PO",
-        "titre": "Per os",
-        "champs": ("produit", "dose", "unite", "rythme"),
-    },
-    "IV": {
-        "libelle": "IV",
-        "titre": "Intraveineux",
-        "champs": ("produit", "dose", "unite", "rythme", "condition", "volume_dilution"),
-    },
-    "PSE": {
-        "libelle": "PSE",
-        "titre": "Seringue électrique",
-        "champs": ("produit", "dilution", "nb_ampoules", "vitesse"),
-    },
-    "SC": {
-        "libelle": "S/C",
-        "titre": "Sous-cutané",
-        "champs": ("produit", "dose", "unite", "rythme"),
-    },
-    "AEROSOL": {
-        "libelle": "Aérosol",
-        "titre": "Aérosols",
-        "champs": ("produit", "dose", "unite", "rythme"),
-    },
-    "SOINS": {
-        "libelle": "Soins",
-        "titre": "Soins locaux",
-        "champs": ("produit", "rythme"),
-    },
-    "KINE": {
-        "libelle": "Kiné",
-        "titre": "Kinésithérapie",
-        "champs": ("produit", "rythme"),
-    },
-    "ENTREES": {
-        "libelle": "Entrées",
-        "titre": "Entrées",
-        "champs": ("produit", "vitesse", "additifs", "volume_24h", "sous_type"),
-    },
-}
-ORDRE_VOIES = ("PO", "IV", "PSE", "SC", "AEROSOL", "SOINS", "KINE", "ENTREES")
+VOIES: dict[str, dict] = _charger("voies", "voies")
+ORDRE_VOIES = _charger("voies", "ordre")
 
 # Sous-types de la voie « Entrées » : une perfusion se prescrit en cc/h, une
 # nutrition en volume sur 24 h. Les deux comptent dans le bilan des entrées.
-SOUS_TYPES_ENTREES = (
-    ("perfusion", "Perfusion (cc/h)"),
-    ("nutrition_enterale", "Nutrition entérale (mL/24 h)"),
-    ("nutrition_parenterale", "Nutrition parentérale (mL/24 h)"),
-)
-
-RYTHMES = (
-    ("x1/j", "×1/j"),
-    ("x2/j", "×2/j"),
-    ("x3/j", "×3/j"),
-    ("x4/j", "×4/j"),
-    ("x6/j", "×6/j"),
-    ("1j/2", "1 jour sur 2"),
-    ("continu", "Continu"),
-    ("conditionnel", "Conditionnel"),
-)
-
-UNITES = ("mg", "g", "µg", "UI", "MUI", "mL", "cc", "cp", "amp", "bouffée", "%")
-
-STATUTS_LIGNE = (
-    ("active", "Active"),
-    ("arretee", "Arrêtée"),
-)
+SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
+RYTHMES = _charger("rythmes")
+UNITES = _charger("unites")
+STATUTS_LIGNE = _charger("statuts_ligne")
 
 # --------------------------------------------------------------------------
 # Bilans à demander pour le lendemain (SPEC §5.2 bis) — à valider
 # --------------------------------------------------------------------------
-EXAMENS_A_DEMANDER = (
-    ("nfs", "NFS"),
-    ("ionogramme", "Ionogramme"),
-    ("creatinine", "Créatinine"),
-    ("uree", "Urée"),
-    ("crp", "CRP"),
-    ("procalcitonine", "Procalcitonine"),
-    ("gds", "Gaz du sang"),
-    ("tp_inr", "TP / INR"),
-    ("bilan_hepatique", "Bilan hépatique"),
-    ("hemoculture", "Hémoculture"),
-    ("ecbu", "ECBU"),
-    ("pdp", "PDP"),
-)
+EXAMENS_A_DEMANDER = _charger("examens_a_demander")
 
 # --------------------------------------------------------------------------
 # Explorations (SPEC §6) — liste à compléter avec un senior
 # --------------------------------------------------------------------------
 # Chaque type déclare ses valeurs chiffrées : (clé, libellé, unité, type).
-TYPES_EXPLORATION: dict[str, dict] = {
-    "dtc": {
-        "libelle": "DTC (Doppler transcrânien)",
-        "valeurs": (
-            ("ip_droit", "IP droit", "", "nombre"),
-            ("ip_gauche", "IP gauche", "", "nombre"),
-            ("vm_droite", "Vm droite", "cm/s", "nombre"),
-            ("vm_gauche", "Vm gauche", "cm/s", "nombre"),
-        ),
-    },
-    "tdm_cerebrale": {
-        "libelle": "TDM cérébrale",
-        "valeurs": (
-            ("lesion", "Lésion", "", "trois_etats"),
-            ("type_lesion", "Type de lésion", "", "texte"),
-        ),
-    },
-    "ett": {
-        "libelle": "ETT",
-        "valeurs": (
-            ("fevg", "FEVG", "%", "nombre"),
-            ("itv_sa", "ITV sous-aortique", "cm", "nombre"),
-            ("debit_cardiaque", "Débit cardiaque", "L/min", "nombre"),
-            ("vci", "Diamètre VCI", "mm", "nombre"),
-            ("vci_compliance", "VCI compliante", "", "trois_etats"),
-            ("paps", "PAPS", "mmHg", "nombre"),
-            ("e_sur_a", "E/A", "", "nombre"),
-            ("e_sur_e_prime", "E/e′", "", "nombre"),
-            ("tapse", "TAPSE", "mm", "nombre"),
-            ("rapport_vd_vg", "Rapport VD/VG", "", "nombre"),
-            ("epanchement", "Épanchement péricardique", "", "trois_etats"),
-            ("valvulopathie", "Valvulopathie", "", "texte"),
-        ),
-    },
-    "ecg": {
-        "libelle": "ECG",
-        "valeurs": (
-            ("rythme", "Rythme", "", "texte"),
-            ("fc", "Fréquence", "/min", "nombre"),
-            ("pr", "PR", "ms", "nombre"),
-            ("qrs", "Durée QRS", "ms", "nombre"),
-            ("qtc", "QTc", "ms", "nombre"),
-            ("axe", "Axe", "°", "nombre"),
-            ("trouble_repolarisation", "Trouble de repolarisation", "", "trois_etats"),
-            ("territoire", "Territoire", "", "texte"),
-        ),
-    },
-    "echo_pleuro_pulmonaire": {
-        "libelle": "Échographie pleuro-pulmonaire",
-        "valeurs": (
-            ("epanchement_droit", "Épanchement droit", "", "trois_etats"),
-            ("epanchement_gauche", "Épanchement gauche", "", "trois_etats"),
-            ("condensation", "Condensation", "", "trois_etats"),
-            ("lignes_b", "Lignes B", "", "trois_etats"),
-        ),
-    },
-    "radio_thorax": {
-        "libelle": "Radiographie thoracique",
-        "valeurs": (
-            ("foyer", "Foyer", "", "trois_etats"),
-            ("siege_foyer", "Siège du foyer", "", "texte"),
-        ),
-    },
-    "eeg": {
-        "libelle": "EEG",
-        "valeurs": (),
-    },
-    "fibroscopie": {
-        "libelle": "Fibroscopie bronchique",
-        "valeurs": (
-            ("indication", "Indication", "", "texte"),
-            ("prelevement", "Prélèvement associé", "", "texte"),
-        ),
-    },
-}
+TYPES_EXPLORATION: dict[str, dict] = _charger("types_exploration")
 
 # --------------------------------------------------------------------------
 # Microbiologie (SPEC §7.4)
 # --------------------------------------------------------------------------
-PRELEVEMENTS = (
-    ("hemoculture", "Hémoculture"),
-    ("ecbu", "ECBU"),
-    ("lcr", "Ponction lombaire"),
-    ("pdp", "PDP"),
-    ("catheter", "Prélèvement de cathéter"),
-    ("autre", "Autre"),
-)
-RESULTATS_MICROBIO = (
-    ("en_cours", "En cours"),
-    ("sterile", "Stérile"),
-    ("positif", "Positif"),
-)
+PRELEVEMENTS = _charger("prelevements")
+RESULTATS_MICROBIO = _charger("resultats_microbio")
 
 # --------------------------------------------------------------------------
 # Infections nosocomiales (SPEC §9.2)
 # --------------------------------------------------------------------------
-INFECTIONS_NOSOCOMIALES = (
-    ("pavm", "PAVM"),
-    ("ilc", "Infection liée au cathéter"),
-    ("iu", "Infection urinaire"),
-    ("iss", "Infection du site opératoire"),
-    ("autre", "Autre"),
+INFECTIONS_NOSOCOMIALES = _charger("infections_nosocomiales")
+
+# --------------------------------------------------------------------------
+# Dispositifs et actes invasifs (écran « Explorations et actes »)
+# --------------------------------------------------------------------------
+# Chaque type déclare :
+#   - le libellé affiché
+#   - `sites`   : liste de sites possibles, vide si la notion n'a pas de sens
+#   - `champs`  : champs supplémentaires demandés à la pose
+#   - `en_cours`/`apres` : comment le compteur de jours se lit une fois posé
+#     puis une fois retiré (ex. « Intubé J3 » → « Extubé J2 »)
+#
+# Le compteur est calculé, jamais saisi : c'est tout l'intérêt de la table.
+TYPES_DISPOSITIF: dict[str, dict] = _charger("types_dispositif", "types")
+ORDRE_DISPOSITIFS = _charger("types_dispositif", "ordre")
+# Champs supplémentaires : libellé du formulaire, puis préfixe et unité pour
+# l'affichage compact (« repère 22 cm », « 3 voies »).
+CHAMPS_DISPOSITIF: dict[str, tuple[str, str, str]] = _charger(
+    "types_dispositif", "champs"
 )
+
+# --------------------------------------------------------------------------
+# Éléments fixes des quatre plans de l'évolution (SPEC §8.1)
+# --------------------------------------------------------------------------
+# Ce que l'interne écrivait à la main tous les jours, devenu saisissable en un
+# geste — et donc exploitable en cinétique.
+#   (clé, libellé, unité, type, plage affichée en gris)
+ELEMENTS_PLAN: dict[str, tuple[tuple[str, str, str, str, str], ...]] = _charger(
+    "elements_plan"
+)
+PUPILLES = _charger("pupilles")
+
+# Escarres — grades NPUAP/EPUAP
+LOCALISATIONS_ESCARRE = _charger("escarres", "localisations")
+GRADES_ESCARRE = _charger("escarres", "grades")
+
 
 # --------------------------------------------------------------------------
 # Helpers
@@ -486,234 +202,7 @@ def precisions_motif(code: str) -> tuple[str, ...]:
     return ()
 
 
-# --------------------------------------------------------------------------
-# Dispositifs et actes invasifs (écran « Explorations et actes »)
-# --------------------------------------------------------------------------
-# Chaque type déclare :
-#   - le libellé affiché
-#   - `sites`   : liste de sites possibles, vide si la notion n'a pas de sens
-#   - `champs`  : champs supplémentaires demandés à la pose
-#   - `en_cours`/`apres` : comment le compteur de jours se lit une fois posé
-#     puis une fois retiré (ex. « Intubé J3 » → « Extubé J2 »)
-#
-# Le compteur est calculé, jamais saisi : c'est tout l'intérêt de la table.
-TYPES_DISPOSITIF: dict[str, dict] = {
-    "intubation": {
-        "libelle": "Intubation",
-        "sites": (),
-        "champs": ("taille_sonde", "reperage_cm"),
-        "en_cours": "Intubé",
-        "apres": "Extubé",
-        "verbe_retrait": "Extubation",
-    },
-    "sedation": {
-        "libelle": "Sédation",
-        "sites": (),
-        "champs": ("molecules",),
-        "en_cours": "Sédaté",
-        "apres": "Arrêt sédation",
-        "verbe_retrait": "Arrêt de la sédation",
-    },
-    "tracheotomie": {
-        "libelle": "Trachéotomie (canule)",
-        "sites": (),
-        "champs": ("taille_sonde",),
-        "en_cours": "Canule de trachéotomie",
-        "apres": "Décanulé",
-        "verbe_retrait": "Décanulation",
-    },
-    "sng": {
-        "libelle": "Sonde nasogastrique",
-        "sites": ("Narine droite", "Narine gauche", "Bouche"),
-        "champs": ("fixation_cm",),
-        "en_cours": "SNG",
-        "apres": "SNG retirée",
-        "verbe_retrait": "Retrait",
-    },
-    "gastrostomie": {
-        "libelle": "Gastrostomie",
-        "sites": (),
-        "champs": (),
-        "en_cours": "Gastrostomie",
-        "apres": "Gastrostomie retirée",
-        "verbe_retrait": "Retrait",
-    },
-    "sonde_urinaire": {
-        "libelle": "Sonde urinaire",
-        "sites": (),
-        "champs": ("taille_sonde",),
-        "en_cours": "Sondé",
-        "apres": "Sonde urinaire retirée",
-        "verbe_retrait": "Ablation",
-    },
-    "ktsp": {
-        "libelle": "Cathéter sus-pubien (KTSP)",
-        "sites": (),
-        "champs": (),
-        "en_cours": "KTSP",
-        "apres": "KTSP retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "kt_central": {
-        "libelle": "Cathéter veineux central (KT)",
-        "sites": (
-            "Jugulaire interne droite", "Jugulaire interne gauche",
-            "Sous-clavière droite", "Sous-clavière gauche",
-            "Fémorale droite", "Fémorale gauche",
-        ),
-        "champs": ("nb_voies",),
-        "en_cours": "KT central",
-        "apres": "KT central retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "picc": {
-        "libelle": "PICC line",
-        "sites": ("Bras droit", "Bras gauche"),
-        "champs": (),
-        "en_cours": "PICC",
-        "apres": "PICC retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "kta": {
-        "libelle": "Cathéter artériel (KTA)",
-        "sites": (
-            "Radiale droite", "Radiale gauche",
-            "Fémorale droite", "Fémorale gauche",
-            "Humérale droite", "Humérale gauche",
-        ),
-        "champs": (),
-        "en_cours": "KTA",
-        "apres": "KTA retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "voie_peripherique": {
-        "libelle": "Voie veineuse périphérique",
-        "sites": ("Membre supérieur droit", "Membre supérieur gauche",
-                  "Membre inférieur droit", "Membre inférieur gauche"),
-        "champs": (),
-        "en_cours": "VVP",
-        "apres": "VVP retirée",
-        "verbe_retrait": "Ablation",
-    },
-    "drain_thoracique": {
-        "libelle": "Drain thoracique",
-        "sites": ("Droit", "Gauche", "Bilatéral"),
-        "champs": (),
-        "en_cours": "Drain thoracique",
-        "apres": "Drain thoracique retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "drain_abdominal": {
-        "libelle": "Drain abdominal",
-        "sites": (),
-        "champs": (),
-        "en_cours": "Drain abdominal",
-        "apres": "Drain abdominal retiré",
-        "verbe_retrait": "Ablation",
-    },
-    "dve": {
-        "libelle": "Dérivation ventriculaire externe",
-        "sites": ("Droite", "Gauche"),
-        "champs": (),
-        "en_cours": "DVE",
-        "apres": "DVE retirée",
-        "verbe_retrait": "Ablation",
-    },
-    "eer": {
-        "libelle": "Épuration extra-rénale (cathéter de dialyse)",
-        "sites": ("Jugulaire interne droite", "Jugulaire interne gauche",
-                  "Fémorale droite", "Fémorale gauche"),
-        "champs": ("technique",),
-        "en_cours": "EER",
-        "apres": "EER arrêtée",
-        "verbe_retrait": "Arrêt",
-    },
-}
-
-ORDRE_DISPOSITIFS = (
-    "intubation", "sedation", "tracheotomie", "sng", "gastrostomie",
-    "kt_central", "picc", "kta", "voie_peripherique",
-    "sonde_urinaire", "ktsp", "drain_thoracique", "drain_abdominal", "dve", "eer",
-)
-
-# Champs supplémentaires : libellé du formulaire, puis préfixe et unité pour
-# l'affichage compact (« repère 22 cm », « 3 voies »). Même logique que les
-# voies de prescription : on ne demande que ce qui a un sens.
-CHAMPS_DISPOSITIF: dict[str, tuple[str, str, str]] = {
-    #   clé            libellé du formulaire          préfixe     unité
-    "taille_sonde": ("Taille / calibre", "n°", ""),
-    "reperage_cm": ("Repère à l'arcade dentaire", "repère", "cm"),
-    "fixation_cm": ("Fixation", "fixée à", "cm"),
-    "molecules": ("Molécules", "", ""),
-    "nb_voies": ("Nombre de voies", "", "voies"),
-    "technique": ("Technique", "", ""),
-}
-
-
 def libelle_dispositif(code: str | None) -> str:
     if not code:
         return ""
     return TYPES_DISPOSITIF.get(code, {}).get("libelle", code)
-
-
-# --------------------------------------------------------------------------
-# Éléments fixes des quatre plans de l'évolution (SPEC §8.1)
-# --------------------------------------------------------------------------
-# Ce que l'interne écrivait à la main tous les jours, devenu saisissable en un
-# geste — et donc exploitable en cinétique.
-#   (clé, libellé, unité, type, plage affichée en gris)
-ELEMENTS_PLAN: dict[str, tuple[tuple[str, str, str, str, str], ...]] = {
-    "neurologique": (
-        ("rass", "RASS", "", "nombre", "−5 à +4"),
-        ("glasgow", "Glasgow", "/15", "nombre", "3 – 15"),
-        ("pupilles", "Pupilles", "", "liste_pupilles", ""),
-        ("deficit", "Déficit focal", "", "trois_etats", ""),
-    ),
-    "respiratoire": (
-        ("fr_clinique", "FR", "/min", "nombre", "12 – 25"),
-        ("spo2_clinique", "SpO₂", "%", "nombre", "≥ 94"),
-        ("encombrement", "Encombrement", "", "trois_etats", ""),
-    ),
-    "hemodynamique": (
-        ("fc", "FC", "/min", "nombre", "60 – 100"),
-        ("pas", "PA systolique", "mmHg", "nombre", "100 – 140"),
-        ("pad", "PA diastolique", "mmHg", "nombre", "60 – 90"),
-        ("pam", "PAM", "mmHg", "nombre", "≥ 65"),
-        ("diurese_24h", "Diurèse /24 h", "mL", "nombre", "> 1000"),
-        ("diurese_conservee", "Diurèse conservée", "", "oui_non", ""),
-        ("signes_choc", "Signes périphériques de choc", "", "trois_etats", ""),
-    ),
-    "infectieux": (
-        ("temperature", "Température", "°C", "nombre", "36,5 – 37,5"),
-        ("frissons", "Frissons", "", "trois_etats", ""),
-    ),
-}
-
-PUPILLES = (
-    ("symetriques_reactives", "Symétriques et réactives"),
-    ("myosis", "Myosis"),
-    ("mydriase_bilaterale", "Mydriase bilatérale"),
-    ("anisocorie_droite", "Anisocorie droite"),
-    ("anisocorie_gauche", "Anisocorie gauche"),
-    ("areactives", "Aréactives"),
-)
-
-OUI_NON = (
-    ("non_renseigne", "Non renseigné"),
-    ("oui", "Oui"),
-    ("non", "Non"),
-)
-
-# Escarres — grades NPUAP/EPUAP
-LOCALISATIONS_ESCARRE = (
-    "Sacrum", "Talon droit", "Talon gauche", "Trochanter droit", "Trochanter gauche",
-    "Ischion droit", "Ischion gauche", "Occiput", "Oreille droite", "Oreille gauche",
-    "Coude droit", "Coude gauche", "Malléole droite", "Malléole gauche",
-    "Narine (sonde)", "Commissure labiale (sonde)", "Autre",
-)
-GRADES_ESCARRE = (
-    (1, "Grade 1 — érythème qui ne blanchit pas"),
-    (2, "Grade 2 — perte cutanée partielle (phlyctène)"),
-    (3, "Grade 3 — perte cutanée totale, graisse visible"),
-    (4, "Grade 4 — perte tissulaire totale, os ou tendon visible"),
-)

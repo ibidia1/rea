@@ -1,0 +1,79 @@
+{
+  "nom": "antecedents_courts",
+  "libelle": "Antécédents fréquents en accès direct",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Liste courte à valider par un senior (SPEC §4.2). Format : [code, libellé, catégorie].",
+  "valeurs": [
+    [
+      "hta",
+      "HTA",
+      "personnel"
+    ],
+    [
+      "diabete_2",
+      "Diabète type 2",
+      "personnel"
+    ],
+    [
+      "diabete_1",
+      "Diabète type 1",
+      "personnel"
+    ],
+    [
+      "cardiopathie_ischemique",
+      "Cardiopathie ischémique",
+      "personnel"
+    ],
+    [
+      "insuffisance_cardiaque",
+      "Insuffisance cardiaque",
+      "personnel"
+    ],
+    [
+      "bpco",
+      "BPCO",
+      "personnel"
+    ],
+    [
+      "asthme",
+      "Asthme",
+      "personnel"
+    ],
+    [
+      "irc",
+      "Insuffisance rénale chronique",
+      "personnel"
+    ],
+    [
+      "cirrhose",
+      "Cirrhose",
+      "personnel"
+    ],
+    [
+      "avc",
+      "AVC",
+      "personnel"
+    ],
+    [
+      "tabagisme",
+      "Tabagisme",
+      "habitude"
+    ],
+    [
+      "ethylisme",
+      "Éthylisme",
+      "habitude"
+    ],
+    [
+      "anticoagulant",
+      "Anticoagulant au long cours",
+      "personnel"
+    ],
+    [
+      "antiagregant",
+      "Antiagrégant",
+      "personnel"
+    ]
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "nom": "sexes",
+  "libelle": "Sexe",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "M",
+      "Masculin"
+    ],
+    [
+      "F",
+      "Féminin"
+    ],
+    [
+      "non_renseigne",
+      "Non renseigné"
+    ]
+  ]
+}

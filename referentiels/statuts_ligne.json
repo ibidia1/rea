@@ -1,0 +1,17 @@
+{
+  "nom": "statuts_ligne",
+  "libelle": "Statuts d'une ligne de prescription",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "active",
+      "Active"
+    ],
+    [
+      "arretee",
+      "Arrêtée"
+    ]
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "code": "igs2",
+  "libelle": "IGS II",
+  "titre": "Indice de gravité simplifié II (SAPS II)",
+  "version": "2026-09-04.1",
+  "date_version": "2026-09-04",
+  "valide": false,
+  "signe_par": null,
+  "source": "Le Gall J-R, Lemeshow S, Saulnier F. A new Simplified Acute Physiology Score (SAPS II) based on a European/North American multicenter study. JAMA 1993;270(24):2957-63.",
+  "note": "Barème saisi de mémoire et NON VALIDÉ : il doit être relu ligne à ligne face à la publication d'origine avant d'être coché « valide » et avant tout usage statistique. Règles d'usage du score : valeurs les plus défavorables des 24 premières heures ; PaO₂/FiO₂ seulement chez les patients ventilés ou sous CPAP ; le score ne s'applique pas aux moins de 18 ans, aux brûlés, aux coronariens et aux patients de chirurgie cardiaque.",
+  "variables": [
+    {
+      "fait": "age",
+      "libelle": "Âge (ans)",
+      "paliers": [
+        {"si": [{"fait": "age", "op": ">=", "valeur": 80}], "points": 18},
+        {"si": [{"fait": "age", "op": ">=", "valeur": 75}], "points": 16},
+        {"si": [{"fait": "age", "op": ">=", "valeur": 70}], "points": 15},
+        {"si": [{"fait": "age", "op": ">=", "valeur": 60}], "points": 12},
+        {"si": [{"fait": "age", "op": ">=", "valeur": 40}], "points": 7},
+        {"si": [{"fait": "age", "op": "<", "valeur": 40}], "points": 0}
+      ]
+    },
+    {
+      "fait": "fc_max_24h",
+      "libelle": "Fréquence cardiaque (/min, valeur la plus défavorable)",
+      "paliers": [
+        {"si": [{"fait": "fc_max_24h", "op": "<", "valeur": 40}], "points": 11},
+        {"si": [{"fait": "fc_max_24h", "op": ">=", "valeur": 160}], "points": 7},
+        {"si": [{"fait": "fc_max_24h", "op": ">=", "valeur": 120}], "points": 4},
+        {"si": [{"fait": "fc_max_24h", "op": "<", "valeur": 70}], "points": 2},
+        {"si": [{"fait": "fc_max_24h", "op": "<", "valeur": 120}], "points": 0}
+      ]
+    },
+    {
+      "fait": "pas_min_24h",
+      "libelle": "Pression artérielle systolique (mmHg)",
+      "paliers": [
+        {"si": [{"fait": "pas_min_24h", "op": "<", "valeur": 70}], "points": 13},
+        {"si": [{"fait": "pas_min_24h", "op": "<", "valeur": 100}], "points": 5},
+        {"si": [{"fait": "pas_min_24h", "op": ">=", "valeur": 200}], "points": 2},
+        {"si": [{"fait": "pas_min_24h", "op": "<", "valeur": 200}], "points": 0}
+      ]
+    },
+    {
+      "fait": "temperature_max_24h",
+      "libelle": "Température (°C)",
+      "paliers": [
+        {"si": [{"fait": "temperature_max_24h", "op": ">=", "valeur": 39}], "points": 3},
+        {"si": [{"fait": "temperature_max_24h", "op": "<", "valeur": 39}], "points": 0}
+      ]
+    },
+    {
+      "fait": "pao2_fio2",
+      "libelle": "PaO₂/FiO₂ (mmHg, si ventilé ou CPAP)",
+      "facultative": true,
+      "note": "Ne compte que chez un patient ventilé ou sous CPAP.",
+      "paliers": [
+        {"si": [{"fait": "ventile", "op": "faux"}], "points": 0},
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 100}], "points": 11},
+        {"si": [{"fait": "pao2_fio2", "op": "<", "valeur": 200}], "points": 9},
+        {"si": [{"fait": "pao2_fio2", "op": ">=", "valeur": 200}], "points": 6}
+      ]
+    },
+    {
+      "fait": "diurese_24h",
+      "libelle": "Diurèse (L/24 h)",
+      "note": "Exprimée en mL dans le dossier ; paliers en mL ici.",
+      "paliers": [
+        {"si": [{"fait": "diurese_24h", "op": "<", "valeur": 500}], "points": 11},
+        {"si": [{"fait": "diurese_24h", "op": "<", "valeur": 1000}], "points": 4},
+        {"si": [{"fait": "diurese_24h", "op": ">=", "valeur": 1000}], "points": 0}
+      ]
+    },
+    {
+      "fait": "uree",
+      "libelle": "Urée sanguine (mmol/L)",
+      "paliers": [
+        {"si": [{"fait": "uree", "op": ">=", "valeur": 30}], "points": 10},
+        {"si": [{"fait": "uree", "op": ">=", "valeur": 10}], "points": 6},
+        {"si": [{"fait": "uree", "op": "<", "valeur": 10}], "points": 0}
+      ]
+    },
+    {
+      "fait": "gb",
+      "libelle": "Globules blancs (×10³/mm³)",
+      "paliers": [
+        {"si": [{"fait": "gb", "op": "<", "valeur": 1}], "points": 12},
+        {"si": [{"fait": "gb", "op": ">=", "valeur": 20}], "points": 3},
+        {"si": [{"fait": "gb", "op": "<", "valeur": 20}], "points": 0}
+      ]
+    },
+    {
+      "fait": "kaliemie",
+      "libelle": "Kaliémie (mmol/L)",
+      "paliers": [
+        {"si": [{"fait": "kaliemie", "op": "<", "valeur": 3.0}], "points": 3},
+        {"si": [{"fait": "kaliemie", "op": ">=", "valeur": 5.0}], "points": 3},
+        {"si": [{"fait": "kaliemie", "op": ">=", "valeur": 3.0}], "points": 0}
+      ]
+    },
+    {
+      "fait": "natremie",
+      "libelle": "Natrémie (mmol/L)",
+      "paliers": [
+        {"si": [{"fait": "natremie", "op": "<", "valeur": 125}], "points": 5},
+        {"si": [{"fait": "natremie", "op": ">=", "valeur": 145}], "points": 1},
+        {"si": [{"fait": "natremie", "op": ">=", "valeur": 125}], "points": 0}
+      ]
+    },
+    {
+      "fait": "bicarbonates",
+      "libelle": "Bicarbonates (mmol/L)",
+      "paliers": [
+        {"si": [{"fait": "bicarbonates", "op": "<", "valeur": 15}], "points": 6},
+        {"si": [{"fait": "bicarbonates", "op": "<", "valeur": 20}], "points": 3},
+        {"si": [{"fait": "bicarbonates", "op": ">=", "valeur": 20}], "points": 0}
+      ]
+    },
+    {
+      "fait": "bilirubine",
+      "libelle": "Bilirubine (µmol/L)",
+      "paliers": [
+        {"si": [{"fait": "bilirubine", "op": ">=", "valeur": 102}], "points": 9},
+        {"si": [{"fait": "bilirubine", "op": ">=", "valeur": 68.4}], "points": 4},
+        {"si": [{"fait": "bilirubine", "op": "<", "valeur": 68.4}], "points": 0}
+      ]
+    },
+    {
+      "fait": "glasgow",
+      "libelle": "Score de Glasgow",
+      "paliers": [
+        {"si": [{"fait": "glasgow", "op": "<", "valeur": 6}], "points": 26},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 8}], "points": 13},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 10}], "points": 7},
+        {"si": [{"fait": "glasgow", "op": "<=", "valeur": 13}], "points": 5},
+        {"si": [{"fait": "glasgow", "op": ">=", "valeur": 14}], "points": 0}
+      ]
+    },
+    {
+      "fait": "maladie_chronique",
+      "libelle": "Maladie chronique",
+      "paliers": [
+        {"si": [{"fait": "maladie_chronique", "op": "=", "valeur": "sida"}], "points": 17},
+        {"si": [{"fait": "maladie_chronique", "op": "=", "valeur": "hemopathie_maligne"}], "points": 10},
+        {"si": [{"fait": "maladie_chronique", "op": "=", "valeur": "cancer_metastatique"}], "points": 9},
+        {"si": [{"fait": "maladie_chronique", "op": "=", "valeur": "aucune"}], "points": 0}
+      ]
+    },
+    {
+      "fait": "type_admission",
+      "libelle": "Type d'admission",
+      "paliers": [
+        {"si": [{"fait": "type_admission", "op": "=", "valeur": "medicale"}], "points": 6},
+        {"si": [{"fait": "type_admission", "op": "=", "valeur": "chirurgie_non_programmee"}], "points": 8},
+        {"si": [{"fait": "type_admission", "op": "=", "valeur": "chirurgie_programmee"}], "points": 0}
+      ]
+    }
+  ]
+}

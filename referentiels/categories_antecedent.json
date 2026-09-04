@@ -1,0 +1,29 @@
+{
+  "nom": "categories_antecedent",
+  "libelle": "Catégories d'antécédent",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "valeurs": [
+    [
+      "personnel",
+      "Personnel"
+    ],
+    [
+      "familial",
+      "Familial"
+    ],
+    [
+      "chirurgical",
+      "Chirurgical"
+    ],
+    [
+      "allergie",
+      "Allergie"
+    ],
+    [
+      "habitude",
+      "Habitude de vie"
+    ]
+  ]
+}

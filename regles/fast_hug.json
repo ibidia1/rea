@@ -1,0 +1,64 @@
+{
+  "code": "fast_hug",
+  "titre": "Check-list quotidienne FAST HUG",
+  "version": "2026-09-04.1",
+  "date_version": "2026-09-04",
+  "valide": false,
+  "signe_par": null,
+  "source": "Vincent J-L. Give your patient a fast hug (at least) once a day. Crit Care Med 2005;33(6):1225-9.",
+  "note": "Sept points à repasser chaque jour pour chaque patient. Le logiciel coche ce qu'il peut déduire de ce qui est déjà saisi ; il ne coche jamais à la place du médecin, et un point qu'il ne sait pas lire reste « non renseigné » plutôt que « fait ». Aucune posologie n'est proposée (SPEC §3.1).",
+  "items": [
+    {
+      "code": "feeding",
+      "lettre": "F",
+      "libelle": "Nutrition",
+      "question": "Le patient est-il nourri, et par quelle voie ?",
+      "satisfait_si": [{"fait": "nutrition_prescrite", "op": "vrai"}],
+      "detail": "Coché dès qu'une ligne de nutrition entérale ou parentérale est active."
+    },
+    {
+      "code": "analgesia",
+      "lettre": "A",
+      "libelle": "Analgésie",
+      "question": "La douleur est-elle évaluée et traitée ?",
+      "satisfait_si": [{"fait": "analgesie_prescrite", "op": "vrai"}]
+    },
+    {
+      "code": "sedation",
+      "lettre": "S",
+      "libelle": "Sédation",
+      "question": "La profondeur de sédation est-elle celle qu'on veut ? Un allègement est-il possible aujourd'hui ?",
+      "satisfait_si": [{"fait": "rass", "op": "renseigne"}],
+      "detail": "Coché dès qu'un RASS est noté dans l'évolution du jour."
+    },
+    {
+      "code": "thrombo",
+      "lettre": "T",
+      "libelle": "Prophylaxie thrombo-embolique",
+      "question": "Une prophylaxie est-elle prescrite, ou une raison de ne pas en donner est-elle notée ?",
+      "satisfait_si": [{"fait": "thromboprophylaxie_prescrite", "op": "vrai"}]
+    },
+    {
+      "code": "head",
+      "lettre": "H",
+      "libelle": "Tête de lit surélevée",
+      "question": "La tête de lit est-elle à 30–45° ?",
+      "satisfait_si": [{"fait": "tete_de_lit_surelevee", "op": "vrai"}],
+      "detail": "Se renseigne dans l'évolution du jour ; sans saisie, le point reste ouvert."
+    },
+    {
+      "code": "ulcer",
+      "lettre": "U",
+      "libelle": "Prophylaxie de l'ulcère de stress",
+      "question": "Est-elle prescrite chez ce patient, et est-elle encore justifiée ?",
+      "satisfait_si": [{"fait": "prophylaxie_ulcere_prescrite", "op": "vrai"}]
+    },
+    {
+      "code": "glucose",
+      "lettre": "G",
+      "libelle": "Contrôle glycémique",
+      "question": "Une glycémie a-t-elle été contrôlée aujourd'hui ?",
+      "satisfait_si": [{"fait": "glycemie_du_jour", "op": "renseigne"}]
+    }
+  ]
+}

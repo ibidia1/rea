@@ -69,6 +69,8 @@ def creer_sejour(
     creatinine_base: float | None = None,
     poids_kg: float | None = None,
     taille_cm: float | None = None,
+    type_admission: str | None = None,
+    maladie_chronique_igs2: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     numero = base.une_ligne(
@@ -83,6 +85,8 @@ def creer_sejour(
             "lit_admission": lit_admission,
             "provenance_type": provenance_type,
             "provenance_detail": provenance_detail,
+            "type_admission": type_admission,
+            "maladie_chronique_igs2": maladie_chronique_igs2,
             "est_readmission": int(est_readmission),
             "motif_readmission": motif_readmission,
             "traumatique": None if traumatique is None else int(traumatique),
@@ -341,12 +345,12 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
     from ..domaine.dates import duree_sejour_jours, format_date_fr
 
     sejour = sejour_avec_patient(base, sejour_id)
-    duree = duree_sejour_jours(sejour["date_admission"], sejour["date_sortie"])
+    duree = duree_sejour_jours(sejour["date_admission"], sejour.get("date_sortie"))
 
     lignes = [f"{sejour['nom_affichage']} — matricule {sejour['matricule']}"]
 
     date_admission_fr = format_date_fr(sejour["date_admission"])
-    date_sortie_fr = format_date_fr(sejour["date_sortie"]) if sejour["date_sortie"] else "en cours"
+    date_sortie_fr = format_date_fr(sejour.get("date_sortie")) if sejour.get("date_sortie") else "en cours"
     lignes.append(f"Séjour du {date_admission_fr} au {date_sortie_fr} — {duree} jours")
 
     provenance = listes.libelle(listes.PROVENANCES, sejour["provenance_type"], "non renseignée")
@@ -383,10 +387,10 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
     elif sejour["complication_statut"] == "aucune":
         lignes.append("Sans complication rapportée")
 
-    mode = listes.libelle(listes.MODES_SORTIE, sejour["mode_sortie"], "")
+    mode = listes.libelle(listes.MODES_SORTIE, sejour.get("mode_sortie"), "")
     destination = sejour["destination"] or ""
     meme_etab = " (même établissement)" if sejour["meme_etablissement"] else ""
-    if sejour["mode_sortie"] == "deces":
+    if sejour.get("mode_sortie") == "deces":
         lignes.append("Décès en réanimation")
     elif destination:
         lignes.append(f"Sortie vers {destination}{meme_etab} le {date_sortie_fr}")
@@ -399,3 +403,12 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
         lignes.append(f"Consultation : {sejour['consultation_externe']}")
 
     return "\n".join(lignes)
+
+
+def definir_code_icd10(
+    base: Base, sejour_id: str, code: str, *, utilisateur_id: str | None = None
+) -> None:
+    """Code CIM-10 du diagnostic principal du séjour (bloc 12)."""
+    base.mettre_a_jour(
+        "sejour", sejour_id, {"code_icd10": code}, utilisateur_id=utilisateur_id
+    )

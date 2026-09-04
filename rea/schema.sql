@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS sejour (
     -- (feuille de route §5, exploitée au bloc 15).
     creatinine_base     REAL,
     motif_readmission   TEXT,
+    -- Deux variables de l'IGS II qu'aucune autre donnée ne permet de
+    -- reconstituer après coup : le type d'admission (une chirurgie programmée
+    -- ne pèse pas le même poids qu'une admission médicale) et la maladie
+    -- chronique au sens du score, dont les trois catégories ne recouvrent pas
+    -- celles des conditions chroniques ANZICS saisies par ailleurs.
+    type_admission      TEXT,
+    maladie_chronique_igs2 TEXT,
+    -- Diagnostic principal codé CIM-10 (bloc 12). Sur le séjour et non sur le
+    -- motif : un séjour traumatique n'a pas de ligne de motif, et il doit
+    -- pouvoir être codé comme les autres.
+    code_icd10          TEXT,
 
     -- Question filtre : conditionne toute la suite de l'écran d'admission
     traumatique         INTEGER,                   -- NULL = non renseigné

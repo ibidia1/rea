@@ -1,0 +1,20 @@
+{
+  "nom": "unites",
+  "libelle": "Unités de prescription",
+  "version": "2026-09-03.1",
+  "date": "2026-09-03",
+  "note": "Unités proposées dans les listes déroulantes du prescrit.",
+  "valeurs": [
+    "mg",
+    "g",
+    "µg",
+    "UI",
+    "MUI",
+    "mL",
+    "cc",
+    "cp",
+    "amp",
+    "bouffée",
+    "%"
+  ]
+}

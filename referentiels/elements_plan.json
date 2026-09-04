@@ -1,0 +1,136 @@
+{
+  "nom": "elements_plan",
+  "libelle": "Éléments fixes des quatre plans de l'évolution",
+  "version": "2026-09-04.1",
+  "date": "2026-09-04",
+  "note": "Format : [clé, libellé, unité, type, plage affichée en gris].",
+  "valeurs": {
+    "neurologique": [
+      [
+        "rass",
+        "RASS",
+        "",
+        "nombre",
+        "−5 à +4"
+      ],
+      [
+        "glasgow",
+        "Glasgow",
+        "/15",
+        "nombre",
+        "3 – 15"
+      ],
+      [
+        "pupilles",
+        "Pupilles",
+        "",
+        "liste_pupilles",
+        ""
+      ],
+      [
+        "deficit",
+        "Déficit focal",
+        "",
+        "trois_etats",
+        ""
+      ]
+    ],
+    "respiratoire": [
+      [
+        "fr_clinique",
+        "FR",
+        "/min",
+        "nombre",
+        "12 – 25"
+      ],
+      [
+        "spo2_clinique",
+        "SpO₂",
+        "%",
+        "nombre",
+        "≥ 94"
+      ],
+      [
+        "encombrement",
+        "Encombrement",
+        "",
+        "trois_etats",
+        ""
+      ],
+      [
+        "tete_de_lit",
+        "Tête de lit ≥ 30°",
+        "",
+        "oui_non",
+        ""
+      ]
+    ],
+    "hemodynamique": [
+      [
+        "fc",
+        "FC",
+        "/min",
+        "nombre",
+        "60 – 100"
+      ],
+      [
+        "pas",
+        "PA systolique",
+        "mmHg",
+        "nombre",
+        "100 – 140"
+      ],
+      [
+        "pad",
+        "PA diastolique",
+        "mmHg",
+        "nombre",
+        "60 – 90"
+      ],
+      [
+        "pam",
+        "PAM",
+        "mmHg",
+        "nombre",
+        "≥ 65"
+      ],
+      [
+        "diurese_24h",
+        "Diurèse /24 h",
+        "mL",
+        "nombre",
+        "> 1000"
+      ],
+      [
+        "diurese_conservee",
+        "Diurèse conservée",
+        "",
+        "oui_non",
+        ""
+      ],
+      [
+        "signes_choc",
+        "Signes périphériques de choc",
+        "",
+        "trois_etats",
+        ""
+      ]
+    ],
+    "infectieux": [
+      [
+        "temperature",
+        "Température",
+        "°C",
+        "nombre",
+        "36,5 – 37,5"
+      ],
+      [
+        "frissons",
+        "Frissons",
+        "",
+        "trois_etats",
+        ""
+      ]
+    ]
+  }
+}
