@@ -810,6 +810,24 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.7 — 5 septembre 2026 — retrait du CIM-10, précision par région, motif/ATCD imprimés automatiquement**
+
+1. **Codage CIM-10 retiré** de l'écran Identité : outil interne redondant
+   avec le motif d'admission, déjà précis, que l'interne choisit à la
+   création du séjour.
+2. **« Corriger l'admission » → « Modifier l'admission »**, en bouton
+   compact (`st.popover`) en haut à droite de l'onglet, plutôt qu'un bandeau
+   permanent — modifier une admission est un geste occasionnel.
+3. **Précision libre par région traumatique** (§4.3) : chaque région choisie
+   porte désormais un commentaire libre, affiché « Région : commentaire »
+   (ex. « Traumatisme crânien : Hématome extra dural droit avec engagement
+   temporal / Embarrure pariétale »).
+4. **Motif, type de traumatisme et antécédents imprimés automatiquement**
+   sur la fiche de réanimation, dans l'encart « Motif — Transport — ATCD —
+   Ttt habituel » (jusque-là entièrement manuscrit) : l'interne n'a plus à
+   retranscrire à la main ce qu'il a déjà saisi sur l'onglet Identité. Le
+   traitement habituel reste manuscrit tant qu'aucun écran ne le saisit.
+
 **v2.6 — 5 septembre 2026 — protocoles et définitions câblés, antécédents en trois états, pancarte relue avant impression**
 
 Suite directe de la reprise d'architecture v2.5 : plusieurs briques posées mais

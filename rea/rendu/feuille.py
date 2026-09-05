@@ -384,6 +384,85 @@ def _texte_abrege_dispositif(etat) -> str:
     return texte
 
 
+def _motif_texte(dossier) -> str:
+    """Reprend le motif d'admission saisi une fois sur l'onglet Identité —
+    l'interne n'a plus à le retranscrire à la main sur la feuille."""
+    sejour = dossier.sejour
+    if sejour.get("traumatique"):
+        elements = [
+            listes.libelle(listes.REGIONS_TRAUMATIQUES, r["region"])
+            + (f" : {r['precision']}" if r.get("precision") else "")
+            for r in dossier.regions_traumatiques
+        ] or ["Régions non précisées"]
+        if sejour.get("mecanisme"):
+            libelle_mec = listes.libelle(listes.MECANISMES, sejour["mecanisme"])
+            if sejour.get("mecanisme_detail"):
+                libelle_mec += f" ({sejour['mecanisme_detail']})"
+            elements.append(f"Mécanisme : {libelle_mec}")
+        associes = [m for m in dossier.motifs if not m["principal"]]
+        if associes:
+            elements.append(
+                "Associé : " + ", ".join(listes.libelle_motif(m["code"]) for m in associes)
+            )
+        return " — ".join(elements)
+    principal = next((m for m in dossier.motifs if m["principal"]), None)
+    associes = [m for m in dossier.motifs if not m["principal"]]
+    elements = [listes.libelle_motif(principal["code"])] if principal else []
+    elements += [listes.libelle_motif(m["code"]) for m in associes]
+    return " — ".join(elements) if elements else "Non renseigné"
+
+
+def _transport_texte(dossier) -> str:
+    sejour = dossier.sejour
+    libelle = listes.libelle(listes.PROVENANCES, sejour.get("provenance_type"), "Non renseignée")
+    if sejour.get("provenance_detail"):
+        libelle += f" ({sejour['provenance_detail']})"
+    if sejour.get("est_readmission"):
+        libelle += " — réadmission"
+    return libelle
+
+
+def _atcd_texte(dossier) -> str:
+    """« Inconnu » et « sans antécédent connu » s'affichent identiquement à
+    la garde — le tiret qui les distingue reste en base (SPEC §4.2 bis),
+    pas sur une feuille que l'infirmier n'a pas à interpréter."""
+    if not dossier.antecedents:
+        return "Non renseignés" if dossier.etat_antecedents == "non_renseigne" else "Aucun connu"
+    elements = []
+    for a in dossier.antecedents:
+        texte = a["libelle"]
+        if a.get("quantification_valeur") is not None:
+            texte += f" ({_nombre(a['quantification_valeur'])} {a.get('quantification_unite') or ''})"
+        elif a.get("precision"):
+            texte += f" ({a['precision']})"
+        elements.append(texte)
+    return ", ".join(elements)
+
+
+def _motif_transport_atcd(dossier) -> Brut:
+    sejour = dossier.sejour
+    lignes = [
+        ("Motif", _motif_texte(dossier)),
+        ("Transport", _transport_texte(dossier)),
+        ("ATCD", _atcd_texte(dossier)),
+    ]
+    corps = "".join(
+        f'<div style="margin-bottom:2px"><b>{html.escape(titre)}</b> — '
+        f'{html.escape(texte)}</div>'
+        for titre, texte in lignes
+    )
+    ttt = sejour.get("traitement_habituel")
+    if ttt:
+        corps += f'<div><b>Ttt habituel</b> — {html.escape(ttt)}</div>'
+    else:
+        corps += (
+            '<div style="display:flex;align-items:baseline;gap:4px">'
+            '<b>Ttt habituel</b> — '
+            '<span style="flex:1;border-bottom:1px dotted #a9b6b5">&nbsp;</span></div>'
+        )
+    return Brut(f'<div style="font-size:9.5px;line-height:1.4;overflow:hidden">{corps}</div>')
+
+
 def _abords(dossier) -> list[dict]:
     """Les dispositifs en place, cochés, avec leur compteur de jours.
 
@@ -473,6 +552,7 @@ def contexte(dossier) -> dict:
         "allergies": (" · ".join(a["libelle"] for a in allergies)
                       if allergies else "ALLERGIE : non renseignée"),
         "scores": dossier.scores,
+        "motifTransportAtcd": _motif_transport_atcd(dossier),
         "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription

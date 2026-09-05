@@ -416,3 +416,59 @@ def test_bloc_presque_plein_garde_la_taille_normale(base, dossier):
         )
     style = feuille.contexte(_dossier(base, sid, AUJ))["styleDynamique"].html
     assert "txt-produit-iv" not in style
+
+
+# -- motif / transport / ATCD auto-générés (5 septembre) ---------------------
+
+def test_le_motif_traumatique_reprend_la_region_et_sa_precision(base, dossier):
+    """L'interne ne doit plus retranscrire à la main ce qu'il a déjà saisi à
+    l'admission sur l'onglet Identité."""
+    _pid, sid = dossier
+    sejours.definir_regions_traumatiques(
+        base, sid, ["cranien"],
+        precisions={"cranien": "Hématome extra-dural droit avec engagement temporal"},
+    )
+    base.mettre_a_jour("sejour", sid, {"traumatique": 1, "mecanisme": "avp_deux_roues"})
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Traumatisme crânien" in html
+    assert "Hématome extra-dural droit avec engagement temporal" in html
+
+
+def test_le_motif_non_traumatique_reprend_le_principal_et_les_associes(base, dossier):
+    _pid, sid = dossier
+    sejours.definir_motifs(
+        base, sid, motif_principal="choc_septique", motifs_associes=["acidocetose"],
+    )
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "choc septique" in html.lower() or "Choc septique" in html
+    assert "acidocétose" in html.lower()
+
+
+def test_le_transport_reprend_la_provenance(base):
+    pid = sejours.creer_patient(base, matricule="M3", nom_affichage="Z", date_naissance=None)
+    sid = sejours.creer_sejour(
+        base, patient_id=pid, date_admission=J2, lit_admission=4,
+        provenance_type="urgences", provenance_detail="SAMU",
+    )
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "SAMU" in html
+
+
+def test_les_antecedents_sont_repris_sans_les_allergies(base, dossier):
+    """Les allergies restent dans leur propre encart rouge — les dupliquer
+    ici referait deux fois la même alerte, à deux endroits différents."""
+    _pid, sid = dossier
+    sejour = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="Diabète type 2")
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="allergie", libelle="Pénicilline")
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Diabète type 2" in html
+    assert "Pénicilline" not in html
+
+
+def test_sans_antecedent_reste_distingue_de_non_renseigne(base, dossier):
+    _pid, sid = dossier
+    sejour = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))
+    assert "Non renseignés" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    sejours.definir_etat_antecedents(base, sejour["patient_id"], "absent")
+    assert "Aucun connu" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html

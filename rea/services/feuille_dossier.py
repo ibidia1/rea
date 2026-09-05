@@ -47,6 +47,10 @@ class DossierFeuille:
     microbiologie: list = field(default_factory=list)
     allergies: list = field(default_factory=list)
     scores: list = field(default_factory=list)
+    regions_traumatiques: list = field(default_factory=list)
+    motifs: list = field(default_factory=list)
+    antecedents: list = field(default_factory=list)
+    etat_antecedents: str = "non_renseigne"
 
 
 def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
@@ -79,4 +83,14 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
             f"SOFA {sofa.total}" + ("" if sofa.complet else " (incomplet)"),
             f"IGS II {igs2.total}" + ("" if igs2.complet else " (incomplet)"),
         ],
+        regions_traumatiques=list(sejours_service.regions_traumatiques_detail(base, sejour_id)),
+        motifs=list(sejours_service.motifs_du_sejour(base, sejour_id)),
+        # Jamais ressaisi sur la feuille : l'interrogatoire a déjà eu lieu à
+        # l'admission, sur l'onglet Identité — les allergies restent à part,
+        # dans leur propre encart rouge, pas dupliquées ici.
+        antecedents=[
+            a for a in sejours_service.antecedents_du_patient(base, sejour["patient_id"])
+            if a["categorie"] != "allergie"
+        ],
+        etat_antecedents=sejours_service.etat_antecedents(base, sejour["patient_id"]),
     )
