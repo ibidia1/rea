@@ -98,6 +98,7 @@ def modifier_admission(
     maladie_chronique_igs2: str | None,
     traumatique: bool,
     regions_traumatiques_choisies: list[str] | None = None,
+    regions_traumatiques_precisions: dict[str, str] | None = None,
     mecanisme: str | None = None,
     mecanisme_detail: str | None = None,
     motif_principal: str | None = None,
@@ -143,7 +144,8 @@ def modifier_admission(
         )
         if traumatique:
             definir_regions_traumatiques(
-                base, sejour_id, regions_traumatiques_choisies or [], utilisateur_id=utilisateur_id
+                base, sejour_id, regions_traumatiques_choisies or [],
+                precisions=regions_traumatiques_precisions, utilisateur_id=utilisateur_id,
             )
             # Pas de motif non traumatique "principal" — la région tient ce
             # rôle — mais les motifs associés (complications) restent posés.
@@ -285,25 +287,34 @@ def sejour_avec_patient(base: Base, sejour_id: str) -> dict | None:
 # --------------------------------------------------------------------------
 
 def definir_regions_traumatiques(
-    base: Base, sejour_id: str, regions: list[str], *, utilisateur_id: str | None = None
+    base: Base,
+    sejour_id: str,
+    regions: list[str],
+    *,
+    precisions: dict[str, str] | None = None,
+    utilisateur_id: str | None = None,
 ) -> None:
+    precisions = precisions or {}
     with base.transaction():
         base.executer(
             "UPDATE sejour_region_trauma SET supprime = 1 WHERE sejour_id = ?", (sejour_id,)
         )
         for region in regions:
-            base.executer(
-                "UPDATE sejour_region_trauma SET supprime = 0 WHERE sejour_id = ? AND region = ?",
-                (sejour_id, region),
-            )
+            precision = precisions.get(region)
             existe = base.une_ligne(
                 "SELECT id FROM sejour_region_trauma WHERE sejour_id = ? AND region = ?",
                 (sejour_id, region),
             )
-            if not existe:
+            if existe:
+                base.mettre_a_jour(
+                    "sejour_region_trauma", existe["id"],
+                    {"supprime": 0, "precision": precision},
+                    utilisateur_id=utilisateur_id,
+                )
+            else:
                 base.inserer(
                     "sejour_region_trauma",
-                    {"sejour_id": sejour_id, "region": region},
+                    {"sejour_id": sejour_id, "region": region, "precision": precision},
                     utilisateur_id=utilisateur_id,
                 )
 
@@ -314,6 +325,16 @@ def regions_traumatiques(base: Base, sejour_id: str) -> list[str]:
         (sejour_id,),
     )
     return [l["region"] for l in lignes]
+
+
+def regions_traumatiques_detail(base: Base, sejour_id: str) -> list[dict]:
+    """Région et précision, pour l'affichage et la fiche imprimée — contrairement
+    à `regions_traumatiques()`, qui ne sert qu'au calcul du polytraumatisme."""
+    return base.requete(
+        "SELECT region, precision FROM sejour_region_trauma "
+        "WHERE sejour_id = ? AND supprime = 0 ORDER BY cree_le",
+        (sejour_id,),
+    )
 
 
 def est_polytraumatise(base: Base, sejour_id: str) -> bool:
@@ -659,12 +680,3 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
         lignes.append(f"Consultation : {sejour['consultation_externe']}")
 
     return "\n".join(lignes)
-
-
-def definir_code_icd10(
-    base: Base, sejour_id: str, code: str, *, utilisateur_id: str | None = None
-) -> None:
-    """Code CIM-10 du diagnostic principal du séjour (bloc 12)."""
-    base.mettre_a_jour(
-        "sejour", sejour_id, {"code_icd10": code}, utilisateur_id=utilisateur_id
-    )

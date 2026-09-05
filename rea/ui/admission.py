@@ -120,6 +120,27 @@ def choix_motifs_associes(
     )
 
 
+def precisions_regions(
+    regions_choisies: list[str], precisions_actuelles: dict[str, str], *, key_prefixe: str
+) -> dict[str, str]:
+    """Un commentaire libre par région choisie, affiché ensuite « Région :
+    commentaire » (ex. « Trauma crânien : hématome extra-dural droit avec
+    engagement temporal / embarrure pariétale ») — la région seule ne dit
+    rien de la lésion réelle."""
+    precisions: dict[str, str] = {}
+    for region in regions_choisies:
+        libelle_region = listes.libelle(listes.REGIONS_TRAUMATIQUES, region)
+        texte = st.text_input(
+            f"Préciser — {libelle_region}",
+            value=precisions_actuelles.get(region, ""),
+            placeholder="ex. hématome extra-dural droit avec engagement temporal / embarrure pariétale",
+            key=f"{key_prefixe}_precision_{region}",
+        )
+        if texte:
+            precisions[region] = texte
+    return precisions
+
+
 def ecran_nouvelle_admission(lit: int | None) -> None:
     """Pas de `st.form` ici, volontairement : la moitié des champs de cet
     écran changent selon un autre champ (patient non identifié, traumatique
@@ -225,6 +246,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
     motif_principal = None
     motifs_associes: list[str] = []
 
+    precisions_regions_choisies: dict[str, str] = {}
     if traumatique:
         regions_choisies = st.multiselect(
             "Régions atteintes",
@@ -232,6 +254,9 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             format_func=lambda c: listes.libelle(listes.REGIONS_TRAUMATIQUES, c),
             key="admission_regions",
             placeholder="Aucune",
+        )
+        precisions_regions_choisies = precisions_regions(
+            regions_choisies, {}, key_prefixe="admission",
         )
         if len(regions_choisies) >= 2:
             st.info("Statut polytraumatisé — calculé automatiquement")
@@ -304,7 +329,10 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             utilisateur_id=contexte.utilisateur_id(),
         )
         if traumatique and regions_choisies:
-            sejours_service.definir_regions_traumatiques(contexte.base(), sid, regions_choisies, utilisateur_id=contexte.utilisateur_id())
+            sejours_service.definir_regions_traumatiques(
+                contexte.base(), sid, regions_choisies,
+                precisions=precisions_regions_choisies, utilisateur_id=contexte.utilisateur_id(),
+            )
         if motif_principal or motifs_associes:
             sejours_service.definir_motifs(
                 contexte.base(), sid, motif_principal=motif_principal, motifs_associes=motifs_associes,

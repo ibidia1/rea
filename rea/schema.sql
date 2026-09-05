@@ -183,6 +183,10 @@ CREATE TABLE IF NOT EXISTS sejour_region_trauma (
     id         TEXT PRIMARY KEY,
     sejour_id  TEXT NOT NULL REFERENCES sejour(id),
     region     TEXT NOT NULL,
+    -- Commentaire libre sur la lésion réelle (ex. « hématome extra-dural
+    -- droit avec engagement temporal / embarrure pariétale ») : la région
+    -- seule ne dit rien de la gravité ni du geste attendu.
+    precision  TEXT,
     cree_le    TEXT NOT NULL,
     cree_par   TEXT REFERENCES utilisateur(id),
     supprime   INTEGER NOT NULL DEFAULT 0
