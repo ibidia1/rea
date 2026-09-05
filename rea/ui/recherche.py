@@ -57,10 +57,12 @@ def _filtres() -> stats.Filtres:
         provenances = c7.multiselect(
             "Provenance", listes.codes(listes.PROVENANCES),
             format_func=lambda c: listes.libelle(listes.PROVENANCES, c),
+            placeholder="Toutes",
         )
         dispositifs = st.multiselect(
             "Ayant eu au moins un de ces dispositifs",
             listes.ORDRE_DISPOSITIFS, format_func=listes.libelle_dispositif,
+            placeholder="Aucun filtre",
         )
     return stats.Filtres(
         date_debut=str(debut) if debut else None,

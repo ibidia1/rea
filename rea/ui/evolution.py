@@ -10,6 +10,7 @@ import streamlit as st
 from .. import listes
 from ..domaine.dates import format_date_fr
 from ..services import aides as aides_service
+from ..services import definitions_cliniques
 from ..services import evolution as evolution_service
 from ..services import scores as scores_service
 from . import contexte, theme
@@ -156,6 +157,12 @@ def panneau_scores(sejour: dict, date_jour_str: str) -> None:
     Un score décrit, il ne décide pas — et un score incomplet le dit.
     """
     with st.expander("📊 Scores de gravité"):
+        # Le score du jour est affiché de toute façon : autant garder une
+        # trace datée pour la recherche (bloc 9), plutôt qu'un calcul qui ne
+        # laisse rien derrière lui une fois l'écran refermé.
+        scores_service.historiser(
+            contexte.base(), sejour["id"], date_jour_str, utilisateur_id=contexte.utilisateur_id()
+        )
         c1, c2, c3 = st.columns(3)
         with c1:
             _bloc_score(scores_service.sofa(contexte.base(), sejour["id"], date_jour_str))
@@ -198,6 +205,63 @@ def panneau_scores(sejour: dict, date_jour_str: str) -> None:
                              index=[d for d, _v in serie]),
                 height=180,
             )
+
+    panneau_definitions(sejour, date_jour_str)
+
+
+def _bloc_definition(verdict) -> None:
+    if not verdict.applicable:
+        theme.bloc_html(
+            verdict.definition,
+            "<span style='color:#94a3b8'>Non applicable — manque "
+            f"{', '.join(verdict.manquants)}</span>",
+            theme.GRIS,
+        )
+        return
+    theme.bloc_html(
+        verdict.definition,
+        f"<span style='font-size:1.15rem;font-weight:600'>{verdict.texte.split(': ', 1)[-1]}</span>",
+        theme.ROUGE if verdict.rempli else theme.BLEU,
+    )
+
+
+def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
+    """Définitions standard du bloc 15 : SDRA (Berlin), IRA (KDIGO), qSOFA,
+    Sepsis-3. Le logiciel signale que les critères sont réunis, il ne code
+    rien à la place du médecin (feuille de route, bloc 15).
+
+    Sepsis-3 demande un jugement clinique (infection suspectée) qu'aucune
+    donnée saisie ne permet de déduire — un antibiotique peut être
+    prophylactique. Les cases ci-dessous ne sont donc pas enregistrées : elles
+    ne font que composer l'affichage du jour, comme un calcul de tête qu'on
+    évite de refaire. Le lactate se relit du dernier gaz du sang quand il y en
+    a un ; le champ ne sert qu'à combler son absence.
+    """
+    with st.expander("📐 Définitions (Berlin, KDIGO, Sepsis-3)"):
+        c1, c2 = st.columns(2)
+        with c1:
+            _bloc_definition(definitions_cliniques.sdra(contexte.base(), sejour["id"], date_jour_str))
+        with c2:
+            _bloc_definition(definitions_cliniques.ira(contexte.base(), sejour["id"], date_jour_str))
+
+        st.divider()
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+        infection = c1.checkbox("Infection suspectée", key=f"def_infect_{sejour['id']}_{date_jour_str}")
+        vaso = c2.checkbox("Vasopresseurs", key=f"def_vaso_{sejour['id']}_{date_jour_str}")
+        hypotension = c3.checkbox(
+            "Hypotension persistante", key=f"def_hypo_{sejour['id']}_{date_jour_str}"
+        )
+        lactate_txt = c4.text_input("Lactate (mmol/L)", key=f"def_lactate_{sejour['id']}_{date_jour_str}")
+        c1, c2 = st.columns(2)
+        with c1:
+            _bloc_definition(definitions_cliniques.qsofa(contexte.base(), sejour["id"], date_jour_str))
+        with c2:
+            _bloc_definition(definitions_cliniques.sepsis(
+                contexte.base(), sejour["id"], date_jour_str,
+                infection_suspectee=infection, vasopresseurs=vaso,
+                hypotension_persistante=hypotension,
+                lactate=champs.nombre_saisi(lactate_txt),
+            ))
 
 
 def onglet_evolution(sejour: dict) -> None:

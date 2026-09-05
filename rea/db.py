@@ -270,6 +270,25 @@ class Base:
             },
         )
 
+    def journaliser_evenement(
+        self,
+        *,
+        action: str,
+        details: dict,
+        cible: str = "systeme",
+        ligne_id: str | None = None,
+        utilisateur_id: str | None = None,
+    ) -> None:
+        """Trace un événement qui ne correspond à aucune ligne créée ou
+        modifiée — un export, un gel de base.
+
+        À utiliser plutôt que `inserer("journal", ...)` : `inserer()`
+        journalise automatiquement toute écriture, donc insérer directement
+        dans `journal` par ce chemin laisse une seconde trace fantôme, qui dit
+        seulement « une ligne a été créée dans journal » sans rien d'utile.
+        """
+        self._journaliser(cible, ligne_id, action, utilisateur_id, details)
+
     def _journaliser(
         self, table: str, ligne_id: str | None, action: str, utilisateur_id: str | None, details: dict
     ) -> None:

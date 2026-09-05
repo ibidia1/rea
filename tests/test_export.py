@@ -125,13 +125,27 @@ def test_l_export_est_journalise(base, tmp_path):
     assert "export" in [j["action"] for j in base.journal()]
 
 
+def test_l_export_laisse_une_seule_trace_pas_deux(base, tmp_path):
+    """`inserer("journal", ...)` journaliserait sa propre écriture en plus :
+    une trace fantôme « table_cible=journal » à côté de la vraie."""
+    _dossier_complet(base)
+    avant = len(base.journal())
+    export.exporter(base, dossier=tmp_path / "export")
+    apres = base.journal()
+    assert len(apres) == avant + 1
+    assert not any(j["table_cible"] == "journal" for j in apres)
+
+
 def test_le_gel_garde_une_copie_et_se_journalise(base):
     _dossier_complet(base)
+    avant = len(base.journal())
     gel = export.geler(base, motif="étude PAVM")
     from pathlib import Path
 
     assert Path(gel["fichier"]).exists()
     assert gel["nb_sejours"] == 1
+    apres = base.journal()
+    assert len(apres) == avant + 1, "le gel ne doit laisser qu'une seule trace"
     assert "gel" in [j["action"] for j in base.journal()]
 
 

@@ -107,8 +107,12 @@ def modifier_admission(
     """Corrige les circonstances de l'admission.
 
     Couvre aussi le cas où le motif a été coché du mauvais côté (traumatique
-    / non traumatique) à l'admission : les régions et les motifs de l'autre
-    catégorie sont effacés, pas laissés à traîner en double.
+    / non traumatique) à l'admission : les régions de l'autre catégorie sont
+    effacées, pas laissées à traîner en double. `motifs_associes` reste pris
+    en compte même quand `traumatique` est vrai : un traumatisme thoracique
+    peut être associé à une embolie pulmonaire, un SDRA, une acidocétose
+    diabétique — ce sont des motifs non traumatiques associés, pas le motif
+    principal, que la région traumatique tient déjà.
 
     Le lit n'est volontairement pas modifiable ici — changer de lit est un
     transfert (`changer_de_lit`), pas une correction d'erreur de saisie ; les
@@ -141,7 +145,12 @@ def modifier_admission(
             definir_regions_traumatiques(
                 base, sejour_id, regions_traumatiques_choisies or [], utilisateur_id=utilisateur_id
             )
-            definir_motifs(base, sejour_id, motif_principal=None, utilisateur_id=utilisateur_id)
+            # Pas de motif non traumatique "principal" — la région tient ce
+            # rôle — mais les motifs associés (complications) restent posés.
+            definir_motifs(
+                base, sejour_id, motif_principal=None,
+                motifs_associes=motifs_associes, utilisateur_id=utilisateur_id,
+            )
         else:
             definir_regions_traumatiques(base, sejour_id, [], utilisateur_id=utilisateur_id)
             definir_motifs(
@@ -325,17 +334,25 @@ def definir_motifs(
     precisions: dict[str, dict] | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
-    """`motif_principal=None` efface les motifs sans en reposer — c'est ce
-    dont une correction d'admission a besoin quand le séjour bascule de
-    « non traumatique » à « traumatique »."""
+    """`motif_principal=None` efface les motifs principaux sans en reposer —
+    c'est ce dont un séjour traumatique a besoin : la région atteinte tient
+    lieu de motif principal, mais un motif non traumatique peut s'y associer
+    (un traumatisme thoracique associé à une embolie pulmonaire, un SDRA, une
+    acidocétose diabétique). `motifs_associes` reste donc pris en compte même
+    sans motif principal — seul `motif_principal=None` et
+    `motifs_associes` vide efface tout sans rien reposer.
+    """
     import json
 
     with base.transaction():
         base.executer("UPDATE sejour_motif SET supprime = 1 WHERE sejour_id = ?", (sejour_id,))
-        if motif_principal is None:
+        if motif_principal is None and not motifs_associes:
             return
         precisions = precisions or {}
-        tous = [(motif_principal, True)] + [(m, False) for m in (motifs_associes or [])]
+        tous = (
+            ([(motif_principal, True)] if motif_principal else [])
+            + [(m, False) for m in (motifs_associes or [])]
+        )
         for code, principal in tous:
             base.inserer(
                 "sejour_motif",
@@ -445,7 +462,23 @@ def interventions_du_sejour(base: Base, sejour_id: str) -> list[dict]:
 def changer_de_lit(
     base: Base, sejour_id: str, nouveau_lit: int, *, utilisateur_id: str | None = None
 ) -> None:
+    """Transfère un séjour vers un autre lit.
+
+    Met à jour `sejour.lit_admission` — c'est ce champ que
+    `lits.etat_des_lits()` lit pour savoir qui occupe quel lit, malgré son nom.
+    Sans cette mise à jour, un transfert restait invisible : le patient
+    continuait d'apparaître dans son ancien lit, et le nouveau restait affiché
+    comme libre. `sejour_lit` garde l'historique (durée passée dans chaque
+    lit), il ne sert pas à l'affichage courant.
+    """
     with base.transaction():
+        occupe = base.une_ligne(
+            "SELECT id FROM sejour WHERE lit_admission = ? AND date_sortie IS NULL "
+            "AND supprime = 0 AND id != ?",
+            (nouveau_lit, sejour_id),
+        )
+        if occupe:
+            raise ValueError(f"Le lit {nouveau_lit} est déjà occupé.")
         en_cours = base.une_ligne(
             "SELECT id FROM sejour_lit WHERE sejour_id = ? AND date_fin IS NULL", (sejour_id,)
         )
@@ -457,6 +490,10 @@ def changer_de_lit(
             "sejour_lit",
             {"sejour_id": sejour_id, "lit": nouveau_lit, "date_debut": maintenant()},
             utilisateur_id=utilisateur_id,
+        )
+        base.mettre_a_jour(
+            "sejour", sejour_id, {"lit_admission": nouveau_lit},
+            utilisateur_id=utilisateur_id, action="transfert",
         )
 
 

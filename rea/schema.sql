@@ -284,6 +284,10 @@ CREATE TABLE IF NOT EXISTS journee (
     date_jour     TEXT NOT NULL,
     preparee_le   TEXT,
     preparee_par  TEXT REFERENCES utilisateur(id),
+    -- Un pas de plus que « préparée » : quelqu'un a relu la pancarte
+    -- reconduite avant qu'elle ne devienne imprimable (demande du service).
+    validee_le    TEXT,
+    validee_par   TEXT REFERENCES utilisateur(id),
     note          TEXT,
     cree_le       TEXT NOT NULL,
     cree_par      TEXT REFERENCES utilisateur(id),

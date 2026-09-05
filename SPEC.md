@@ -369,7 +369,9 @@ imprimée, à destination des infirmiers.
 ## 5.2 bis Bilans à demander pour le lendemain
 
 Section à part entière de la pancarte, remplie chaque soir par l'interne :
-liste d'examens à cocher, avec l'heure de prélèvement *(par défaut 6 h)*.
+liste d'examens à cocher, avec l'heure de prélèvement *(par défaut 8 h,
+tranché en FEUILLE_DE_ROUTE.md §9 — après les soins d'hygiène, avant les
+prises de 8 h)*.
 
 Liste de départ à valider : NFS · Ionogramme · Créatinine · Urée · CRP ·
 Procalcitonine · Gaz du sang · TP/INR · Bilan hépatique · Hémoculture · ECBU ·

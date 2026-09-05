@@ -68,26 +68,32 @@ def _champ_analyte(a, cle_widget: str) -> float | None:
 
 
 def onglet_bilans(sejour: dict) -> None:
-    """Deux usages, deux ordres de lecture. Par défaut on vient saisir un
-    bilan, souvent avec le DMI ouvert à côté et la fenêtre en demi-écran :
-    la saisie est donc en premier, sur deux colonnes qui tiennent dans cette
-    largeur. La cinétique suit."""
-    saisie_bilan(sejour)
-
-    st.divider()
-    panneau_microbiologie(sejour)
-
-    st.divider()
-    vue_cinetique(sejour)
-
-    st.subheader("Texte généré")
-    date_affichee = st.date_input("Jour", value=date.today(), key="date_bilan_texte")
-    texte = bilans_service.texte_genere(contexte.base(), sejour["id"], str(date_affichee))
-    st.text_area(
-        "Prêt à coller dans l'évolution",
-        value=texte or "(aucun bilan ce jour-là)",
-        height=200,
+    """Deux usages qui ne se lisent pas pareil : taper un résultat qui vient
+    de tomber, avec le DMI ouvert à côté, ou relire ce qui a déjà été saisi.
+    Un bandeau au-dessus choisit lequel s'affiche, plutôt que d'empiler les
+    deux — la saisie à elle seule porte près de trente champs, ce qui noyait
+    la cinétique et le texte généré en dessous.
+    """
+    mode = st.radio(
+        "Mode", ["📝 Saisir un bilan", "📊 Visualiser"], horizontal=True,
+        key=f"bilans_mode_{sejour['id']}",
     )
+    if mode == "📝 Saisir un bilan":
+        saisie_bilan(sejour)
+    else:
+        panneau_microbiologie(sejour)
+
+        st.divider()
+        vue_cinetique(sejour)
+
+        st.subheader("Texte généré")
+        date_affichee = st.date_input("Jour", value=date.today(), key="date_bilan_texte")
+        texte = bilans_service.texte_genere(contexte.base(), sejour["id"], str(date_affichee))
+        st.text_area(
+            "Prêt à coller dans l'évolution",
+            value=texte or "(aucun bilan ce jour-là)",
+            height=200,
+        )
 
 
 def panneau_microbiologie(sejour: dict) -> None:

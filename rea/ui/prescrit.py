@@ -12,10 +12,53 @@ import streamlit as st
 
 from .. import config, listes
 from ..domaine import coherence, prescription as dom
-from ..domaine.dates import format_date_fr
+from ..domaine.dates import format_date_fr, lendemain
 from ..services import pancarte as pancarte_service
 from ..services import prescriptions as prescriptions_service
 from . import contexte, theme
+
+from . import champs
+
+
+def _pancarte_de_demain(sejour: dict, date_jour_str: str) -> None:
+    """Préparer, puis valider, puis seulement alors imprimer.
+
+    Préparer ne fait que reconduire les lignes actives — un geste mécanique,
+    sans relecture. Le service a demandé une étape de validation entre les
+    deux : imprimer une pancarte jamais relue serait imprimer une erreur de
+    reconduction telle quelle.
+    """
+    demain = str(lendemain(date_jour_str))
+    journee_demain = prescriptions_service.etat_journee(contexte.base(), sejour["id"], demain)
+    preparee = bool(journee_demain and journee_demain.get("preparee_le"))
+    validee = bool(journee_demain and journee_demain.get("validee_le"))
+
+    st.markdown(f"**Pancarte du {format_date_fr(demain)}**")
+    if not preparee:
+        if st.button("📅 Préparer la pancarte de demain", use_container_width=True):
+            prescriptions_service.preparer_pancarte_de_demain(
+                contexte.base(), sejour["id"], aujourdhui=date_jour_str, utilisateur_id=contexte.utilisateur_id()
+            )
+            st.rerun()
+        return
+
+    if not validee:
+        st.caption("Préparée — à relire avant impression.")
+        if st.button("✅ Valider la pancarte de demain", use_container_width=True):
+            prescriptions_service.valider_pancarte_de_demain(
+                contexte.base(), sejour["id"], aujourdhui=date_jour_str, utilisateur_id=contexte.utilisateur_id()
+            )
+            st.rerun()
+        return
+
+    st.caption(f"Validée le {format_date_fr(journee_demain['validee_le'][:10])}.")
+    if st.button("🖨 Imprimer la pancarte de demain", type="primary", use_container_width=True):
+        snap = pancarte_service.imprimer(
+            contexte.base(), sejour["id"], demain, utilisateur_id=contexte.utilisateur_id()
+        )
+        st.session_state["derniere_impression"] = snap["html"]
+        st.session_state["nom_impression"] = f"feuille-lit{sejour['lit_admission']}-{demain}.html"
+        st.success(f"Feuille de demain enregistrée — version {snap['version']}.")
 
 
 def onglet_prescrit(sejour: dict) -> None:
@@ -31,11 +74,7 @@ def onglet_prescrit(sejour: dict) -> None:
 
     with zone_actions:
         st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
-        if st.button("📅 Préparer la pancarte de demain", use_container_width=True):
-            prescriptions_service.preparer_pancarte_de_demain(
-                contexte.base(), sejour["id"], aujourdhui=date_jour_str, utilisateur_id=contexte.utilisateur_id()
-            )
-            st.success("Journée de demain préparée.")
+
         if st.button("🖨 Imprimer la pancarte de ce jour", use_container_width=True):
             snap = pancarte_service.imprimer(
                 contexte.base(), sejour["id"], date_jour_str, utilisateur_id=contexte.utilisateur_id()
@@ -45,6 +84,9 @@ def onglet_prescrit(sejour: dict) -> None:
                 f"feuille-lit{sejour['lit_admission']}-{date_jour_str}.html"
             )
             st.success(f"Feuille enregistrée — version {snap['version']}.")
+
+        _pancarte_de_demain(sejour, date_jour_str)
+
         demandes = pancarte["bilans_demandes"]
         theme.bloc(
             "Bilans demandés",
@@ -144,9 +186,9 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
                 )
                 st.rerun()
 
-    with st.expander("➕ Ajouter une ligne"):
+    with st.expander("➕ Ajouter une ligne", expanded=True):
         voie = st.selectbox("Voie", listes.ORDRE_VOIES, format_func=lambda c: listes.VOIES[c]["titre"])
-        champs = listes.VOIES[voie]["champs"]
+        champs_voie = listes.VOIES[voie]["champs"]
         with st.form(f"ajout_ligne_{voie}"):
             produit = st.text_input("Produit / libellé")
             dose = unite = rythme = condition = None
@@ -156,34 +198,49 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
             sous_type = None
             duree_prevue = None
 
-            if "dose" in champs:
+            # Chaque champ part vide, jamais à « 0 » : un zéro pré-rempli est
+            # une valeur qu'il faut remarquer et effacer avant de taper la
+            # vraie — une perte de temps répétée à chaque ligne de la pancarte.
+            if "dose" in champs_voie:
                 c1, c2 = st.columns(2)
-                dose = c1.number_input("Dose", min_value=0.0, step=1.0, value=0.0)
+                dose = champs.nombre_saisi(c1.text_input("Dose", value="", placeholder="ex. 40"))
                 unite = c2.selectbox("Unité", listes.UNITES)
-            if "rythme" in champs:
+            if "rythme" in champs_voie:
                 rythme = st.selectbox("Rythme", listes.codes(listes.RYTHMES), format_func=lambda c: listes.libelle(listes.RYTHMES, c))
-            if "condition" in champs:
+            if "condition" in champs_voie:
                 condition = st.text_input("Condition (si conditionnel)")
-            if "dilution" in champs:
+            if "dilution" in champs_voie:
                 dilution = st.text_input("Dilution (ex. 0,5 mg/cc)")
-            if "nb_ampoules" in champs:
+            if "nb_ampoules" in champs_voie:
                 # PO se compte en comprimés, les autres voies en ampoules — le
                 # mot change, la valeur reste un nombre saisi par le médecin,
                 # jamais déduit du dosage (SPEC §3.1).
                 etiquette_unites = "Nombre de comprimés" if voie == "PO" else "Nombre d'ampoules"
-                nb_ampoules = st.number_input(etiquette_unites, min_value=0.0, step=1.0, value=0.0)
-            if "vitesse" in champs:
-                vitesse = st.number_input("Vitesse (cc/h)", min_value=0.0, step=1.0, value=0.0)
-            if "volume_dilution" in champs:
-                volume_dilution = st.number_input("Volume de dilution (mL/prise)", min_value=0.0, step=10.0, value=0.0)
-            if "additifs" in champs:
+                nb_ampoules = champs.nombre_saisi(
+                    st.text_input(etiquette_unites, value="", placeholder="ex. 1")
+                )
+            if "vitesse" in champs_voie:
+                vitesse = champs.nombre_saisi(
+                    st.text_input("Vitesse (cc/h)", value="", placeholder="ex. 2")
+                )
+            if "volume_dilution" in champs_voie:
+                volume_dilution = champs.nombre_saisi(
+                    st.text_input("Volume de dilution (mL/prise)", value="", placeholder="ex. 50")
+                )
+            if "additifs" in champs_voie:
                 additifs = st.text_input("Additifs (ex. + 3 KCl + 2 NaCl)")
-            if "sous_type" in champs:
+            if "sous_type" in champs_voie:
                 sous_type = st.selectbox("Type", listes.codes(listes.SOUS_TYPES_ENTREES), format_func=lambda c: listes.libelle(listes.SOUS_TYPES_ENTREES, c))
-            if "volume_24h" in champs:
-                volume_24h = st.number_input("Volume /24 h (mL)", min_value=0.0, step=50.0, value=0.0)
+            if "volume_24h" in champs_voie:
+                volume_24h = champs.nombre_saisi(
+                    st.text_input("Volume /24 h (mL)", value="", placeholder="ex. 1500")
+                )
             if voie in ("IV", "PSE"):
-                duree_prevue = st.number_input("Durée prévue (jours, si antibiotique)", min_value=0, step=1, value=0)
+                duree_prevue = champs.nombre_saisi(
+                    st.text_input(
+                        "Durée prévue (jours, si antibiotique)", value="", placeholder="ex. 7"
+                    )
+                )
 
             date_debut = st.date_input(
                 "Date de début", value=date.fromisoformat(date_jour_str), key=f"debut_{voie}"
@@ -226,6 +283,7 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
                 "Examens", listes.codes(listes.EXAMENS_A_DEMANDER),
                 default=list(deja_coches),
                 format_func=lambda c: listes.libelle(listes.EXAMENS_A_DEMANDER, c),
+                placeholder="Aucun",
             )
             heure = st.text_input("Heure de prélèvement", value=config.HEURE_PRELEVEMENT_DEFAUT)
             if st.form_submit_button("Enregistrer les bilans"):

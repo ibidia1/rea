@@ -14,6 +14,7 @@ bonnes dates :
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 from .. import aides as fichiers
@@ -78,6 +79,53 @@ def mortalite_predite(base: Base, sejour_id: str) -> float | None:
     mortalité faussement basse, ce qui est le sens le plus dangereux."""
     score = igs2(base, sejour_id)
     return dom.mortalite_predite_igs2(score.total) if score.complet else None
+
+
+def historiser(
+    base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None
+) -> None:
+    """Garde une trace datée du SOFA du jour, pour l'export recherche.
+
+    Le score est déjà recalculé à chaque affichage — cette fonction ne calcule
+    rien de plus, elle écrit ce qui vient d'être montré à l'écran. Sans elle,
+    `score_quotidien` (bloc 9, table exportée) restait structurellement vide :
+    personne n'écrivait jamais dedans, même si le SOFA était affiché tous les
+    jours.
+
+    Idempotente : un même jour réécrit met à jour la ligne existante plutôt
+    que d'en créer une seconde (`score_quotidien` porte un index unique sur
+    sejour_id, date_jour, score).
+    """
+    score = sofa(base, sejour_id, date_jour)
+    valeurs = {
+        "sejour_id": sejour_id,
+        "date_jour": date_jour,
+        "score": score.code,
+        "valeur": score.total if score.complet else None,
+        "detail": json.dumps(
+            {
+                "complet": score.complet,
+                "manquantes": score.manquantes,
+                "composantes": [
+                    {"code": c.code, "points": c.points, "renseignee": c.renseignee}
+                    for c in score.composantes
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    }
+    existant = base.une_ligne(
+        "SELECT id FROM score_quotidien WHERE sejour_id = ? AND date_jour = ? AND score = ?",
+        (sejour_id, date_jour, score.code),
+    )
+    if existant:
+        base.mettre_a_jour(
+            "score_quotidien", existant["id"],
+            {k: v for k, v in valeurs.items() if k not in ("sejour_id", "date_jour", "score")},
+            utilisateur_id=utilisateur_id,
+        )
+    else:
+        base.inserer("score_quotidien", valeurs, utilisateur_id=utilisateur_id)
 
 
 def evolution_sofa(base: Base, sejour_id: str) -> list[tuple[str, int]]:

@@ -14,6 +14,8 @@ from ..services import dispositifs as dispositifs_service
 from ..services import explorations as explorations_service
 from . import contexte, theme
 
+from . import champs
+
 
 def onglet_actes(sejour: dict) -> None:
     lignes = dispositifs_service.du_sejour(contexte.base(), sejour["id"])
@@ -94,7 +96,7 @@ def onglet_actes(sejour: dict) -> None:
                 if champ in ("molecules", "technique"):
                     details[champ] = st.text_input(etiquette)
                 else:
-                    details[champ] = st.number_input(etiquette, min_value=0.0, step=1.0, value=0.0)
+                    details[champ] = champs.nombre_saisi(st.text_input(etiquette, value=""))
             commentaire = st.text_input("Commentaire (facultatif)")
             if st.form_submit_button("Enregistrer") and contexte.controle(
                 f"pose_{type_}",
@@ -138,17 +140,16 @@ def onglet_actes(sejour: dict) -> None:
                 "Date / heure", value=datetime.now().isoformat(timespec="minutes")
             )
             valeurs: dict = {}
-            champs = definition["valeurs"]
-            if champs:
-                cols = st.columns(min(len(champs), 4))
-                for i, (cle, libelle_v, unite, type_v) in enumerate(champs):
+            champs_exploration = definition["valeurs"]
+            if champs_exploration:
+                cols = st.columns(min(len(champs_exploration), 4))
+                for i, (cle, libelle_v, unite, type_v) in enumerate(champs_exploration):
                     etiquette = f"{libelle_v} ({unite})" if unite else libelle_v
                     with cols[i % len(cols)]:
                         if type_v == "nombre":
-                            valeurs[cle] = st.number_input(
-                                etiquette, min_value=0.0, step=0.01, value=0.0,
-                                key=f"expl_{type_expl}_{cle}",
-                            )
+                            valeurs[cle] = champs.nombre_saisi(st.text_input(
+                                etiquette, value="", key=f"expl_{type_expl}_{cle}",
+                            ))
                         elif type_v == "trois_etats":
                             valeurs[cle] = st.selectbox(
                                 etiquette, ["", "Présent", "Absent", "Non renseigné"],
