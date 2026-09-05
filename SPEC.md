@@ -827,6 +827,11 @@ En fin de session :
    Ttt habituel » (jusque-là entièrement manuscrit) : l'interne n'a plus à
    retranscrire à la main ce qu'il a déjà saisi sur l'onglet Identité. Le
    traitement habituel reste manuscrit tant qu'aucun écran ne le saisit.
+5. **Antécédents : liste courte portée à 20 pathologies fréquentes**, et
+   saisie repensée — un seul champ de recherche par mot-clé partiel (« dia »
+   retrouve Diabète), plusieurs antécédents empilés avant une validation
+   unique, texte libre accepté au même endroit si l'antécédent n'est pas
+   dans la liste courte.
 
 **v2.6 — 5 septembre 2026 — protocoles et définitions câblés, antécédents en trois états, pancarte relue avant impression**
 

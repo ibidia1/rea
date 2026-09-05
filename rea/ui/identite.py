@@ -203,33 +203,28 @@ def _formulaire_categorie(sejour: dict, prefixe: str) -> None:
 
 
 def _formulaire_antecedent_libre(sejour: dict, *, categorie: str, key_prefixe: str) -> None:
+    """Empiler plusieurs antécédents avant de valider une seule fois : taper
+    « dia », Entrée ajoute Diabète, taper un antécédent absent de la liste
+    courte, Entrée l'ajoute aussi (`accept_new_options`) — sans forcer
+    l'interne à reparcourir toute la liste à chaque antécédent."""
     options = [(c, l) for c, l, cat in listes.ANTECEDENTS_COURTS if cat == categorie]
-    autre = "— Autre / recherche libre —"
-    choix = st.selectbox(
-        "Antécédent",
-        [autre] + [c for c, _l in options],
-        format_func=lambda c: c if c == autre else listes.libelle(options, c),
+    choisis = st.multiselect(
+        "Antécédent(s)",
+        [c for c, _l in options],
+        format_func=lambda c: listes.libelle(options, c),
+        placeholder="Taper pour chercher (ex. « dia »), ou écrire un antécédent puis Entrée",
+        accept_new_options=True,
         key=f"{key_prefixe}_choix",
     )
-    libelle_libre = (
-        st.text_input("Libellé", key=f"{key_prefixe}_libelle") if choix == autre else ""
-    )
-    precision = st.text_input("Précision (facultatif)", key=f"{key_prefixe}_precision")
-    if st.button("Ajouter l'antécédent", key=f"{key_prefixe}_valider"):
-        if choix != autre:
+    if st.button("Ajouter", key=f"{key_prefixe}_valider") and choisis:
+        for entree in choisis:
+            connu = entree in [c for c, _l in options]
             sejours_service.ajouter_antecedent(
                 contexte.base(), patient_id=sejour["patient_id"], categorie=categorie,
-                libelle=listes.libelle(options, choix), code=choix, precision=precision or None,
+                libelle=listes.libelle(options, entree), code=entree if connu else None,
                 utilisateur_id=contexte.utilisateur_id(),
             )
-            st.rerun()
-        elif libelle_libre:
-            sejours_service.ajouter_antecedent(
-                contexte.base(), patient_id=sejour["patient_id"], categorie=categorie,
-                libelle=libelle_libre, precision=precision or None,
-                utilisateur_id=contexte.utilisateur_id(),
-            )
-            st.rerun()
+        st.rerun()
 
 
 def _formulaire_habitude(sejour: dict, *, key_prefixe: str) -> None:
