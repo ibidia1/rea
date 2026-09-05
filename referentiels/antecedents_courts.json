@@ -1,8 +1,8 @@
 {
   "nom": "antecedents_courts",
   "libelle": "Antécédents fréquents en accès direct",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
+  "version": "2026-09-05.1",
+  "date": "2026-09-05",
   "note": "Liste courte à valider par un senior (SPEC §4.2). Format : [code, libellé, catégorie].",
   "valeurs": [
     [
@@ -63,6 +63,11 @@
     [
       "ethylisme",
       "Éthylisme",
+      "habitude"
+    ],
+    [
+      "toxicomanie",
+      "Toxicomanie",
       "habitude"
     ],
     [

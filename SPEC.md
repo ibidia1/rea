@@ -203,6 +203,18 @@ mise à jour.
 direct, plus un champ de recherche ICD-10 (par nom ou par code) pour tout le
 reste. Case **« Sans antécédent connu »** disponible.
 
+### 4.2 bis — Le patient a-t-il des antécédents ? (implémenté v2.6)
+
+Question d'entrée, avant toute saisie : **Oui / Non / Inconnu**. Inconnu
+s'affiche comme « aucun antécédent enregistré », mais reste distingué de
+Non en base — ce logiciel ne confond jamais « répondu non » et « jamais
+demandé ». Si Oui, la saisie se scinde par catégorie : **Familiaux** /
+**Personnels** (chirurgical, médical, allergies) / **Habitudes de vie**,
+ces dernières avec trois habitudes prêtes par défaut — tabagisme (quantifié
+en paquets-années), éthylisme, toxicomanie (substance ou substances
+précisées) — modifiable après l'admission, à tout moment, depuis l'onglet
+Identité.
+
 **Allergies :** catégorie à part, affichée en **alerte rouge en haut de la
 pancarte et de toutes les fiches**.
 
@@ -797,6 +809,51 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v2.6 — 5 septembre 2026 — protocoles et définitions câblés, antécédents en trois états, pancarte relue avant impression**
+
+Suite directe de la reprise d'architecture v2.5 : plusieurs briques posées mais
+jamais reliées à un écran, et deux bugs réels trouvés en les câblant.
+
+1. **Heure de prélèvement par défaut : 08:00** (était 06:00 — décision
+   FEUILLE_DE_ROUTE.md non reportée dans le code).
+2. **Protocoles câblés à l'admission** (§4.5) : les protocoles pertinents
+   pour la région traumatique ou le motif sont proposés à la création du
+   séjour et appliqués sans jamais poser de dose.
+3. **Définitions cliniques câblées** (Berlin/KDIGO/qSOFA/Sepsis-3, §8) à
+   l'onglet Évolution — `rea/domaine/definitions.py` était pur et testé mais
+   inatteignable depuis l'interface.
+4. **`score_quotidien` historisé** à chaque calcul de SOFA.
+5. **Bug réel — transfert de lit invisible** : `changer_de_lit` écrivait
+   l'historique (`sejour_lit`) mais jamais `sejour.lit_admission`, le champ
+   que le tableau des lits lit réellement. Un transfert ne changeait donc
+   rien à l'écran. Corrigé, avec contrôle d'occupation du lit cible.
+6. **Bug réel — motifs associés perdus** : `definir_motifs` sortait sans
+   rien écrire dès que `motif_principal` était `None`, ce qui empêchait
+   d'associer un motif non traumatique à un séjour traumatique (ex.
+   traumatisme thoracique + embolie pulmonaire + SDRA + acidocétose
+   diabétique — cas explicitement demandé par le service).
+7. **`st.form()` retiré des écrans d'admission et de correction.** Un
+   formulaire Streamlit ne redéclenche pas de script tant qu'il n'est pas
+   soumis : la bascule traumatique/non traumatique, la révélation du
+   mécanisme, de la provenance détaillée, ne s'affichaient jamais. Toute
+   logique conditionnelle dans ce logiciel doit désormais éviter `st.form`.
+8. **Antécédents en trois états** (§4.2 bis) : la case « Sans antécédent
+   connu » de la SPEC devient un vrai « Le patient a-t-il des
+   antécédents ? » Oui / Non / Inconnu — Inconnu s'affiche comme Non mais
+   reste distingué en base (`antecedent` catégorie `evaluation`, retirée
+   dès qu'un antécédent réel est ajouté). Si Oui : Familiaux / Personnels
+   (chirurgical, médical, allergies) / Habitudes de vie, ces dernières avec
+   trois habitudes prêtes — tabagisme quantifié en paquets-années,
+   éthylisme, toxicomanie avec la ou les substances précisées.
+9. **Écran Bilans** : bascule Saisir/Visualiser pour espacer la saisie de la
+   relecture, sur demande du service.
+10. **Pancarte de demain relue avant impression** (§5.5) : entre préparer
+    (reconduction mécanique) et imprimer, une étape valider explicite
+    (`journee.validee_le`/`validee_par`) — l'impression d'une reconduction
+    jamais relue est désormais impossible depuis l'écran.
+11. Placeholders français sur les listes déroulantes à choix multiple, et
+    correction du double-journal dans `export.exporter()`/`geler()`.
 
 **v2.5 — 5 septembre 2026 — reprise d'architecture : atomicité, traçabilité, découpe**
 

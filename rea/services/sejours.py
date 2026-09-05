@@ -386,6 +386,8 @@ def ajouter_antecedent(
     code: str | None = None,
     code_icd10: str | None = None,
     precision: str | None = None,
+    quantification_valeur: float | None = None,
+    quantification_unite: str | None = None,
     statut: str = "present",
     utilisateur_id: str | None = None,
 ) -> str:
@@ -398,6 +400,8 @@ def ajouter_antecedent(
             "libelle": libelle,
             "code_icd10": code_icd10,
             "precision": precision,
+            "quantification_valeur": quantification_valeur,
+            "quantification_unite": quantification_unite,
             "statut": statut,
         },
         utilisateur_id=utilisateur_id,
@@ -405,10 +409,62 @@ def ajouter_antecedent(
 
 
 def antecedents_du_patient(base: Base, patient_id: str) -> list[dict]:
+    """N'inclut jamais la catégorie `evaluation` (§4.2 bis) : c'est une note
+    interne sur l'état de l'interrogatoire, pas un antécédent à afficher."""
     return base.requete(
-        "SELECT * FROM antecedent WHERE patient_id = ? AND supprime = 0 ORDER BY cree_le",
+        "SELECT * FROM antecedent WHERE patient_id = ? AND categorie != 'evaluation' "
+        "AND supprime = 0 ORDER BY cree_le",
         (patient_id,),
     )
+
+
+# --------------------------------------------------------------------------
+# « Le patient a-t-il des antécédents ? » Oui / Non / Inconnu (SPEC §4.2 bis)
+# --------------------------------------------------------------------------
+#
+# Case « Sans antécédent connu » de la SPEC : distincte de « jamais demandé »
+# (trois états, comme partout ailleurs dans ce logiciel). Dès qu'un antécédent
+# réel est ajouté, cette note devient caduque et est retirée — elle ne doit
+# jamais contredire une entrée réelle.
+
+def definir_etat_antecedents(
+    base: Base, patient_id: str, etat: str, *, utilisateur_id: str | None = None
+) -> None:
+    if etat not in ("absent", "non_renseigne"):
+        raise ValueError("etat doit être 'absent' ou 'non_renseigne'")
+    existante = base.une_ligne(
+        "SELECT id FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
+        "AND supprime = 0",
+        (patient_id,),
+    )
+    if existante:
+        base.mettre_a_jour(
+            "antecedent", existante["id"], {"statut": etat}, utilisateur_id=utilisateur_id
+        )
+    else:
+        base.inserer(
+            "antecedent",
+            {
+                "patient_id": patient_id,
+                "categorie": "evaluation",
+                "libelle": "Interrogatoire des antécédents",
+                "statut": etat,
+            },
+            utilisateur_id=utilisateur_id,
+        )
+
+
+def etat_antecedents(base: Base, patient_id: str) -> str:
+    """'oui' dès qu'un antécédent réel existe ; sinon la réponse déclarée
+    ('absent' / 'non_renseigne') ; 'non_renseigne' si jamais demandé."""
+    if antecedents_du_patient(base, patient_id):
+        return "oui"
+    evaluation = base.une_ligne(
+        "SELECT statut FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
+        "AND supprime = 0",
+        (patient_id,),
+    )
+    return evaluation["statut"] if evaluation else "non_renseigne"
 
 
 def allergies_du_patient(base: Base, patient_id: str) -> list[dict]:

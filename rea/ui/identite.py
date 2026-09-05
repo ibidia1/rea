@@ -104,6 +104,11 @@ def onglet_identite(sejour: dict) -> None:
             "Antécédents",
             [
                 f"{a['libelle']}"
+                + (
+                    f" — {champs.format_valeur(a['quantification_valeur'])} {a['quantification_unite']}"
+                    if a.get("quantification_valeur") is not None
+                    else ""
+                )
                 + (f" — {a['precision']}" if a["precision"] else "")
                 for a in antecedents if a["categorie"] != "allergie"
             ] or ["Aucun antécédent enregistré"],
@@ -114,37 +119,170 @@ def onglet_identite(sejour: dict) -> None:
     _transferer_lit(sejour)
     _corriger_admission(sejour)
 
-    with st.form("ajout_antecedent"):
-        col1, col2 = st.columns(2)
-        with col1:
-            code_court = st.selectbox(
-                "Antécédent",
-                ["— Autre / recherche libre —"] + [c for c, _l, _cat in listes.ANTECEDENTS_COURTS],
-                format_func=lambda c: c if c == "— Autre / recherche libre —" else listes.libelle(
-                    [(cc, ll) for cc, ll, _ in listes.ANTECEDENTS_COURTS], c
-                ),
+    st.markdown("**Antécédents**")
+    _antecedents_editeur(sejour)
+
+
+def _antecedents_editeur(sejour: dict) -> None:
+    """Le patient a-t-il des antécédents ? Oui / Non / Inconnu (SPEC §4.2
+    bis) — « Inconnu » se traite comme « sans antécédent connu » à
+    l'affichage, mais reste distingué en base (trois états, pas deux).
+
+    Volontairement sans `st.form` : la bascule Oui/Non/Inconnu puis la
+    cascade catégorie → sous-catégorie doivent se réafficher à chaque clic,
+    ce qu'un formulaire Streamlit ne fait pas tant qu'il n'est pas soumis."""
+    base = contexte.base()
+    patient_id = sejour["patient_id"]
+    prefixe = f"atcd_{sejour['id']}"
+    etat_actuel = sejours_service.etat_antecedents(base, patient_id)
+
+    if etat_actuel == "oui":
+        st.caption("Antécédents renseignés — ajouter un autre antécédent :")
+        _formulaire_categorie(sejour, prefixe)
+        return
+
+    valeurs = ["oui", "non", "inconnu"]
+    defaut = "non" if etat_actuel == "absent" else "inconnu"
+    reponse = st.radio(
+        "Le patient a-t-il des antécédents ?",
+        valeurs,
+        format_func=lambda v: {"oui": "Oui", "non": "Non", "inconnu": "Inconnu"}[v],
+        index=valeurs.index(defaut),
+        horizontal=True,
+        key=f"{prefixe}_reponse",
+    )
+    if reponse == "non" and etat_actuel != "absent":
+        sejours_service.definir_etat_antecedents(
+            base, patient_id, "absent", utilisateur_id=contexte.utilisateur_id()
+        )
+        st.rerun()
+    elif reponse == "inconnu" and etat_actuel != "non_renseigne":
+        sejours_service.definir_etat_antecedents(
+            base, patient_id, "non_renseigne", utilisateur_id=contexte.utilisateur_id()
+        )
+        st.rerun()
+    elif reponse == "oui":
+        _formulaire_categorie(sejour, prefixe)
+
+
+def _formulaire_categorie(sejour: dict, prefixe: str) -> None:
+    groupes = ["familial", "personnel_large", "habitude"]
+    groupe = st.radio(
+        "Catégorie",
+        groupes,
+        format_func=lambda v: {
+            "familial": "Familiaux",
+            "personnel_large": "Personnels (chirurgical, médical, allergies)",
+            "habitude": "Habitudes de vie",
+        }[v],
+        horizontal=True,
+        key=f"{prefixe}_groupe",
+    )
+    if groupe == "familial":
+        _formulaire_antecedent_libre(sejour, categorie="familial", key_prefixe=f"{prefixe}_familial")
+    elif groupe == "personnel_large":
+        sous_categories = ["personnel", "chirurgical", "allergie"]
+        sous_categorie = st.radio(
+            "Type",
+            sous_categories,
+            format_func=lambda c: listes.libelle(listes.CATEGORIES_ANTECEDENT, c),
+            horizontal=True,
+            key=f"{prefixe}_sous_categorie",
+        )
+        _formulaire_antecedent_libre(
+            sejour, categorie=sous_categorie, key_prefixe=f"{prefixe}_{sous_categorie}"
+        )
+    else:
+        _formulaire_habitude(sejour, key_prefixe=f"{prefixe}_habitude")
+
+
+def _formulaire_antecedent_libre(sejour: dict, *, categorie: str, key_prefixe: str) -> None:
+    options = [(c, l) for c, l, cat in listes.ANTECEDENTS_COURTS if cat == categorie]
+    autre = "— Autre / recherche libre —"
+    choix = st.selectbox(
+        "Antécédent",
+        [autre] + [c for c, _l in options],
+        format_func=lambda c: c if c == autre else listes.libelle(options, c),
+        key=f"{key_prefixe}_choix",
+    )
+    libelle_libre = (
+        st.text_input("Libellé", key=f"{key_prefixe}_libelle") if choix == autre else ""
+    )
+    precision = st.text_input("Précision (facultatif)", key=f"{key_prefixe}_precision")
+    if st.button("Ajouter l'antécédent", key=f"{key_prefixe}_valider"):
+        if choix != autre:
+            sejours_service.ajouter_antecedent(
+                contexte.base(), patient_id=sejour["patient_id"], categorie=categorie,
+                libelle=listes.libelle(options, choix), code=choix, precision=precision or None,
+                utilisateur_id=contexte.utilisateur_id(),
             )
-            libelle_libre = st.text_input("Libellé (si recherche libre)") if code_court == "— Autre / recherche libre —" else ""
-        with col2:
-            categorie = st.selectbox(
-                "Catégorie", listes.codes(listes.CATEGORIES_ANTECEDENT),
-                format_func=lambda c: listes.libelle(listes.CATEGORIES_ANTECEDENT, c),
+            st.rerun()
+        elif libelle_libre:
+            sejours_service.ajouter_antecedent(
+                contexte.base(), patient_id=sejour["patient_id"], categorie=categorie,
+                libelle=libelle_libre, precision=precision or None,
+                utilisateur_id=contexte.utilisateur_id(),
             )
-            precision = st.text_input("Précision (facultatif)")
-        if st.form_submit_button("Ajouter l'antécédent"):
-            if code_court != "— Autre / recherche libre —":
-                libelle_txt = listes.libelle([(c, l) for c, l, _ in listes.ANTECEDENTS_COURTS], code_court)
-                categorie_auto = next(cat for c, _l, cat in listes.ANTECEDENTS_COURTS if c == code_court)
-                sejours_service.ajouter_antecedent(
-                    contexte.base(), patient_id=sejour["patient_id"], categorie=categorie_auto,
-                    libelle=libelle_txt, code=code_court, precision=precision or None,
-                    utilisateur_id=contexte.utilisateur_id(),
-                )
-            elif libelle_libre:
-                sejours_service.ajouter_antecedent(
-                    contexte.base(), patient_id=sejour["patient_id"], categorie=categorie,
-                    libelle=libelle_libre, precision=precision or None, utilisateur_id=contexte.utilisateur_id(),
-                )
+            st.rerun()
+
+
+def _formulaire_habitude(sejour: dict, *, key_prefixe: str) -> None:
+    """Trois habitudes prêtes par défaut (SPEC §4.2 bis), plus « Autre » en
+    recherche libre : tabagisme quantifié en paquets-années, éthylisme,
+    toxicomanie avec la ou les substances précisées — jamais un simple
+    « présent/absent » qui ferait perdre l'information clinique utile."""
+    habitude = st.radio(
+        "Habitude",
+        ["tabagisme", "ethylisme", "toxicomanie", "autre"],
+        format_func=lambda v: {
+            "tabagisme": "Tabagisme", "ethylisme": "Éthylisme",
+            "toxicomanie": "Toxicomanie", "autre": "Autre",
+        }[v],
+        horizontal=True,
+        key=f"{key_prefixe}_type",
+    )
+    base = contexte.base()
+    patient_id = sejour["patient_id"]
+    uid = contexte.utilisateur_id()
+
+    if habitude == "tabagisme":
+        pa = champs.nombre_saisi(
+            st.text_input("Paquets-années", value="", placeholder="ex. 20", key=f"{key_prefixe}_pa")
+        )
+        if st.button("Ajouter", key=f"{key_prefixe}_valider"):
+            sejours_service.ajouter_antecedent(
+                base, patient_id=patient_id, categorie="habitude", libelle="Tabagisme",
+                code="tabagisme", quantification_valeur=pa,
+                quantification_unite="paquets-année" if pa is not None else None,
+                utilisateur_id=uid,
+            )
+            st.rerun()
+    elif habitude == "ethylisme":
+        precision = st.text_input("Précision (facultatif)", key=f"{key_prefixe}_precision")
+        if st.button("Ajouter", key=f"{key_prefixe}_valider"):
+            sejours_service.ajouter_antecedent(
+                base, patient_id=patient_id, categorie="habitude", libelle="Éthylisme",
+                code="ethylisme", precision=precision or None, utilisateur_id=uid,
+            )
+            st.rerun()
+    elif habitude == "toxicomanie":
+        substances = st.text_input(
+            "Substance(s)", placeholder="ex. cannabis, cocaïne", key=f"{key_prefixe}_substances"
+        )
+        if st.button("Ajouter", key=f"{key_prefixe}_valider") and substances:
+            sejours_service.ajouter_antecedent(
+                base, patient_id=patient_id, categorie="habitude", libelle="Toxicomanie",
+                code="toxicomanie", precision=substances, utilisateur_id=uid,
+            )
+            st.rerun()
+    else:
+        libelle_libre = st.text_input("Libellé", key=f"{key_prefixe}_libelle")
+        precision = st.text_input("Précision (facultatif)", key=f"{key_prefixe}_precision")
+        if st.button("Ajouter", key=f"{key_prefixe}_valider") and libelle_libre:
+            sejours_service.ajouter_antecedent(
+                base, patient_id=patient_id, categorie="habitude", libelle=libelle_libre,
+                precision=precision or None, utilisateur_id=uid,
+            )
             st.rerun()
 
 
