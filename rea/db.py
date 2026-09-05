@@ -15,6 +15,7 @@ import shutil
 import sqlite3
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -44,7 +45,10 @@ class Base:
     def __init__(self, chemin: Path | str | None = None):
         self.chemin = Path(chemin) if chemin else config.FICHIER_BASE
         self.chemin.parent.mkdir(parents=True, exist_ok=True)
-        self._verrou = threading.Lock()
+        # Réentrant : une transaction garde le verrou pendant qu'elle appelle
+        # `inserer()`, qui le reprend. Un verrou simple se bloquerait lui-même.
+        self._verrou = threading.RLock()
+        self._profondeur_transaction = 0
         self.connexion = sqlite3.connect(
             str(self.chemin), check_same_thread=False, isolation_level=None
         )
@@ -131,6 +135,45 @@ class Base:
     def _colonnes(self, table: str) -> set[str]:
         return {ligne["name"] for ligne in self.requete(f"PRAGMA table_info({table})")}
 
+    # -- transactions -------------------------------------------------------
+    @contextmanager
+    def transaction(self):
+        """Rend atomique un groupe d'écritures : tout passe, ou rien.
+
+        Sans elle, la connexion est en validation automatique — chaque écriture
+        est définitive dès qu'elle est faite. Une admission, qui crée d'abord le
+        patient puis le séjour, laissait donc un patient sans séjour si la
+        seconde écriture échouait.
+
+        Le verrou est tenu pendant toute la transaction : c'est lui qui empêche
+        deux onglets (Streamlit sert chacun dans son propre fil) de lire le même
+        compteur avant que l'autre ne l'ait incrémenté. `BEGIN IMMEDIATE` prend
+        le verrou d'écriture de SQLite tout de suite, plutôt qu'à la première
+        écriture, ce qui écarte le même écueil entre deux processus.
+
+        S'imbrique : une transaction ouverte dans une autre rejoint la première
+        et ne valide rien avant elle.
+        """
+        with self._verrou:
+            if self._profondeur_transaction:
+                self._profondeur_transaction += 1
+                try:
+                    yield self
+                finally:
+                    self._profondeur_transaction -= 1
+                return
+            self.connexion.execute("BEGIN IMMEDIATE")
+            self._profondeur_transaction = 1
+            try:
+                yield self
+            except BaseException:
+                self.connexion.execute("ROLLBACK")
+                raise
+            else:
+                self.connexion.execute("COMMIT")
+            finally:
+                self._profondeur_transaction = 0
+
     def executer(self, sql: str, parametres: tuple = ()) -> None:
         with self._verrou:
             self.connexion.execute(sql, parametres)
@@ -154,12 +197,14 @@ class Base:
             valeurs["cree_par"] = utilisateur_id
         colonnes = ", ".join(valeurs.keys())
         espaces = ", ".join("?" for _ in valeurs)
-        with self._verrou:
+        # La ligne et sa trace au journal partent ensemble : une écriture sans
+        # trace ne serait pas opposable (règle de conception 8).
+        with self.transaction():
             self.connexion.execute(
                 f"INSERT INTO {table} ({colonnes}) VALUES ({espaces})",
                 tuple(valeurs.values()),
             )
-        self._journaliser(table, valeurs["id"], action, utilisateur_id, valeurs)
+            self._journaliser(table, valeurs["id"], action, utilisateur_id, valeurs)
         return valeurs["id"]
 
     def mettre_a_jour(
@@ -178,12 +223,12 @@ class Base:
         if "modifie_par" in colonnes:
             valeurs["modifie_par"] = utilisateur_id
         affectation = ", ".join(f"{cle} = ?" for cle in valeurs)
-        with self._verrou:
+        with self.transaction():
             self.connexion.execute(
                 f"UPDATE {table} SET {affectation} WHERE id = ?",
                 (*valeurs.values(), id_ligne),
             )
-        self._journaliser(table, id_ligne, action, utilisateur_id, valeurs)
+            self._journaliser(table, id_ligne, action, utilisateur_id, valeurs)
 
     def supprimer_logiquement(
         self, table: str, id_ligne: str, *, utilisateur_id: str | None = None
@@ -193,8 +238,59 @@ class Base:
             table, id_ligne, {"supprime": 1}, utilisateur_id=utilisateur_id, action="suppression"
         )
 
+    def journaliser_forcage(
+        self,
+        *,
+        cible: str,
+        avertissements,
+        utilisateur_id: str | None = None,
+        ligne_id: str | None = None,
+    ) -> None:
+        """Trace le franchissement d'un garde-fou de cohérence (bloc 4).
+
+        Un avertissement « impossible » — sortie avant l'admission, extubation
+        avant l'intubation — se franchit à un second clic. Le médecin garde le
+        dernier mot, mais le dossier doit dire qu'un garde-fou a été franchi :
+        sans ça, la ligne écrite ressemble à n'importe quelle autre, et personne
+        ne peut savoir plus tard que le logiciel avait signalé quelque chose.
+
+        `bilan_resultat` porte en plus une colonne `saisie_forcee` ; ici on
+        garde la trace pour tous les écrans, y compris ceux qui n'ont pas de
+        colonne où la mettre.
+        """
+        self._journaliser(
+            cible,
+            ligne_id,
+            "forcage_coherence",
+            utilisateur_id,
+            {
+                "avertissements": [
+                    {"gravite": a.gravite, "message": a.message} for a in avertissements
+                ]
+            },
+        )
+
+    def journaliser_evenement(
+        self,
+        *,
+        action: str,
+        details: dict,
+        cible: str = "systeme",
+        ligne_id: str | None = None,
+        utilisateur_id: str | None = None,
+    ) -> None:
+        """Trace un événement qui ne correspond à aucune ligne créée ou
+        modifiée — un export, un gel de base.
+
+        À utiliser plutôt que `inserer("journal", ...)` : `inserer()`
+        journalise automatiquement toute écriture, donc insérer directement
+        dans `journal` par ce chemin laisse une seconde trace fantôme, qui dit
+        seulement « une ligne a été créée dans journal » sans rien d'utile.
+        """
+        self._journaliser(cible, ligne_id, action, utilisateur_id, details)
+
     def _journaliser(
-        self, table: str, ligne_id: str, action: str, utilisateur_id: str | None, details: dict
+        self, table: str, ligne_id: str | None, action: str, utilisateur_id: str | None, details: dict
     ) -> None:
         details_serialisables = {
             k: v for k, v in details.items() if k not in ("id",) and not isinstance(v, (bytes,))

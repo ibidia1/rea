@@ -1,4 +1,3 @@
-import pytest
 
 from rea.domaine import prescription as p
 

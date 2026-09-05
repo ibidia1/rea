@@ -1,9 +1,9 @@
 {
   "nom": "voies",
   "libelle": "Voies d'administration et champs demandés",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
-  "note": "Les champs déclarés ici décident de ce que le formulaire demande.",
+  "version": "2026-09-05.2",
+  "date": "2026-09-05",
+  "note": "Les champs déclarés ici décident de ce que le formulaire demande. « nb_ampoules » sert aussi, pour PO et SC, à noter le nombre de comprimés ou d'ampoules administrés par prise — une valeur saisie par le médecin, jamais déduite du dosage (SPEC §3.1).",
   "valeurs": {
     "ordre": [
       "PO",
@@ -23,7 +23,8 @@
           "produit",
           "dose",
           "unite",
-          "rythme"
+          "rythme",
+          "nb_ampoules"
         ]
       },
       "IV": {
@@ -55,7 +56,8 @@
           "produit",
           "dose",
           "unite",
-          "rythme"
+          "rythme",
+          "nb_ampoules"
         ]
       },
       "AEROSOL": {

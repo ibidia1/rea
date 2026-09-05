@@ -89,4 +89,4 @@ SYMBOLES_UNICODE = True
 # --------------------------------------------------------------------------
 # Bilans à demander pour le lendemain (SPEC §5.2 bis)
 # --------------------------------------------------------------------------
-HEURE_PRELEVEMENT_DEFAUT = "06:00"
+HEURE_PRELEVEMENT_DEFAUT = "08:00"

@@ -4,7 +4,6 @@ La feuille de route rend les tests obligatoires pour ce bloc : un score faux
 n'a aucun symptôme visible — il produit des chiffres plausibles.
 """
 
-import pytest
 
 from rea import aides as fichiers
 from rea.domaine import scores

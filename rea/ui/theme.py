@@ -41,6 +41,20 @@ COULEUR_VOIE = {
     "ENTREES": BLEU,
 }
 
+# Un bouton par voie, dans l'ordre de COULEUR_VOIE (ORDRE_VOIES) : le
+# sélecteur de voie du panneau « Ajouter une ligne » retrouve, bouton par
+# bouton, la couleur que cette voie porte déjà sur la pancarte — sans quoi
+# les deux ne se répondraient pas visuellement.
+_CSS_BOUTONS_VOIES = "\n".join(
+    f'div[data-testid="stButtonGroup"] button[data-variant="segmented_control"]:nth-of-type({i}) {{'
+    f" border-color:{couleur} !important; }}\n"
+    f'div[data-testid="stButtonGroup"] button[data-variant="segmented_control"]:nth-of-type({i})[aria-checked="true"] {{'
+    f" background:{couleur} !important; border-color:{couleur} !important; }}\n"
+    f'div[data-testid="stButtonGroup"] button[data-variant="segmented_control"]:nth-of-type({i})[aria-checked="true"] p {{'
+    f" color:#fff !important; }}"
+    for i, couleur in enumerate(COULEUR_VOIE.values(), start=1)
+)
+
 # Idem pour les familles de dispositifs.
 COULEUR_DISPOSITIF = {
     "intubation": ROUGE, "sedation": ROUGE, "tracheotomie": ROUGE,
@@ -141,6 +155,10 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 
 /* ---- Tableaux plus denses ------------------------------------------- */
 div[data-testid="stDataFrame"] {{ font-size: .8rem; }}
+
+/* ---- Sélecteur de voie (panneau « Ajouter une ligne ») --------------- */
+div[data-testid="stButtonGroup"] > div[role="radiogroup"] {{ flex-wrap: wrap; }}
+{_CSS_BOUTONS_VOIES}
 </style>
 """
 

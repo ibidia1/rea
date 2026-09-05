@@ -19,3 +19,5 @@ venv/
 # Système
 .DS_Store
 Thumbs.db
+.coverage
+htmlcov/

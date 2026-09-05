@@ -13,12 +13,17 @@ qui n'existaient jusqu'ici que dans le code :
 from __future__ import annotations
 
 import json
-from datetime import datetime
 
 import streamlit as st
 
-from .. import aides, config, protocoles, referentiels
+import re
+import unicodedata
+
+from .. import aides, config, listes, protocoles, referentiels
 from ..db import Base
+from ..domaine import regles as regles_dom
+from ..domaine.dates import format_date_fr
+from ..services import pancarte as pancarte_service
 from . import theme
 
 
@@ -36,17 +41,20 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
     )
 
     onglets = st.tabs(
-        ["Sauvegardes", "Journal", "Référentiels", "Protocoles", "Règles d'aide"]
+        ["Sauvegardes", "Journal", "Fiches imprimées", "Référentiels",
+         "Protocoles", "Règles d'aide"]
     )
     with onglets[0]:
         _sauvegardes(base)
     with onglets[1]:
         _journal(base)
     with onglets[2]:
-        _referentiels()
+        _fiches_imprimees(base)
     with onglets[3]:
-        _protocoles()
+        _referentiels()
     with onglets[4]:
+        _protocoles()
+    with onglets[5]:
         _regles()
 
 
@@ -174,6 +182,50 @@ def _journal(base: Base) -> None:
 # Référentiels et protocoles — quelle liste, dans quelle version
 # --------------------------------------------------------------------------
 
+def _fiches_imprimees(base: Base) -> None:
+    """Retrouver ce qui a été imprimé dans le service, jour par jour.
+
+    Chaque fiche est un instantané figé : on revoit exactement ce qui est
+    sorti sur papier ce jour-là, même si le dossier a changé depuis — la
+    seule lecture fidèle pour une relecture médico-légale ou une visite qui
+    veut comparer plusieurs jours.
+    """
+    st.caption(
+        "Chaque impression est conservée telle quelle, quel que soit le "
+        "patient ou le lit. Choisir un jour pour voir tout ce qui a été "
+        "imprimé ce jour-là dans le service."
+    )
+    dates = pancarte_service.dates_avec_impression(base)
+    if not dates:
+        st.info("Aucune fiche n'a encore été imprimée.")
+        return
+    jour = st.selectbox(
+        "Jour", dates, format_func=lambda d: format_date_fr(d),
+    )
+    fiches = pancarte_service.snapshots_par_date(base, jour)
+    if not fiches:
+        st.caption("Aucune fiche imprimée ce jour-là.")
+        return
+    for fiche in fiches:
+        with st.expander(
+            f"Lit {fiche['lit_admission']} — {fiche['nom_affichage']} "
+            f"(v{fiche['version']})"
+        ):
+            st.caption(
+                f"Imprimée à {fiche['imprime_le'][11:16]}"
+                + (f" par {fiche['imprime_par_nom']}" if fiche.get("imprime_par_nom") else "")
+            )
+            complete = pancarte_service.snapshot(base, fiche["id"])
+            if complete:
+                st.download_button(
+                    "⬇ Télécharger",
+                    data=complete["html"],
+                    file_name=f"feuille-lit{fiche['lit_admission']}-{jour}-v{fiche['version']}.html",
+                    mime="text/html",
+                    key=f"dl_admin_{fiche['id']}",
+                )
+
+
 def _referentiels() -> None:
     st.caption(
         "Les listes codées sont des fichiers, pas du code : les modifier ne "
@@ -208,6 +260,62 @@ def _referentiels() -> None:
     )
 
 
+def _slug(texte: str) -> str:
+    """Un identifiant de fichier sûr : minuscules, chiffres, underscores."""
+    sans_accents = "".join(
+        c for c in unicodedata.normalize("NFD", texte)
+        if unicodedata.category(c) != "Mn"
+    )
+    return re.sub(r"[^a-z0-9_]+", "_", sans_accents.lower()).strip("_")
+
+
+def _valeur_typee(texte: str):
+    """Une valeur de condition : nombre si possible, texte sinon — les
+    barèmes comparent aussi bien des seuils (100) que des catégories
+    ("aucune")."""
+    texte = texte.strip()
+    if not texte:
+        return None
+    try:
+        return int(texte)
+    except ValueError:
+        pass
+    try:
+        return float(texte.replace(",", "."))
+    except ValueError:
+        return texte
+
+
+_OPERATEURS_EDITEUR = ("<", "<=", ">", ">=", "=", "!=", "renseigne",
+                       "non_renseigne", "vrai", "faux")
+_SANS_VALEUR = ("renseigne", "non_renseigne", "vrai", "faux")
+_NB_LIGNES_CONDITION = 4
+
+
+def _reinitialiser_editeur_regle() -> None:
+    for cle in list(st.session_state):
+        if cle.startswith("ed_regle_"):
+            del st.session_state[cle]
+
+
+def _charger_regle_dans_editeur(regle: dict) -> None:
+    _reinitialiser_editeur_regle()
+    st.session_state["ed_regle_code_cible"] = regle["code"]
+    st.session_state["ed_regle_code"] = regle["code"]
+    st.session_state["ed_regle_libelle"] = regle.get("libelle", "")
+    st.session_state["ed_regle_message"] = regle.get("message", "")
+    st.session_state["ed_regle_gravite"] = regle.get("gravite", "attention")
+    st.session_state["ed_regle_source"] = regle.get("source", "")
+    st.session_state["ed_regle_combinaison"] = (
+        "ou (au moins une)" if regle.get("combinaison") == "ou" else "et (toutes)"
+    )
+    for i, cond in enumerate(regle.get("conditions", [])[:_NB_LIGNES_CONDITION]):
+        st.session_state[f"ed_regle_fait_{i}"] = cond.get("fait", "")
+        st.session_state[f"ed_regle_op_{i}"] = cond.get("op", "")
+        if "valeur" in cond:
+            st.session_state[f"ed_regle_valeur_{i}"] = str(cond["valeur"])
+
+
 def _protocoles() -> None:
     st.caption(
         "Un protocole n'est proposé à l'écran que s'il est **validé et signé** "
@@ -234,6 +342,193 @@ def _protocoles() -> None:
             theme.VERT if p.valide else theme.ORANGE,
         )
 
+    _editeur_protocoles()
+
+
+def _charger_protocole_dans_editeur(code: str | None) -> None:
+    for cle in list(st.session_state):
+        if cle.startswith("ed_proto_") and cle != "ed_proto_choix":
+            del st.session_state[cle]
+    if code is None:
+        return
+    p = protocoles.lire_fichier(code)
+    st.session_state["ed_proto_code"] = code
+    st.session_state["ed_proto_titre"] = p.get("titre", "")
+    declencheur = p.get("declencheur") or {}
+    if declencheur.get("type") == "region_traumatique":
+        st.session_state["ed_proto_decl_type"] = "region_traumatique"
+        st.session_state["ed_proto_decl_valeur_region"] = declencheur.get("valeur")
+    elif declencheur.get("type") == "motif":
+        st.session_state["ed_proto_decl_type"] = "motif"
+        st.session_state["ed_proto_decl_valeur_motif"] = declencheur.get("valeur")
+    else:
+        st.session_state["ed_proto_decl_type"] = "aucun (jamais proposé automatiquement)"
+    for i, ligne in enumerate(p.get("lignes_prescription", [])[:6]):
+        st.session_state[f"ed_proto_ligne_voie_{i}"] = ligne.get("voie", "")
+        st.session_state[f"ed_proto_ligne_produit_{i}"] = ligne.get("produit", "")
+        st.session_state[f"ed_proto_ligne_rythme_{i}"] = ligne.get("rythme", "")
+        st.session_state[f"ed_proto_ligne_note_{i}"] = ligne.get("note", "")
+    for i, expl in enumerate(p.get("explorations_proposees", [])[:4]):
+        st.session_state[f"ed_proto_expl_type_{i}"] = expl.get("type", "")
+        st.session_state[f"ed_proto_expl_delai_{i}"] = expl.get("delai", "")
+        st.session_state[f"ed_proto_expl_libelle_{i}"] = expl.get("libelle", "")
+    st.session_state["ed_proto_consignes"] = "\n".join(p.get("consignes", []))
+    st.session_state["ed_proto_valide"] = bool(p.get("valide"))
+    st.session_state["ed_proto_signe_par"] = p.get("signe_par") or ""
+
+
+def _editeur_protocoles() -> None:
+    st.divider()
+    st.subheader("✏️ Ajouter ou modifier un protocole")
+    st.caption(
+        "Un protocole reste un brouillon — jamais proposé à l'admission — "
+        "tant que « Validé » n'est pas coché et « Signé par » renseigné "
+        "(règle de sécurité 1, SPEC §4.5)."
+    )
+
+    codes_existants = list(protocoles.codes())
+    choix = st.selectbox(
+        "Protocole", ["➕ Nouveau protocole…"] + codes_existants, key="ed_proto_choix"
+    )
+    if choix != st.session_state.get("ed_proto_charge"):
+        _charger_protocole_dans_editeur(None if choix == "➕ Nouveau protocole…" else choix)
+        st.session_state["ed_proto_charge"] = choix
+    code_existant = None if choix == "➕ Nouveau protocole…" else choix
+
+    code = st.text_input(
+        "Code (identifiant unique)", key="ed_proto_code", disabled=bool(code_existant)
+    )
+    titre = st.text_input("Titre affiché", key="ed_proto_titre")
+
+    st.markdown("**Déclencheur** — quand ce protocole doit-il être proposé ?")
+    c1, c2 = st.columns(2)
+    type_declencheur = c1.selectbox(
+        "Type", ["region_traumatique", "motif", "aucun (jamais proposé automatiquement)"],
+        key="ed_proto_decl_type",
+    )
+    valeur_declencheur = None
+    if type_declencheur == "region_traumatique":
+        valeur_declencheur = c2.selectbox(
+            "Région", listes.codes(listes.REGIONS_TRAUMATIQUES),
+            format_func=lambda c: listes.libelle(listes.REGIONS_TRAUMATIQUES, c),
+            key="ed_proto_decl_valeur_region",
+        )
+    elif type_declencheur == "motif":
+        tous_motifs = listes.motifs_a_plat()
+        codes_motifs = [c for c, _l, _g in tous_motifs]
+        valeur_declencheur = c2.selectbox(
+            "Motif", codes_motifs, format_func=listes.libelle_motif,
+            key="ed_proto_decl_valeur_motif",
+        )
+    else:
+        c2.caption("Jamais proposé automatiquement — un dossier à part.")
+
+    st.markdown("**Lignes de prescription proposées**")
+    lignes_prescription = []
+    for i in range(6):
+        cc1, cc2, cc3, cc4 = st.columns([1, 2, 1, 2])
+        voie = cc1.selectbox(
+            "Voie", [""] + list(listes.ORDRE_VOIES), key=f"ed_proto_ligne_voie_{i}",
+            format_func=lambda c: "—" if not c else listes.VOIES[c]["titre"],
+            label_visibility="collapsed" if i else "visible",
+        )
+        produit = cc2.text_input(
+            "Produit", key=f"ed_proto_ligne_produit_{i}",
+            label_visibility="collapsed" if i else "visible",
+        )
+        rythme = cc3.selectbox(
+            "Rythme", [""] + list(listes.codes(listes.RYTHMES)), key=f"ed_proto_ligne_rythme_{i}",
+            format_func=lambda c: "—" if not c else listes.libelle(listes.RYTHMES, c),
+            label_visibility="collapsed" if i else "visible",
+        )
+        note = cc4.text_input(
+            "Note (optionnel)", key=f"ed_proto_ligne_note_{i}",
+            label_visibility="collapsed" if i else "visible",
+        )
+        if voie and produit:
+            ligne = {"voie": voie, "produit": produit}
+            if rythme:
+                ligne["rythme"] = rythme
+            if note:
+                ligne["note"] = note
+            lignes_prescription.append(ligne)
+
+    st.markdown("**Explorations proposées**")
+    explorations_proposees = []
+    types_expl = list(listes.TYPES_EXPLORATION.keys())
+    for i in range(4):
+        cc1, cc2, cc3 = st.columns([1, 1, 2])
+        type_expl = cc1.selectbox(
+            "Type", [""] + types_expl, key=f"ed_proto_expl_type_{i}",
+            format_func=lambda c: "—" if not c else listes.TYPES_EXPLORATION[c]["libelle"],
+            label_visibility="collapsed" if i else "visible",
+        )
+        delai = cc2.text_input(
+            "Délai (H48, quotidien…)", key=f"ed_proto_expl_delai_{i}",
+            label_visibility="collapsed" if i else "visible",
+        )
+        libelle_expl = cc3.text_input(
+            "Libellé affiché", key=f"ed_proto_expl_libelle_{i}",
+            label_visibility="collapsed" if i else "visible",
+        )
+        if type_expl:
+            explorations_proposees.append({
+                "type": type_expl,
+                "delai": delai,
+                "libelle": libelle_expl or listes.TYPES_EXPLORATION[type_expl]["libelle"],
+            })
+
+    st.markdown("**Consignes** (une par ligne)")
+    consignes_brutes = st.text_area(
+        "Consignes", key="ed_proto_consignes", height=100, label_visibility="collapsed"
+    )
+    consignes = [l.strip() for l in consignes_brutes.splitlines() if l.strip()]
+
+    st.markdown("**Validation**")
+    c1, c2 = st.columns(2)
+    valide_coche = c1.checkbox("Validé par le chef de service", key="ed_proto_valide")
+    signe_par = c2.text_input("Signé par", key="ed_proto_signe_par")
+    if valide_coche and not signe_par:
+        st.warning("Indiquer qui valide, sinon le protocole reste un brouillon.")
+
+    col_save, col_del = st.columns([3, 1])
+    if col_save.button("💾 Enregistrer le protocole", type="primary"):
+        code_normalise = _slug(code)
+        if not code_normalise:
+            st.error("Le code est obligatoire.")
+        elif not titre:
+            st.error("Le titre est obligatoire.")
+        elif not code_existant and code_normalise in codes_existants:
+            st.error("Ce code existe déjà — en choisir un autre.")
+        else:
+            declencheur = (
+                {} if valeur_declencheur is None
+                else {"type": type_declencheur, "valeur": valeur_declencheur}
+            )
+            ancien = protocoles.lire_fichier(code_existant) if code_existant else {}
+            contenu = {
+                "titre": titre,
+                "version": ancien.get("version", ""),
+                "signe_par": signe_par or None,
+                "valide": bool(valide_coche and signe_par),
+                "declencheur": declencheur,
+                "lignes_prescription": lignes_prescription,
+                "explorations_proposees": explorations_proposees,
+                "consignes": consignes,
+                "note": ancien.get(
+                    "note", "Créé ou modifié depuis l'éditeur de protocoles."
+                ),
+            }
+            protocoles.enregistrer(code_normalise, contenu)
+            st.success(f"Protocole « {code_normalise} » enregistré.")
+            st.session_state.pop("ed_proto_charge", None)
+            st.rerun()
+    if code_existant and col_del.button("🗑 Supprimer"):
+        protocoles.supprimer(code_existant)
+        st.success("Protocole supprimé.")
+        st.session_state.pop("ed_proto_charge", None)
+        st.rerun()
+
 
 def _regles() -> None:
     st.caption(
@@ -251,3 +546,171 @@ def _regles() -> None:
         if jeu["source"]:
             lignes.append(jeu["source"])
         theme.bloc(jeu["titre"], lignes, theme.VERT if jeu["valide"] else theme.ORANGE)
+
+    _editeur_regles()
+
+
+# --------------------------------------------------------------------------
+# Éditeur de règles — un formulaire, jamais de fichier à ouvrir
+# --------------------------------------------------------------------------
+
+def _editeur_regles() -> None:
+    st.divider()
+    st.subheader("✏️ Ajouter ou modifier une règle")
+    st.caption(
+        "Une règle enregistrée ici s'applique tout de suite, comme si elle "
+        "avait été tapée à la main dans le fichier. Le badge « non signé » "
+        "reste affiché tant qu'un senior n'a pas validé le fichier — ça ne "
+        "bloque rien, ce n'est qu'un avertissement."
+    )
+
+    fichiers = list(aides.noms_fichiers())
+    choix_fichier = st.selectbox(
+        "Fichier de règles", fichiers + ["➕ Nouveau fichier…"], key="ed_regle_choix_fichier"
+    )
+
+    if choix_fichier == "➕ Nouveau fichier…":
+        with st.form("nouveau_fichier_regles"):
+            nom = st.text_input("Nom du fichier (ex. « rappels_cardio »)")
+            titre = st.text_input("Titre affiché")
+            if st.form_submit_button("Créer le fichier"):
+                nom_normalise = _slug(nom)
+                if not nom_normalise:
+                    st.error("Le nom est obligatoire.")
+                elif nom_normalise in fichiers:
+                    st.error("Un fichier de ce nom existe déjà.")
+                else:
+                    aides.creer_fichier(nom_normalise, titre or nom_normalise)
+                    st.success(f"Fichier « {nom_normalise} » créé — le choisir dans la liste.")
+        return
+
+    contenu = aides.lire_fichier(choix_fichier)
+    regles_existantes = contenu.get("regles", [])
+
+    if regles_existantes:
+        st.caption(f"{len(regles_existantes)} règle(s) dans ce fichier :")
+        for r in regles_existantes:
+            c1, c2, c3 = st.columns([5, 1, 1])
+            c1.write(f"**{r.get('libelle', r['code'])}** · `{r['code']}`")
+            if c2.button("Modifier", key=f"mod_{choix_fichier}_{r['code']}"):
+                _charger_regle_dans_editeur(r)
+                st.rerun()
+            if c3.button("Supprimer", key=f"sup_{choix_fichier}_{r['code']}"):
+                contenu["regles"] = [x for x in regles_existantes if x["code"] != r["code"]]
+                aides.enregistrer_fichier(choix_fichier, contenu)
+                st.success(f"Règle « {r['code']} » supprimée.")
+                st.rerun()
+        st.markdown("---")
+
+    code_cible = st.session_state.get("ed_regle_code_cible")
+    st.markdown(
+        f"**Modifier « {code_cible} »**" if code_cible else "**Nouvelle règle**"
+    )
+    if code_cible and st.button("Annuler — créer une nouvelle règle à la place"):
+        _reinitialiser_editeur_regle()
+        st.rerun()
+
+    code = st.text_input(
+        "Code (identifiant unique)", key="ed_regle_code", disabled=bool(code_cible)
+    )
+    libelle = st.text_input("Libellé (titre affiché)", key="ed_regle_libelle")
+    message = st.text_area(
+        "Message — { un_fait} insère sa valeur, ex. « Plaquettes à {plaquettes} »",
+        key="ed_regle_message", height=70,
+    )
+    trouve = regles_dom.contient_une_posologie(message) if message else None
+    if trouve:
+        st.error(
+            f"Le mot « {trouve} » ressemble à une posologie — le logiciel ne "
+            "calcule ni ne propose de dose (SPEC §3.1). Reformuler le message."
+        )
+
+    c1, c2 = st.columns(2)
+    gravite = c1.selectbox("Gravité", ["alerte", "attention", "info"], key="ed_regle_gravite")
+    source = c2.text_input("Source (optionnel)", key="ed_regle_source")
+
+    combinaison = st.radio(
+        "Condition à remplir", ["et (toutes)", "ou (au moins une)"],
+        key="ed_regle_combinaison", horizontal=True,
+    )
+
+    st.caption("Conditions :")
+    libelles_faits = dict(regles_dom.FAITS_CONNUS)
+    noms_faits = [f for f, _l in regles_dom.FAITS_CONNUS]
+    conditions = []
+    for i in range(_NB_LIGNES_CONDITION):
+        cc1, cc2, cc3 = st.columns([2, 1, 1])
+        fait = cc1.selectbox(
+            f"Fait {i + 1}", [""] + noms_faits, key=f"ed_regle_fait_{i}",
+            format_func=lambda f: "—" if not f else libelles_faits.get(f, f),
+        )
+        op = cc2.selectbox("Opérateur", [""] + list(_OPERATEURS_EDITEUR), key=f"ed_regle_op_{i}")
+        valeur_brute = cc3.text_input(
+            "Valeur", key=f"ed_regle_valeur_{i}", disabled=op in _SANS_VALEUR or not op,
+        )
+        if fait and op:
+            cond = {"fait": fait, "op": op}
+            if op not in _SANS_VALEUR:
+                valeur = _valeur_typee(valeur_brute)
+                if valeur is None:
+                    continue
+                cond["valeur"] = valeur
+            conditions.append(cond)
+
+    if conditions:
+        with st.expander("🧪 Tester avec des valeurs d'exemple"):
+            faits_test = {}
+            for cond in conditions:
+                brut = st.text_input(
+                    f"Valeur de test — {libelles_faits.get(cond['fait'], cond['fait'])}",
+                    key=f"ed_regle_test_{cond['fait']}",
+                )
+                if brut.strip():
+                    minuscule = brut.strip().lower()
+                    faits_test[cond["fait"]] = (
+                        True if minuscule in ("vrai", "oui", "true") else
+                        False if minuscule in ("faux", "non", "false") else
+                        _valeur_typee(brut)
+                    )
+            if st.button("Tester"):
+                regle_test = regles_dom.Regle.depuis_dict({
+                    "code": "test", "libelle": "test", "message": "",
+                    "conditions": conditions,
+                    "combinaison": "ou" if combinaison.startswith("ou") else "et",
+                })
+                if regles_dom.declenchee(regle_test, faits_test):
+                    st.success("Cette règle se déclencherait avec ces valeurs.")
+                else:
+                    st.info("Cette règle ne se déclencherait pas avec ces valeurs.")
+
+    if st.button("💾 Enregistrer la règle", type="primary"):
+        code_normalise = _slug(code)
+        if not code_normalise:
+            st.error("Le code est obligatoire.")
+        elif not libelle:
+            st.error("Le libellé est obligatoire.")
+        elif not message:
+            st.error("Le message est obligatoire.")
+        elif trouve:
+            st.error("Corriger le message avant d'enregistrer.")
+        elif not conditions:
+            st.error("Au moins une condition complète est nécessaire.")
+        elif not code_cible and any(r["code"] == code_normalise for r in regles_existantes):
+            st.error("Ce code existe déjà dans ce fichier — en choisir un autre.")
+        else:
+            nouvelle_regle = {
+                "code": code_normalise,
+                "libelle": libelle,
+                "message": message,
+                "gravite": gravite,
+                "source": source,
+                "combinaison": "ou" if combinaison.startswith("ou") else "et",
+                "conditions": conditions,
+            }
+            autres = [r for r in regles_existantes
+                     if r["code"] != (code_cible or code_normalise)]
+            contenu["regles"] = autres + [nouvelle_regle]
+            aides.enregistrer_fichier(choix_fichier, contenu)
+            st.success(f"Règle « {code_normalise} » enregistrée.")
+            _reinitialiser_editeur_regle()
+            st.rerun()

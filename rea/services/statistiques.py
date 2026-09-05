@@ -17,7 +17,7 @@ chiffres faux à l'air juste :
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 from .. import referentiels

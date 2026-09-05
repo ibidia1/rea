@@ -19,6 +19,88 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+# Un message de règle qui contiendrait un de ces mots franchirait la limite du
+# SPEC §3.1 : le logiciel calcule des dates, des heures et des volumes, jamais
+# une dose. Même liste utilisée par le test de garde et par l'éditeur de
+# règles — une seule source, pour ne jamais les laisser diverger.
+MOTS_POSOLOGIE_INTERDITS = ("mg/kg", "µg/kg", "mg/j", "ui/kg", "administrer", "injecter")
+
+
+def prochaine_version(ancienne: str) -> str:
+    """Un numéro de version qui monte à chaque enregistrement, daté du jour.
+
+    Même discipline que pour les référentiels : deux extractions doivent
+    pouvoir se comparer, donc savoir si elles ont vu la même version d'un
+    fichier de règles ou d'un protocole.
+    """
+    from datetime import date
+
+    aujourdhui = date.today().isoformat()
+    if ancienne and ancienne.startswith(aujourdhui):
+        suffixe = ancienne.rsplit(".", 1)[-1]
+        try:
+            return f"{aujourdhui}.{int(suffixe) + 1}"
+        except ValueError:
+            pass
+    return f"{aujourdhui}.1"
+
+
+def contient_une_posologie(texte: str) -> str | None:
+    """Le premier mot interdit trouvé dans le texte, ou None s'il est propre."""
+    minuscule = texte.lower()
+    return next((mot for mot in MOTS_POSOLOGIE_INTERDITS if mot in minuscule), None)
+
+
+# Le vocabulaire que l'éditeur de règles propose dans son menu déroulant.
+# Chaque fait correspond à un calcul réel dans rea/services/aides.py : cette
+# liste ne fait qu'aider à les retrouver, elle ne les définit pas. Rien
+# n'empêche une condition d'utiliser un fait absent d'ici (le moteur ne le
+# vérifie pas), mais un fait qui ne s'y trouve pas ne sera jamais renseigné.
+FAITS_CONNUS: tuple[tuple[str, str], ...] = (
+    ("kaliemie", "Kaliémie (mmol/L)"),
+    ("natremie", "Natrémie (mmol/L)"),
+    ("hemoglobine", "Hémoglobine (g/dL)"),
+    ("plaquettes", "Plaquettes (×10³/µL)"),
+    ("creatinine", "Créatinine (µmol/L)"),
+    ("glycemie_du_jour", "Glycémie du jour"),
+    ("crp", "CRP"),
+    ("clairance", "Clairance de la créatinine calculée (mL/min)"),
+    ("pao2_fio2", "Rapport PaO₂/FiO₂ calculé"),
+    ("age", "Âge (ans)"),
+    ("poids_kg", "Poids (kg)"),
+    ("jour_hospitalisation", "Jour d'hospitalisation"),
+    ("rass", "RASS du jour"),
+    ("glasgow", "Glasgow du jour"),
+    ("temperature", "Température du jour"),
+    ("tete_de_lit_surelevee", "Tête de lit surélevée (vrai/faux)"),
+    ("nb_escarres", "Nombre d'escarres actives"),
+    ("nb_lignes_prescrites", "Nombre de lignes prescrites actives"),
+    ("sortie_prononcee", "Sortie déjà prononcée (vrai/faux)"),
+    ("ventile", "Sous ventilation, intubé ou trachéotomisé (vrai/faux)"),
+    ("analgesie_prescrite", "Analgésie prescrite (vrai/faux)"),
+    ("thromboprophylaxie_prescrite", "Thromboprophylaxie prescrite (vrai/faux)"),
+    ("prophylaxie_ulcere_prescrite", "Prophylaxie de l'ulcère prescrite (vrai/faux)"),
+    ("nutrition_prescrite", "Nutrition prescrite (vrai/faux)"),
+    ("insuline_prescrite", "Insuline prescrite (vrai/faux)"),
+    ("intubation_en_place", "Intubation en place (vrai/faux)"),
+    ("jours_intubation", "Jours d'intubation"),
+    ("sedation_en_place", "Sédation en place (vrai/faux)"),
+    ("jours_sedation", "Jours de sédation"),
+    ("tracheotomie_en_place", "Trachéotomie en place (vrai/faux)"),
+    ("sng_en_place", "Sonde nasogastrique en place (vrai/faux)"),
+    ("jours_sng", "Jours de sonde nasogastrique"),
+    ("kt_central_en_place", "Cathéter central en place (vrai/faux)"),
+    ("jours_kt_central", "Jours de cathéter central"),
+    ("kta_en_place", "Cathéter artériel en place (vrai/faux)"),
+    ("jours_kta", "Jours de cathéter artériel"),
+    ("sonde_urinaire_en_place", "Sonde urinaire en place (vrai/faux)"),
+    ("jours_sonde_urinaire", "Jours de sonde urinaire"),
+    ("eer_en_place", "Épuration extra-rénale en place (vrai/faux)"),
+    ("jours_eer", "Jours d'épuration extra-rénale"),
+    ("gastrostomie_en_place", "Gastrostomie en place (vrai/faux)"),
+)
+
+
 class ConditionInvalide(ValueError):
     """Une règle mal écrite doit se voir tout de suite, pas se taire.
 

@@ -19,7 +19,6 @@ from dataclasses import dataclass
 
 from .. import analytes as cat
 from ..db import Base
-from ..domaine.dates import format_date_fr
 
 
 # --------------------------------------------------------------------------

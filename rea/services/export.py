@@ -150,20 +150,13 @@ def exporter(
 
     _ecrire_dictionnaire(base, racine, avec_texte_libre)
     manifeste = _ecrire_manifeste(base, racine, compte, avec_texte_libre, motif, sejour_ids)
-    base.inserer(
-        "journal",
-        {
-            "date_heure": datetime.now().isoformat(timespec="seconds"),
-            "utilisateur_id": utilisateur_id,
-            "table_cible": "export",
-            "ligne_id": racine.name,
-            "action": "export",
-            "details": json.dumps(
-                {"dossier": str(racine), "sejours": len(sejour_ids),
+    base.journaliser_evenement(
+        action="export",
+        cible="export",
+        ligne_id=racine.name,
+        utilisateur_id=utilisateur_id,
+        details={"dossier": str(racine), "sejours": len(sejour_ids),
                  "texte_libre": avec_texte_libre, "motif": motif},
-                ensure_ascii=False,
-            ),
-        },
     )
     return manifeste.parent
 
@@ -346,15 +339,8 @@ def geler(base: Base, *, motif: str, utilisateur_id: str | None = None) -> dict:
             "SELECT COUNT(*) AS n FROM sejour WHERE supprime = 0"
         )["n"],
     }
-    base.inserer(
-        "journal",
-        {
-            "date_heure": gel["date"],
-            "utilisateur_id": utilisateur_id,
-            "table_cible": "base",
-            "ligne_id": fichier.name,
-            "action": "gel",
-            "details": json.dumps(gel, ensure_ascii=False),
-        },
+    base.journaliser_evenement(
+        action="gel", cible="base", ligne_id=fichier.name,
+        utilisateur_id=utilisateur_id, details=gel,
     )
     return gel

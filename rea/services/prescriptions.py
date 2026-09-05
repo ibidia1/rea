@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..db import Base
 from ..domaine import prescription as dom
-from ..domaine.dates import lendemain, parse_date
+from ..domaine.dates import lendemain
 
 
 # --------------------------------------------------------------------------
@@ -198,34 +198,44 @@ def definir_bilans_demandes(
     utilisateur_id: str | None = None,
 ) -> None:
     """`examens` : liste de (code_examen, heure_prelevement)."""
-    journee = obtenir_ou_creer_journee(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
-    base.executer(
-        "UPDATE bilan_demande SET supprime = 1 WHERE journee_id = ?", (journee["id"],)
-    )
-    for code, heure in examens:
-        deja = base.une_ligne(
-            "SELECT id FROM bilan_demande WHERE journee_id = ? AND examen_code = ?",
-            (journee["id"], code),
+    with base.transaction():
+        journee = obtenir_ou_creer_journee(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
+        base.executer(
+            "UPDATE bilan_demande SET supprime = 1 WHERE journee_id = ?", (journee["id"],)
         )
-        if deja:
-            base.mettre_a_jour(
-                "bilan_demande",
-                deja["id"],
-                {"supprime": 0, "heure_prelevement": heure},
-                utilisateur_id=utilisateur_id,
+        for code, heure in examens:
+            deja = base.une_ligne(
+                "SELECT id FROM bilan_demande WHERE journee_id = ? AND examen_code = ?",
+                (journee["id"], code),
             )
-        else:
-            base.inserer(
-                "bilan_demande",
-                {"journee_id": journee["id"], "examen_code": code, "heure_prelevement": heure},
-                utilisateur_id=utilisateur_id,
-            )
+            if deja:
+                base.mettre_a_jour(
+                    "bilan_demande",
+                    deja["id"],
+                    {"supprime": 0, "heure_prelevement": heure},
+                    utilisateur_id=utilisateur_id,
+                )
+            else:
+                base.inserer(
+                    "bilan_demande",
+                    {"journee_id": journee["id"], "examen_code": code, "heure_prelevement": heure},
+                    utilisateur_id=utilisateur_id,
+                )
 
 
 # --------------------------------------------------------------------------
 # « Préparer la pancarte de demain » (SPEC §5.5) — la fonction la plus
 # importante du logiciel.
 # --------------------------------------------------------------------------
+
+def etat_journee(base: Base, sejour_id: str, date_jour: str) -> dict | None:
+    """L'état de préparation/validation d'une journée, sans recalculer toute
+    la pancarte — sert à décider si un bouton d'impression doit être actif."""
+    return base.une_ligne(
+        "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
+        (sejour_id, date_jour),
+    )
+
 
 def preparer_pancarte_de_demain(
     base: Base, sejour_id: str, *, aujourdhui: str | None = None, utilisateur_id: str | None = None
@@ -243,6 +253,30 @@ def preparer_pancarte_de_demain(
         {"preparee_le": base.__class__.__module__ and _maintenant()},
         utilisateur_id=utilisateur_id,
         action="preparation_pancarte",
+    )
+    return pancarte_du_jour(base, sejour_id, demain)
+
+
+def valider_pancarte_de_demain(
+    base: Base, sejour_id: str, *, aujourdhui: str | None = None, utilisateur_id: str | None = None
+) -> dict:
+    """Une relecture avant impression, distincte de la préparation.
+
+    Préparer ne fait que reconduire les lignes actives — un geste mécanique.
+    Valider dit que quelqu'un a relu le résultat avant que la feuille ne soit
+    imprimable : sur demande du service, l'impression de la pancarte du
+    lendemain reste bloquée tant que cette étape n'a pas eu lieu.
+    """
+    demain = str(lendemain(aujourdhui))
+    journee = base.une_ligne(
+        "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
+        (sejour_id, demain),
+    )
+    if journee is None:
+        raise ValueError("La pancarte du lendemain n'a pas encore été préparée.")
+    base.mettre_a_jour(
+        "journee", journee["id"], {"validee_le": _maintenant(), "validee_par": utilisateur_id},
+        utilisateur_id=utilisateur_id, action="validation_pancarte",
     )
     return pancarte_du_jour(base, sejour_id, demain)
 

@@ -1,9 +1,9 @@
 {
   "nom": "types_dispositif",
   "libelle": "Dispositifs et actes invasifs",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
-  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité].",
+  "version": "2026-09-05.2",
+  "date": "2026-09-05",
+  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords.",
   "valeurs": {
     "ordre": [
       "intubation",
@@ -38,7 +38,8 @@
         "libelle": "Sédation",
         "sites": [],
         "champs": [
-          "molecules"
+          "molecules",
+          "vitesse"
         ],
         "en_cours": "Sédaté",
         "apres": "Arrêt sédation",
@@ -227,6 +228,11 @@
         "Technique",
         "",
         ""
+      ],
+      "vitesse": [
+        "Vitesse",
+        "",
+        "cc/h"
       ]
     }
   }

@@ -5,9 +5,23 @@ Voir **[SPEC.md](SPEC.md)** — c'est le document de référence du projet,
 
 ## État actuel
 
-**v2.1** — tous les blocs codables de la feuille de route sont faits, et la
+**v2.5** — tous les blocs codables de la feuille de route sont faits, et la
 feuille imprimée est celle du service (maquette A3 de Kairouan, dans
 `modeles/` : c'est un fichier, il se remplace sans reprogrammer).
+
+### Organisation du code
+
+- `rea/domaine/` — tout le calcul médical (scores, cohérence, prescription,
+  règles). Ne connaît ni la base ni les écrans : c'est ce qui le rend
+  vérifiable.
+- `rea/services/` — la seule couche qui écrit, toujours dans une transaction
+  et toujours avec une trace au journal.
+- `rea/rendu/` — remplit la maquette imprimée avec un dossier qu'on lui donne ;
+  ne lit rien par lui-même.
+- `rea/ui/` — un module par écran ; `rea_app.py` ne fait plus que le montage.
+
+Ces séparations sont vérifiées par `tests/test_architecture.py`, pas seulement
+écrites ici.
 
 *Soin quotidien* : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
 impression), Explorations et actes (dispositifs invasifs avec compteurs de
@@ -20,7 +34,8 @@ pseudonymisé avec dictionnaire des données, gel de base.
 
 *Administration* : sauvegardes et **restauration**, journal d'audit
 consultable, version de chaque référentiel, de chaque protocole et de chaque
-jeu de règles.
+jeu de règles, **éditeur** pour ajouter ou modifier une règle d'aide ou un
+protocole pré-rempli depuis un formulaire (sans toucher au JSON).
 
 Les listes codées (`referentiels/`), les règles d'aide et les barèmes de score
 (`regles/`) sont des **fichiers JSON versionnés** : les modifier ne demande pas
@@ -37,6 +52,26 @@ de reprogrammer le logiciel.
 
 Le détail exact figure dans le journal des versions de SPEC.md et dans
 l'audit §10 de FEUILLE_DE_ROUTE.md.
+
+## Installation sur le poste du service (Windows)
+
+Pas de commande à taper : deux fichiers à double-cliquer, à la racine du
+dépôt.
+
+1. **`installer.bat`** — une seule fois. Installe Python si besoin (le
+   fichier le signale et donne le lien), puis tout ce que le logiciel
+   demande. Compter quelques minutes, avec une connexion internet.
+2. **`lancer_reanimation.bat`** — à chaque utilisation. Ouvre le logiciel
+   dans le navigateur. **Ne pas fermer la fenêtre noire** pendant l'usage :
+   la fermer arrête le logiciel pour tout le poste.
+
+Pour une icône sur le bureau : clic droit sur `lancer_reanimation.bat` →
+*Envoyer vers* → *Bureau (créer un raccourci)*. Le raccourci peut être
+renommé et son icône changée (clic droit → *Propriétés* → *Changer l'icône*)
+sans toucher au fichier d'origine.
+
+Le logiciel tourne alors **entièrement en local** : aucune donnée ne sort du
+poste (voir *Emplacement des données* ci-dessous et SPEC §2.2).
 
 ## Installation (poste de développement)
 

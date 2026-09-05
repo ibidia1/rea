@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from .. import listes
-from ..db import Base, maintenant, nouvel_id
+from ..db import Base, maintenant
 
 
 # --------------------------------------------------------------------------
@@ -23,8 +23,54 @@ def creer_patient(
     utilisateur_id: str | None = None,
     non_identifie: bool = False,
 ) -> str:
-    return base.inserer(
+    # L'identifiant d'étude est cherché et écrit dans la même transaction :
+    # sinon deux admissions simultanées reçoivent le même (deux onglets
+    # suffisent, Streamlit sert chacun dans son propre fil).
+    with base.transaction():
+        if non_identifie:
+            # Le matricule proposé à l'écran peut avoir été pris entre-temps.
+            matricule = _suffixe_libre(
+                base, "matricule", matricule.rsplit("-", 1)[0] + "-%d",
+                int(matricule.rsplit("-", 1)[-1]) if matricule.rsplit("-", 1)[-1].isdigit() else 1,
+            )
+        return base.inserer(
+            "patient",
+            {
+                "matricule": matricule,
+                "nom_affichage": nom_affichage,
+                "date_naissance": date_naissance,
+                "sexe": sexe,
+                "groupe_sanguin": None if groupe_sanguin in (None, "non_renseigne")
+                                  else groupe_sanguin,
+                "non_identifie": int(non_identifie),
+                "identifiant_etude": _nouvel_identifiant_etude(base),
+            },
+            utilisateur_id=utilisateur_id,
+        )
+
+
+def modifier_identite(
+    base: Base,
+    patient_id: str,
+    *,
+    matricule: str,
+    nom_affichage: str,
+    date_naissance: str | None,
+    sexe: str,
+    groupe_sanguin: str | None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Corrige une erreur de saisie à l'admission (matricule, nom, date de
+    naissance, sexe, groupe).
+
+    Ce n'est pas une nouvelle admission : la ligne existante est mise à jour,
+    jamais recréée (règle de conception 2 — pas de suppression physique).
+    Le journal garde qui a corrigé, quand, et vers quelles valeurs ; c'est ce
+    qui distingue une correction tracée d'une donnée simplement écrasée.
+    """
+    base.mettre_a_jour(
         "patient",
+        patient_id,
         {
             "matricule": matricule,
             "nom_affichage": nom_affichage,
@@ -32,28 +78,138 @@ def creer_patient(
             "sexe": sexe,
             "groupe_sanguin": None if groupe_sanguin in (None, "non_renseigne")
                               else groupe_sanguin,
-            "non_identifie": int(non_identifie),
-            "identifiant_etude": _nouvel_identifiant_etude(base),
         },
         utilisateur_id=utilisateur_id,
+        action="correction",
     )
+
+
+def modifier_admission(
+    base: Base,
+    sejour_id: str,
+    *,
+    date_admission: str,
+    provenance_type: str | None,
+    provenance_detail: str | None,
+    poids_kg: float | None,
+    taille_cm: float | None,
+    creatinine_base: float | None,
+    type_admission: str | None,
+    maladie_chronique_igs2: str | None,
+    traumatique: bool,
+    regions_traumatiques_choisies: list[str] | None = None,
+    mecanisme: str | None = None,
+    mecanisme_detail: str | None = None,
+    motif_principal: str | None = None,
+    motifs_associes: list[str] | None = None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Corrige les circonstances de l'admission.
+
+    Couvre aussi le cas où le motif a été coché du mauvais côté (traumatique
+    / non traumatique) à l'admission : les régions de l'autre catégorie sont
+    effacées, pas laissées à traîner en double. `motifs_associes` reste pris
+    en compte même quand `traumatique` est vrai : un traumatisme thoracique
+    peut être associé à une embolie pulmonaire, un SDRA, une acidocétose
+    diabétique — ce sont des motifs non traumatiques associés, pas le motif
+    principal, que la région traumatique tient déjà.
+
+    Le lit n'est volontairement pas modifiable ici — changer de lit est un
+    transfert (`changer_de_lit`), pas une correction d'erreur de saisie ; les
+    deux n'ont ni la même trace attendue ni les mêmes contrôles.
+    """
+    # Trois écritures pour une seule correction : le séjour, ses régions, ses
+    # motifs. À moitié appliquée, elle laisserait un séjour dont la catégorie
+    # ne correspond plus aux motifs qui y sont accrochés.
+    with base.transaction():
+        base.mettre_a_jour(
+            "sejour",
+            sejour_id,
+            {
+                "date_admission": date_admission,
+                "provenance_type": provenance_type,
+                "provenance_detail": provenance_detail,
+                "poids_kg": poids_kg,
+                "taille_cm": taille_cm,
+                "creatinine_base": creatinine_base,
+                "type_admission": type_admission,
+                "maladie_chronique_igs2": maladie_chronique_igs2,
+                "traumatique": int(traumatique),
+                "mecanisme": mecanisme if traumatique else None,
+                "mecanisme_detail": mecanisme_detail if traumatique else None,
+            },
+            utilisateur_id=utilisateur_id,
+            action="correction",
+        )
+        if traumatique:
+            definir_regions_traumatiques(
+                base, sejour_id, regions_traumatiques_choisies or [], utilisateur_id=utilisateur_id
+            )
+            # Pas de motif non traumatique "principal" — la région tient ce
+            # rôle — mais les motifs associés (complications) restent posés.
+            definir_motifs(
+                base, sejour_id, motif_principal=None,
+                motifs_associes=motifs_associes, utilisateur_id=utilisateur_id,
+            )
+        else:
+            definir_regions_traumatiques(base, sejour_id, [], utilisateur_id=utilisateur_id)
+            definir_motifs(
+                base, sejour_id, motif_principal=motif_principal,
+                motifs_associes=motifs_associes, utilisateur_id=utilisateur_id,
+            )
+
+
+def _suffixe_libre(base: Base, colonne: str, gabarit: str, depart: int) -> str:
+    """Premier `gabarit % n` (à partir de `depart`) que `patient.colonne` ne
+    porte pas encore.
+
+    À n'appeler que dans une transaction : c'est elle qui garantit qu'aucune
+    autre écriture ne prend la valeur entre le moment où on la trouve libre et
+    celui où on l'écrit.
+    """
+    n = max(depart, 1)
+    while base.une_ligne(
+        f"SELECT 1 AS x FROM patient WHERE {colonne} = ?", (gabarit % n,)
+    ):
+        n += 1
+    return gabarit % n
 
 
 def _nouvel_identifiant_etude(base: Base) -> str:
     """Identifiant stable, sans lien direct avec le matricule (règle de
-    conception 8 — export recherche pseudonymisé automatiquement)."""
-    n = base.une_ligne("SELECT COUNT(*) AS n FROM patient")["n"] + 1
-    return f"ETU-{n:05d}"
+    conception 8 — export recherche pseudonymisé automatiquement).
+
+    Se déduit du plus grand déjà attribué, puis du premier libre à partir de
+    là. Un comptage des lignes donnait le bon résultat tant que rien n'est
+    jamais effacé pour de bon — ce qui est le cas aujourd'hui (règle de
+    conception 2) — mais ne le dit pas, et redevient faux le jour où une ligne
+    est écrite ou reprise autrement. La recherche du premier libre, elle, tient
+    la contrainte d'unicité du schéma quoi qu'il arrive.
+    """
+    dernier = base.une_ligne(
+        "SELECT MAX(CAST(SUBSTR(identifiant_etude, 5) AS INTEGER)) AS n FROM patient "
+        "WHERE identifiant_etude LIKE 'ETU-%'"
+    )
+    return _suffixe_libre(base, "identifiant_etude", "ETU-%05d", ((dernier or {}).get("n") or 0) + 1)
 
 
 def prochain_matricule_non_identifie(base: Base) -> str:
-    """SPEC §4.1 : `XXX-{date}-{n}`."""
+    """SPEC §4.1 : `XXX-{date}-{n}`.
+
+    Proposé à l'écran, puis réattribué au moment de l'écriture (voir
+    `creer_patient`) : entre l'affichage et la validation du formulaire, un
+    autre poste a pu prendre le numéro.
+    """
     aujourdhui = date.today().strftime("%Y%m%d")
-    n = base.une_ligne(
-        "SELECT COUNT(*) AS n FROM patient WHERE matricule LIKE ?",
-        (f"XXX-{aujourdhui}-%",),
-    )["n"] + 1
-    return f"XXX-{aujourdhui}-{n}"
+    prefixe = f"XXX-{aujourdhui}-"
+    dernier = base.une_ligne(
+        "SELECT MAX(CAST(SUBSTR(matricule, ?) AS INTEGER)) AS n FROM patient "
+        "WHERE matricule LIKE ?",
+        (len(prefixe) + 1, f"{prefixe}%"),
+    )
+    return _suffixe_libre(
+        base, "matricule", f"{prefixe}%d", ((dernier or {}).get("n") or 0) + 1
+    )
 
 
 def creer_sejour(
@@ -76,34 +232,39 @@ def creer_sejour(
     maladie_chronique_igs2: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
-    numero = base.une_ligne(
-        "SELECT COUNT(*) AS n FROM sejour WHERE patient_id = ?", (patient_id,)
-    )["n"] + 1
-    return base.inserer(
-        "sejour",
-        {
-            "patient_id": patient_id,
-            "numero_sejour": numero,
-            "date_admission": date_admission,
-            "lit_admission": lit_admission,
-            "provenance_type": provenance_type,
-            "provenance_detail": provenance_detail,
-            "type_admission": type_admission,
-            "maladie_chronique_igs2": maladie_chronique_igs2,
-            "est_readmission": int(est_readmission),
-            "motif_readmission": motif_readmission,
-            "traumatique": None if traumatique is None else int(traumatique),
-            "mecanisme": mecanisme,
-            "mecanisme_detail": mecanisme_detail,
-            # Poids : sans lui, pas de clairance de la créatinine.
-            "poids_kg": poids_kg,
-            "taille_cm": taille_cm,
-            # Créatinine antérieure : sans elle KDIGO est incalculable (§5).
-            "creatinine_base": creatinine_base,
-            "complication_statut": "non_renseigne",
-        },
-        utilisateur_id=utilisateur_id,
-    )
+    with base.transaction():
+        # Le plus grand numéro déjà donné, pas le nombre de séjours : c'est ce
+        # que « deuxième séjour de ce patient » veut dire, et ça reste juste si
+        # un séjour est un jour repris ou importé hors de cette fonction.
+        numero = (base.une_ligne(
+            "SELECT MAX(numero_sejour) AS n FROM sejour WHERE patient_id = ?", (patient_id,)
+        ) or {}).get("n") or 0
+        numero += 1
+        return base.inserer(
+            "sejour",
+            {
+                "patient_id": patient_id,
+                "numero_sejour": numero,
+                "date_admission": date_admission,
+                "lit_admission": lit_admission,
+                "provenance_type": provenance_type,
+                "provenance_detail": provenance_detail,
+                "type_admission": type_admission,
+                "maladie_chronique_igs2": maladie_chronique_igs2,
+                "est_readmission": int(est_readmission),
+                "motif_readmission": motif_readmission,
+                "traumatique": None if traumatique is None else int(traumatique),
+                "mecanisme": mecanisme,
+                "mecanisme_detail": mecanisme_detail,
+                # Poids : sans lui, pas de clairance de la créatinine.
+                "poids_kg": poids_kg,
+                "taille_cm": taille_cm,
+                # Créatinine antérieure : sans elle KDIGO est incalculable (§5).
+                "creatinine_base": creatinine_base,
+                "complication_statut": "non_renseigne",
+            },
+            utilisateur_id=utilisateur_id,
+        )
 
 
 def sejour_avec_patient(base: Base, sejour_id: str) -> dict | None:
@@ -126,24 +287,25 @@ def sejour_avec_patient(base: Base, sejour_id: str) -> dict | None:
 def definir_regions_traumatiques(
     base: Base, sejour_id: str, regions: list[str], *, utilisateur_id: str | None = None
 ) -> None:
-    base.executer(
-        "UPDATE sejour_region_trauma SET supprime = 1 WHERE sejour_id = ?", (sejour_id,)
-    )
-    for region in regions:
+    with base.transaction():
         base.executer(
-            "UPDATE sejour_region_trauma SET supprime = 0 WHERE sejour_id = ? AND region = ?",
-            (sejour_id, region),
+            "UPDATE sejour_region_trauma SET supprime = 1 WHERE sejour_id = ?", (sejour_id,)
         )
-        existe = base.une_ligne(
-            "SELECT id FROM sejour_region_trauma WHERE sejour_id = ? AND region = ?",
-            (sejour_id, region),
-        )
-        if not existe:
-            base.inserer(
-                "sejour_region_trauma",
-                {"sejour_id": sejour_id, "region": region},
-                utilisateur_id=utilisateur_id,
+        for region in regions:
+            base.executer(
+                "UPDATE sejour_region_trauma SET supprime = 0 WHERE sejour_id = ? AND region = ?",
+                (sejour_id, region),
             )
+            existe = base.une_ligne(
+                "SELECT id FROM sejour_region_trauma WHERE sejour_id = ? AND region = ?",
+                (sejour_id, region),
+            )
+            if not existe:
+                base.inserer(
+                    "sejour_region_trauma",
+                    {"sejour_id": sejour_id, "region": region},
+                    utilisateur_id=utilisateur_id,
+                )
 
 
 def regions_traumatiques(base: Base, sejour_id: str) -> list[str]:
@@ -167,27 +329,41 @@ def definir_motifs(
     base: Base,
     sejour_id: str,
     *,
-    motif_principal: str,
+    motif_principal: str | None,
     motifs_associes: list[str] | None = None,
     precisions: dict[str, dict] | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
+    """`motif_principal=None` efface les motifs principaux sans en reposer —
+    c'est ce dont un séjour traumatique a besoin : la région atteinte tient
+    lieu de motif principal, mais un motif non traumatique peut s'y associer
+    (un traumatisme thoracique associé à une embolie pulmonaire, un SDRA, une
+    acidocétose diabétique). `motifs_associes` reste donc pris en compte même
+    sans motif principal — seul `motif_principal=None` et
+    `motifs_associes` vide efface tout sans rien reposer.
+    """
     import json
 
-    base.executer("UPDATE sejour_motif SET supprime = 1 WHERE sejour_id = ?", (sejour_id,))
-    precisions = precisions or {}
-    tous = [(motif_principal, True)] + [(m, False) for m in (motifs_associes or [])]
-    for code, principal in tous:
-        base.inserer(
-            "sejour_motif",
-            {
-                "sejour_id": sejour_id,
-                "code": code,
-                "principal": int(principal),
-                "donnees": json.dumps(precisions.get(code, {}), ensure_ascii=False),
-            },
-            utilisateur_id=utilisateur_id,
+    with base.transaction():
+        base.executer("UPDATE sejour_motif SET supprime = 1 WHERE sejour_id = ?", (sejour_id,))
+        if motif_principal is None and not motifs_associes:
+            return
+        precisions = precisions or {}
+        tous = (
+            ([(motif_principal, True)] if motif_principal else [])
+            + [(m, False) for m in (motifs_associes or [])]
         )
+        for code, principal in tous:
+            base.inserer(
+                "sejour_motif",
+                {
+                    "sejour_id": sejour_id,
+                    "code": code,
+                    "principal": int(principal),
+                    "donnees": json.dumps(precisions.get(code, {}), ensure_ascii=False),
+                },
+                utilisateur_id=utilisateur_id,
+            )
 
 
 def motifs_du_sejour(base: Base, sejour_id: str) -> list[dict]:
@@ -210,6 +386,8 @@ def ajouter_antecedent(
     code: str | None = None,
     code_icd10: str | None = None,
     precision: str | None = None,
+    quantification_valeur: float | None = None,
+    quantification_unite: str | None = None,
     statut: str = "present",
     utilisateur_id: str | None = None,
 ) -> str:
@@ -222,6 +400,8 @@ def ajouter_antecedent(
             "libelle": libelle,
             "code_icd10": code_icd10,
             "precision": precision,
+            "quantification_valeur": quantification_valeur,
+            "quantification_unite": quantification_unite,
             "statut": statut,
         },
         utilisateur_id=utilisateur_id,
@@ -229,10 +409,62 @@ def ajouter_antecedent(
 
 
 def antecedents_du_patient(base: Base, patient_id: str) -> list[dict]:
+    """N'inclut jamais la catégorie `evaluation` (§4.2 bis) : c'est une note
+    interne sur l'état de l'interrogatoire, pas un antécédent à afficher."""
     return base.requete(
-        "SELECT * FROM antecedent WHERE patient_id = ? AND supprime = 0 ORDER BY cree_le",
+        "SELECT * FROM antecedent WHERE patient_id = ? AND categorie != 'evaluation' "
+        "AND supprime = 0 ORDER BY cree_le",
         (patient_id,),
     )
+
+
+# --------------------------------------------------------------------------
+# « Le patient a-t-il des antécédents ? » Oui / Non / Inconnu (SPEC §4.2 bis)
+# --------------------------------------------------------------------------
+#
+# Case « Sans antécédent connu » de la SPEC : distincte de « jamais demandé »
+# (trois états, comme partout ailleurs dans ce logiciel). Dès qu'un antécédent
+# réel est ajouté, cette note devient caduque et est retirée — elle ne doit
+# jamais contredire une entrée réelle.
+
+def definir_etat_antecedents(
+    base: Base, patient_id: str, etat: str, *, utilisateur_id: str | None = None
+) -> None:
+    if etat not in ("absent", "non_renseigne"):
+        raise ValueError("etat doit être 'absent' ou 'non_renseigne'")
+    existante = base.une_ligne(
+        "SELECT id FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
+        "AND supprime = 0",
+        (patient_id,),
+    )
+    if existante:
+        base.mettre_a_jour(
+            "antecedent", existante["id"], {"statut": etat}, utilisateur_id=utilisateur_id
+        )
+    else:
+        base.inserer(
+            "antecedent",
+            {
+                "patient_id": patient_id,
+                "categorie": "evaluation",
+                "libelle": "Interrogatoire des antécédents",
+                "statut": etat,
+            },
+            utilisateur_id=utilisateur_id,
+        )
+
+
+def etat_antecedents(base: Base, patient_id: str) -> str:
+    """'oui' dès qu'un antécédent réel existe ; sinon la réponse déclarée
+    ('absent' / 'non_renseigne') ; 'non_renseigne' si jamais demandé."""
+    if antecedents_du_patient(base, patient_id):
+        return "oui"
+    evaluation = base.une_ligne(
+        "SELECT statut FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
+        "AND supprime = 0",
+        (patient_id,),
+    )
+    return evaluation["statut"] if evaluation else "non_renseigne"
 
 
 def allergies_du_patient(base: Base, patient_id: str) -> list[dict]:
@@ -286,18 +518,39 @@ def interventions_du_sejour(base: Base, sejour_id: str) -> list[dict]:
 def changer_de_lit(
     base: Base, sejour_id: str, nouveau_lit: int, *, utilisateur_id: str | None = None
 ) -> None:
-    en_cours = base.une_ligne(
-        "SELECT id FROM sejour_lit WHERE sejour_id = ? AND date_fin IS NULL", (sejour_id,)
-    )
-    if en_cours:
-        base.mettre_a_jour(
-            "sejour_lit", en_cours["id"], {"date_fin": maintenant()}, utilisateur_id=utilisateur_id
+    """Transfère un séjour vers un autre lit.
+
+    Met à jour `sejour.lit_admission` — c'est ce champ que
+    `lits.etat_des_lits()` lit pour savoir qui occupe quel lit, malgré son nom.
+    Sans cette mise à jour, un transfert restait invisible : le patient
+    continuait d'apparaître dans son ancien lit, et le nouveau restait affiché
+    comme libre. `sejour_lit` garde l'historique (durée passée dans chaque
+    lit), il ne sert pas à l'affichage courant.
+    """
+    with base.transaction():
+        occupe = base.une_ligne(
+            "SELECT id FROM sejour WHERE lit_admission = ? AND date_sortie IS NULL "
+            "AND supprime = 0 AND id != ?",
+            (nouveau_lit, sejour_id),
         )
-    base.inserer(
-        "sejour_lit",
-        {"sejour_id": sejour_id, "lit": nouveau_lit, "date_debut": maintenant()},
-        utilisateur_id=utilisateur_id,
-    )
+        if occupe:
+            raise ValueError(f"Le lit {nouveau_lit} est déjà occupé.")
+        en_cours = base.une_ligne(
+            "SELECT id FROM sejour_lit WHERE sejour_id = ? AND date_fin IS NULL", (sejour_id,)
+        )
+        if en_cours:
+            base.mettre_a_jour(
+                "sejour_lit", en_cours["id"], {"date_fin": maintenant()}, utilisateur_id=utilisateur_id
+            )
+        base.inserer(
+            "sejour_lit",
+            {"sejour_id": sejour_id, "lit": nouveau_lit, "date_debut": maintenant()},
+            utilisateur_id=utilisateur_id,
+        )
+        base.mettre_a_jour(
+            "sejour", sejour_id, {"lit_admission": nouveau_lit},
+            utilisateur_id=utilisateur_id, action="transfert",
+        )
 
 
 # --------------------------------------------------------------------------
@@ -345,7 +598,6 @@ def cloturer_sejour(
 # --------------------------------------------------------------------------
 
 def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
-    from .. import config, listes
     from ..domaine.dates import duree_sejour_jours, format_date_fr
 
     sejour = sejour_avec_patient(base, sejour_id)

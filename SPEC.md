@@ -203,6 +203,18 @@ mise à jour.
 direct, plus un champ de recherche ICD-10 (par nom ou par code) pour tout le
 reste. Case **« Sans antécédent connu »** disponible.
 
+### 4.2 bis — Le patient a-t-il des antécédents ? (implémenté v2.6)
+
+Question d'entrée, avant toute saisie : **Oui / Non / Inconnu**. Inconnu
+s'affiche comme « aucun antécédent enregistré », mais reste distingué de
+Non en base — ce logiciel ne confond jamais « répondu non » et « jamais
+demandé ». Si Oui, la saisie se scinde par catégorie : **Familiaux** /
+**Personnels** (chirurgical, médical, allergies) / **Habitudes de vie**,
+ces dernières avec trois habitudes prêtes par défaut — tabagisme (quantifié
+en paquets-années), éthylisme, toxicomanie (substance ou substances
+précisées) — modifiable après l'admission, à tout moment, depuis l'onglet
+Identité.
+
 **Allergies :** catégorie à part, affichée en **alerte rouge en haut de la
 pancarte et de toutes les fiches**.
 
@@ -369,7 +381,9 @@ imprimée, à destination des infirmiers.
 ## 5.2 bis Bilans à demander pour le lendemain
 
 Section à part entière de la pancarte, remplie chaque soir par l'interne :
-liste d'examens à cocher, avec l'heure de prélèvement *(par défaut 6 h)*.
+liste d'examens à cocher, avec l'heure de prélèvement *(par défaut 8 h,
+tranché en FEUILLE_DE_ROUTE.md §9 — après les soins d'hygiène, avant les
+prises de 8 h)*.
 
 Liste de départ à valider : NFS · Ionogramme · Créatinine · Urée · CRP ·
 Procalcitonine · Gaz du sang · TP/INR · Bilan hépatique · Hémoculture · ECBU ·
@@ -795,6 +809,246 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v2.6 — 5 septembre 2026 — protocoles et définitions câblés, antécédents en trois états, pancarte relue avant impression**
+
+Suite directe de la reprise d'architecture v2.5 : plusieurs briques posées mais
+jamais reliées à un écran, et deux bugs réels trouvés en les câblant.
+
+1. **Heure de prélèvement par défaut : 08:00** (était 06:00 — décision
+   FEUILLE_DE_ROUTE.md non reportée dans le code).
+2. **Protocoles câblés à l'admission** (§4.5) : les protocoles pertinents
+   pour la région traumatique ou le motif sont proposés à la création du
+   séjour et appliqués sans jamais poser de dose.
+3. **Définitions cliniques câblées** (Berlin/KDIGO/qSOFA/Sepsis-3, §8) à
+   l'onglet Évolution — `rea/domaine/definitions.py` était pur et testé mais
+   inatteignable depuis l'interface.
+4. **`score_quotidien` historisé** à chaque calcul de SOFA.
+5. **Bug réel — transfert de lit invisible** : `changer_de_lit` écrivait
+   l'historique (`sejour_lit`) mais jamais `sejour.lit_admission`, le champ
+   que le tableau des lits lit réellement. Un transfert ne changeait donc
+   rien à l'écran. Corrigé, avec contrôle d'occupation du lit cible.
+6. **Bug réel — motifs associés perdus** : `definir_motifs` sortait sans
+   rien écrire dès que `motif_principal` était `None`, ce qui empêchait
+   d'associer un motif non traumatique à un séjour traumatique (ex.
+   traumatisme thoracique + embolie pulmonaire + SDRA + acidocétose
+   diabétique — cas explicitement demandé par le service).
+7. **`st.form()` retiré des écrans d'admission et de correction.** Un
+   formulaire Streamlit ne redéclenche pas de script tant qu'il n'est pas
+   soumis : la bascule traumatique/non traumatique, la révélation du
+   mécanisme, de la provenance détaillée, ne s'affichaient jamais. Toute
+   logique conditionnelle dans ce logiciel doit désormais éviter `st.form`.
+8. **Antécédents en trois états** (§4.2 bis) : la case « Sans antécédent
+   connu » de la SPEC devient un vrai « Le patient a-t-il des
+   antécédents ? » Oui / Non / Inconnu — Inconnu s'affiche comme Non mais
+   reste distingué en base (`antecedent` catégorie `evaluation`, retirée
+   dès qu'un antécédent réel est ajouté). Si Oui : Familiaux / Personnels
+   (chirurgical, médical, allergies) / Habitudes de vie, ces dernières avec
+   trois habitudes prêtes — tabagisme quantifié en paquets-années,
+   éthylisme, toxicomanie avec la ou les substances précisées.
+9. **Écran Bilans** : bascule Saisir/Visualiser pour espacer la saisie de la
+   relecture, sur demande du service.
+10. **Pancarte de demain relue avant impression** (§5.5) : entre préparer
+    (reconduction mécanique) et imprimer, une étape valider explicite
+    (`journee.validee_le`/`validee_par`) — l'impression d'une reconduction
+    jamais relue est désormais impossible depuis l'écran.
+11. Placeholders français sur les listes déroulantes à choix multiple, et
+    correction du double-journal dans `export.exporter()`/`geler()`.
+12. **Écran Prescrit réorganisé** : le panneau « Ajouter une ligne » reste en
+    permanence à côté de la pancarte, au lieu d'un tiroir à rouvrir à chaque
+    ligne. La voie se choisit d'un clic sur un bouton coloré (même couleur
+    qu'à l'affichage de la pancarte), plutôt que dans une liste déroulante —
+    c'est le geste le plus répété de l'écran.
+
+**v2.5 — 5 septembre 2026 — reprise d'architecture : atomicité, traçabilité, découpe**
+
+Quatre corrections issues d'une évaluation structurelle du dépôt. Aucune ne
+change ce que le service voit à l'écran ; toutes changent ce sur quoi on peut
+s'appuyer.
+
+1. **Les écritures sont atomiques.** La connexion était en validation
+   automatique, sans un seul `BEGIN`/`COMMIT` dans tout le dépôt. Une
+   admission — créer le patient, puis le séjour — pouvait laisser un patient
+   sans séjour ; une correction de motifs, qui efface tout avant de reposer la
+   nouvelle liste, pouvait laisser un séjour **sans aucun motif**. `Base` a
+   maintenant un gestionnaire de transaction (`base.transaction()`), le verrou
+   est réentrant, et une ligne part désormais avec sa trace au journal, ou pas
+   du tout.
+2. **Les compteurs ne courent plus.** `identifiant_etude`, matricule `XXX-` et
+   `numero_sejour` se calculaient par `COUNT(*) + 1`, lu puis écrit hors
+   transaction. Deux admissions simultanées prenaient le même identifiant — et
+   comme le schéma porte une contrainte d'unicité, la seconde **plantait**.
+   Deux onglets ouverts suffisaient : Streamlit sert chacun dans son propre
+   fil. L'allocation se fait maintenant dans la transaction, sur le premier
+   numéro libre. Vérifié par des tests qui lancent douze admissions en
+   parallèle, et qui échouent bien sur l'ancien code.
+3. **Tout forçage d'un garde-fou laisse une trace.** Un avertissement
+   « impossible » se franchit à un second clic — c'est voulu. Mais seul
+   `bilan_resultat` avait une colonne `saisie_forcee` : sur les cinq autres
+   écrans qui laissent forcer (admission, correction, prescription, sortie,
+   dispositifs), rien dans le dossier ne disait qu'un garde-fou avait été
+   franchi. Le journal enregistre désormais l'écran, l'utilisateur et le texte
+   exact des avertissements passés outre.
+4. **`rea_app.py` n'est plus un monolithe.** 2 040 lignes, 33 fonctions dont 8
+   de plus de cent lignes, et surtout **zéro test** : le fichier n'était pas
+   importable sans exécuter l'application entière. Les écrans vivent maintenant
+   dans `rea/ui/` (lits, admission, identite, prescrit, bilans, evolution,
+   actes, sortie, fiche, champs), et `rea_app.py` se réduit à 70 lignes de
+   montage. `rea/ui/contexte.py` porte ce que les écrans partagent (base,
+   utilisateur courant, garde-fou de cohérence) à la place des variables
+   globales qui les retenaient prisonniers du même fichier.
+5. **Règle R3 tenue.** `rea/rendu/feuille.py` importait `db.Base` et six
+   services : le rendu décidait quoi lire, et `services/pancarte.py` devait un
+   import différé pour éviter le cycle. Un `services/feuille_dossier.py`
+   rassemble maintenant toutes les lectures, et le rendu reçoit ce dossier —
+   il ne connaît plus ni la base ni les services. Au passage, `ui/utilisateur.py`
+   écrivait lui aussi directement en base (règle R1) : c'est un service
+   désormais.
+
+Les règles d'isolation sont **vérifiées par des tests** (`test_architecture.py`)
+et non plus seulement écrites : le domaine reste pur, aucun écran n'écrit en
+base, le rendu ne lit rien, et le paquet n'a aucun cycle d'import. Une règle
+qu'aucun test ne tient finit par ne plus être vraie — les cinq l'avaient été
+au moins une fois.
+
+- 370 tests (pytest, +63), dépôt propre sous pyflakes, et parcours complet des
+  treize écrans plus une impression réelle vérifiés au navigateur.
+- La couverture affichée passe de 90 % à 69 %, ce qui est une **amélioration
+  de la mesure, pas une régression** : `rea/ui/` (1 025 instructions) était
+  jusqu'ici totalement absent du rapport, faute d'être importable. Le cœur
+  métier reste au-dessus de 90 %.
+
+**v2.4 — 4 septembre 2026 — éditeur de règles et de protocoles, sans JSON**
+
+Jusqu'ici, ajouter un rappel ou un protocole pré-rempli demandait d'éditer un
+fichier JSON à la main dans `regles/` ou `protocoles/` — en pratique un frein
+pour le service, qui n'a pas à ouvrir un éditeur de texte pour ça.
+Administration → **Règles d'aide** et **Protocoles** portent maintenant un
+formulaire complet ; le fichier reste la vérité, ces écrans ne font que le
+lire et le réécrire exactement comme une main l'aurait fait.
+
+- **Règles d'aide** : choisir un fichier existant ou en créer un nouveau,
+  lister/modifier/supprimer ses règles, composer une condition (jusqu'à 4
+  clauses, et/ou) sur la liste des faits que le moteur sait déjà calculer
+  (`FAITS_CONNUS` dans `rea/domaine/regles.py`), et **tester la règle avec des
+  valeurs d'exemple avant de l'enregistrer** — un aller-retour sans quitter
+  l'écran. Le garde-fou SPEC §3.1 (aucune règle ne peut porter un mot de
+  posologie — mg/kg, administrer, injecter…) est vérifié au moment de la
+  frappe du message, avec le même code que celui qui protège les fichiers
+  livrés.
+- **Protocoles** : mêmes principes pour les protocoles de pré-remplissage —
+  déclencheur (région traumatique ou motif), jusqu'à 6 lignes de prescription
+  et 4 explorations proposées, consignes. La règle de sécurité 1 (SPEC §4.5)
+  reste tenue par le code, pas par l'écran : tant que « Validé » n'est pas
+  coché et « Signé par » renseigné, `protocoles_valides()` — et donc tout
+  écran de proposition — ignore le protocole, qui reste un brouillon visible
+  mais inerte.
+- Chaque enregistrement incrémente la version du fichier
+  (`AAAA-MM-JJ.N`, `regles.prochaine_version()`), comme une modification
+  manuelle l'aurait fait.
+- En corrigeant ce chantier : un bug d'isolation dans les tests de cet
+  éditeur écrivait, lors d'une exécution complète de la suite, dans les
+  vrais dossiers `regles/` et `protocoles/` du dépôt au lieu d'un dossier
+  temporaire — `conftest.base` vide `sys.modules["rea.*"]` pour forcer une
+  relecture de `REA_DIR`, ce qui pouvait faire pointer un module `rea.config`
+  fraîchement importé vers un objet différent de celui déjà capturé par
+  `rea.protocoles`. Le correctif patche `protocoles.config` directement
+  plutôt qu'un `rea.config` réimporté à part.
+- 290 tests (pytest, +10) ; vérifié aussi dans l'application réelle
+  (Playwright) : créer/tester/modifier/supprimer une règle, créer un
+  protocole brouillon et vérifier qu'aucun écran ne le proposerait, le
+  valider et signer, vérifier qu'il devient proposable, le supprimer.
+
+**v2.3 — 5 septembre 2026 — neuf remarques du service sur la feuille imprimée**
+
+Toutes issues d'une relecture de la feuille par le service.
+
+1. **La grille horaire commence à 8 h**, pas à minuit — c'est l'heure où la
+   relève ouvre la feuille. `ORDRE_HEURES = (8..23, 0..7)` commande à la fois
+   l'en-tête et le placement des ronds, recto comme verso.
+2. **La colonne « Voie » a disparu** : chaque bloc est déjà organisé par voie,
+   elle ne disait rien de plus. Ce qu'elle portait d'utile pour les entrées
+   (perfusion / nutrition) est reporté entre parenthèses à côté du produit.
+   La largeur libérée agrandit Dose.
+3. **La dose affiche le nombre de comprimés ou d'ampoules** à côté du dosage
+   — « 40 mg · 1 cp », « 4000 UI · 1 amp » — sauf en seringue électrique, où
+   la vitesse (le seul nombre qu'un infirmier règle) prime sur tout le reste.
+   `nb_ampoules` est désormais saisissable en PO (comprimés) et SC
+   (ampoules), en plus de PSE ; toujours une valeur saisie, jamais déduite du
+   dosage (SPEC §3.1).
+4. **Le rond à cocher est plus grand** (11px → 15px, gras) : visible depuis
+   le pied du lit.
+5. **Le nom du médicament s'imprime en bleu**, plus gras — la seule couleur
+   du tableau qui ne soit ni le noir du texte ni le vert d'en-tête du service.
+6. **Les abords et dispositifs sont abrégés** : KTVC (sous-C G, 3 voies),
+   KTA (radiale G), SNG (ND, 55cm), SV (sans le calibre — ça ne change pas
+   grand-chose), Trachéo, Drain thx… Un nouveau référentiel
+   (`feuille_abreviations.json`) porte ces raccourcis : le service peut en
+   changer sans toucher au code. Les écrans du logiciel gardent le libellé
+   complet, seule la feuille imprimée est compressée.
+7. **La sédation apparaît aussi en P.S.E., vitesse comprise** — en plus des
+   abords, où son compteur de jours reste affiché. C'est à la fois une
+   lecture neurologique et une consigne infirmière ; elle partage le quota de
+   lignes du bloc P.S.E., elle ne s'ajoute pas par-dessus.
+8. **Le texte grossit dans un bloc largement vide** : moins d'un tiers de
+   lignes utilisées → 13,5 px, moins de 60 % → 11,5 px, sinon la taille
+   normale. Un style calculé par patient est injecté au début de la feuille ;
+   la maquette elle-même ne change pas.
+9. **Rappel si les plaquettes sont basses sous énoxaparine ou IPP** — deux
+   règles ajoutées à `regles/rappels_biologie.json`, sur signalement du
+   service : risque hémorragique et TIH pour l'héparine de bas poids
+   moléculaire, cause médicamenteuse à évoquer pour un inhibiteur de la
+   pompe à protons. Comme toute règle tout juste ajoutée, marquées non
+   validées tant qu'un senior ne les a pas confirmées.
+
+- 280 tests (pytest, +15), vérifiés aussi sur un dossier réaliste couvrant les
+  neuf remarques, dans l'application réelle
+
+
+**v2.2 — 5 septembre 2026 — corriger une admission, revoir les fiches imprimées**
+
+Deux manques signalés à l'usage : aucune façon de corriger une erreur de
+saisie à l'admission sans recréer le patient, et aucune façon de retrouver
+une fiche déjà imprimée un autre jour.
+
+*Corriger l'admission*
+
+Un encadré « ✏️ Corriger l'admission » dans l'onglet Identité, fermé par
+défaut, pré-rempli avec les valeurs actuelles. Ce n'est pas une nouvelle
+admission : la même ligne est mise à jour (règle de conception 2 — jamais de
+suppression physique), avec trace de qui a corrigé et quand dans le journal.
+
+Couvre aussi le cas où le motif a été coché du mauvais côté à l'admission
+(traumatique / non traumatique) : basculer d'un côté à l'autre efface
+proprement les régions ou les motifs de l'ancienne catégorie, sans les laisser
+traîner en double.
+
+Le **lit n'est volontairement pas modifiable** ici : changer de lit est un
+transfert (`changer_de_lit`, déjà écrit côté service mais pas encore relié à
+un écran), pas une correction d'erreur de saisie — les deux n'ont ni la même
+trace attendue ni les mêmes contrôles.
+
+*Revoir les fiches imprimées*
+
+Chaque impression était déjà conservée telle quelle en base
+(`pancarte_snapshot`, une des rares tables où le texte est stocké et non
+recalculé — règle de conception 6), mais rien ne permettait de la relire :
+seule la toute dernière impression restait visible, et seulement jusqu'au
+prochain rafraîchissement du navigateur.
+
+- **Par patient** (onglet Prescrit) : « 📜 Anciennes fiches imprimées »,
+  sélecteur par jour et version, aperçu et téléchargement.
+- **Par jour, tout le service** (Administration → Fiches imprimées) : choisir
+  une date, voir tout ce qui a été imprimé ce jour-là, tous lits confondus —
+  la relecture qu'une visite ou une revue médico-légale demande.
+
+La fiche relue est **l'instantané exact du jour d'impression**, pas une
+version recalculée avec les données d'aujourd'hui : un test vérifie que
+modifier le dossier après coup ne change pas une fiche déjà imprimée.
+
+- 265 tests (pytest, +9), vérifiés aussi dans l'application réelle : correction
+  d'une admission, historique par patient, historique par jour tout le service
+
 
 **v2.1 — 5 septembre 2026 — la feuille du service**
 
