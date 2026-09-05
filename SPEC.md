@@ -854,6 +854,11 @@ jamais reliées à un écran, et deux bugs réels trouvés en les câblant.
     jamais relue est désormais impossible depuis l'écran.
 11. Placeholders français sur les listes déroulantes à choix multiple, et
     correction du double-journal dans `export.exporter()`/`geler()`.
+12. **Écran Prescrit réorganisé** : le panneau « Ajouter une ligne » reste en
+    permanence à côté de la pancarte, au lieu d'un tiroir à rouvrir à chaque
+    ligne. La voie se choisit d'un clic sur un bouton coloré (même couleur
+    qu'à l'affichage de la pancarte), plutôt que dans une liste déroulante —
+    c'est le geste le plus répété de l'écran.
 
 **v2.5 — 5 septembre 2026 — reprise d'architecture : atomicité, traçabilité, découpe**
 

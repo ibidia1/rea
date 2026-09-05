@@ -70,11 +70,17 @@ def onglet_prescrit(sejour: dict) -> None:
     voies_remplies = [
         v for v in listes.ORDRE_VOIES if pancarte["lignes_par_voie"].get(v)
     ]
-    zone_pancarte, zone_actions = st.columns([2.3, 1])
+    zone_pancarte, zone_ajout = st.columns([2.1, 1])
 
-    with zone_actions:
+    with zone_pancarte:
         st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
+        gauche, droite = st.columns(2)
+        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite)
 
+    # Le panneau d'ajout reste à l'écran en permanence à côté de la pancarte
+    # (capture du service) plutôt que dans un tiroir qu'il faut rouvrir à
+    # chaque ligne — c'est le geste le plus répété de tout l'écran.
+    with zone_ajout:
         if st.button("🖨 Imprimer la pancarte de ce jour", use_container_width=True):
             snap = pancarte_service.imprimer(
                 contexte.base(), sejour["id"], date_jour_str, utilisateur_id=contexte.utilisateur_id()
@@ -98,9 +104,8 @@ def onglet_prescrit(sejour: dict) -> None:
             theme.VIOLET if demandes else theme.GRIS,
         )
 
-    with zone_pancarte:
-        gauche, droite = st.columns(2)
-        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite)
+        st.divider()
+        _panneau_ajouter_ligne(sejour, date_jour_str)
 
     _actions_prescrit(sejour, pancarte, date_jour_str)
 
@@ -172,6 +177,114 @@ def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) 
             )
 
 
+def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
+    """« AJOUTER UNE LIGNE » — panneau permanent, pas un tiroir à rouvrir.
+
+    La voie se choisit d'un clic sur un bouton (une par voie, toujours les
+    mêmes couleurs qu'à l'affichage de la pancarte), plutôt que dans une
+    liste déroulante : c'est le geste le plus répété de l'écran, capturé
+    tel que le service l'a demandé.
+    """
+    st.markdown("**➕ Ajouter une ligne**")
+    voie = st.segmented_control(
+        "Voie",
+        listes.ORDRE_VOIES,
+        format_func=lambda c: listes.VOIES[c]["titre"],
+        default=listes.ORDRE_VOIES[0],
+        key=f"voie_choisie_{sejour['id']}",
+        label_visibility="collapsed",
+    )
+    if not voie:
+        st.caption("Choisir une voie ci-dessus.")
+        return
+
+    champs_voie = listes.VOIES[voie]["champs"]
+    with st.form(f"ajout_ligne_{voie}"):
+        produit = st.text_input("Produit / libellé")
+        dose = unite = rythme = condition = None
+        dilution = None
+        nb_ampoules = vitesse = volume_dilution = volume_24h = None
+        additifs = None
+        sous_type = None
+        duree_prevue = None
+
+        # Chaque champ part vide, jamais à « 0 » : un zéro pré-rempli est
+        # une valeur qu'il faut remarquer et effacer avant de taper la
+        # vraie — une perte de temps répétée à chaque ligne de la pancarte.
+        if "dilution" in champs_voie:
+            dilution = st.text_input("Dilution (ex. 0,5 mg/cc)")
+        if "dose" in champs_voie:
+            c1, c2 = st.columns(2)
+            dose = champs.nombre_saisi(c1.text_input("Dose", value="", placeholder="ex. 40"))
+            unite = c2.selectbox("Unité", listes.UNITES)
+        if "nb_ampoules" in champs_voie:
+            # PO se compte en comprimés, les autres voies en ampoules — le
+            # mot change, la valeur reste un nombre saisi par le médecin,
+            # jamais déduit du dosage (SPEC §3.1).
+            etiquette_unites = "Nombre de comprimés" if voie == "PO" else "Nombre d'ampoules"
+            nb_ampoules = champs.nombre_saisi(
+                st.text_input(etiquette_unites, value="", placeholder="ex. 1")
+            )
+        if "vitesse" in champs_voie:
+            vitesse = champs.nombre_saisi(
+                st.text_input("Vitesse (cc/h)", value="", placeholder="ex. 2")
+            )
+        if "rythme" in champs_voie:
+            rythme = st.selectbox("Rythme", listes.codes(listes.RYTHMES), format_func=lambda c: listes.libelle(listes.RYTHMES, c))
+        if "condition" in champs_voie:
+            condition = st.text_input("Condition (si conditionnel)")
+        if "volume_dilution" in champs_voie:
+            volume_dilution = champs.nombre_saisi(
+                st.text_input("Volume de dilution (mL/prise)", value="", placeholder="ex. 50")
+            )
+        if "additifs" in champs_voie:
+            additifs = st.text_input("Additifs (ex. + 3 KCl + 2 NaCl)")
+        if "sous_type" in champs_voie:
+            sous_type = st.selectbox("Type", listes.codes(listes.SOUS_TYPES_ENTREES), format_func=lambda c: listes.libelle(listes.SOUS_TYPES_ENTREES, c))
+        if "volume_24h" in champs_voie:
+            volume_24h = champs.nombre_saisi(
+                st.text_input("Volume /24 h (mL)", value="", placeholder="ex. 1500")
+            )
+        if voie in ("IV", "PSE"):
+            duree_prevue = champs.nombre_saisi(
+                st.text_input(
+                    "Durée prévue (jours, si antibiotique)", value="", placeholder="ex. 7"
+                )
+            )
+
+        date_debut = st.date_input(
+            "Début", value=date.fromisoformat(date_jour_str), key=f"debut_{voie}"
+        )
+
+        if st.form_submit_button("Ajouter à la pancarte", type="primary", use_container_width=True):
+            if not produit:
+                st.error("Le produit est obligatoire.")
+            elif contexte.controle(
+                f"ligne_{voie}",
+                coherence.verifier_prescription(
+                    date_debut=date_debut,
+                    duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
+                    dose=dose or None, vitesse=vitesse or None,
+                    volume_24h=volume_24h or None,
+                    date_admission=sejour["date_admission"],
+                ),
+                cible="prescription_ligne",
+                ligne_id=sejour["id"],
+            ):
+                prescriptions_service.ajouter_ligne(
+                    contexte.base(), sejour_id=sejour["id"], voie=voie, produit=produit,
+                    date_debut=str(date_debut),
+                    dose=dose or None, unite=unite, rythme=rythme,
+                    condition_texte=condition or None, dilution=dilution or None,
+                    nb_ampoules=nb_ampoules or None, vitesse=vitesse or None,
+                    volume_dilution=volume_dilution or None, volume_24h=volume_24h or None,
+                    additifs=additifs or None, sous_type=sous_type,
+                    duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
+                    utilisateur_id=contexte.utilisateur_id(),
+                )
+                st.rerun()
+
+
 def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
     with st.expander("⏹ Arrêter une ligne"):
         actives = [l for l in pancarte["lignes"] if l["statut"] == "active"]
@@ -185,94 +298,6 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
                     contexte.base(), ligne["id"], date_arret=date_jour_str, utilisateur_id=contexte.utilisateur_id()
                 )
                 st.rerun()
-
-    with st.expander("➕ Ajouter une ligne", expanded=True):
-        voie = st.selectbox("Voie", listes.ORDRE_VOIES, format_func=lambda c: listes.VOIES[c]["titre"])
-        champs_voie = listes.VOIES[voie]["champs"]
-        with st.form(f"ajout_ligne_{voie}"):
-            produit = st.text_input("Produit / libellé")
-            dose = unite = rythme = condition = None
-            dilution = None
-            nb_ampoules = vitesse = volume_dilution = volume_24h = None
-            additifs = None
-            sous_type = None
-            duree_prevue = None
-
-            # Chaque champ part vide, jamais à « 0 » : un zéro pré-rempli est
-            # une valeur qu'il faut remarquer et effacer avant de taper la
-            # vraie — une perte de temps répétée à chaque ligne de la pancarte.
-            if "dose" in champs_voie:
-                c1, c2 = st.columns(2)
-                dose = champs.nombre_saisi(c1.text_input("Dose", value="", placeholder="ex. 40"))
-                unite = c2.selectbox("Unité", listes.UNITES)
-            if "rythme" in champs_voie:
-                rythme = st.selectbox("Rythme", listes.codes(listes.RYTHMES), format_func=lambda c: listes.libelle(listes.RYTHMES, c))
-            if "condition" in champs_voie:
-                condition = st.text_input("Condition (si conditionnel)")
-            if "dilution" in champs_voie:
-                dilution = st.text_input("Dilution (ex. 0,5 mg/cc)")
-            if "nb_ampoules" in champs_voie:
-                # PO se compte en comprimés, les autres voies en ampoules — le
-                # mot change, la valeur reste un nombre saisi par le médecin,
-                # jamais déduit du dosage (SPEC §3.1).
-                etiquette_unites = "Nombre de comprimés" if voie == "PO" else "Nombre d'ampoules"
-                nb_ampoules = champs.nombre_saisi(
-                    st.text_input(etiquette_unites, value="", placeholder="ex. 1")
-                )
-            if "vitesse" in champs_voie:
-                vitesse = champs.nombre_saisi(
-                    st.text_input("Vitesse (cc/h)", value="", placeholder="ex. 2")
-                )
-            if "volume_dilution" in champs_voie:
-                volume_dilution = champs.nombre_saisi(
-                    st.text_input("Volume de dilution (mL/prise)", value="", placeholder="ex. 50")
-                )
-            if "additifs" in champs_voie:
-                additifs = st.text_input("Additifs (ex. + 3 KCl + 2 NaCl)")
-            if "sous_type" in champs_voie:
-                sous_type = st.selectbox("Type", listes.codes(listes.SOUS_TYPES_ENTREES), format_func=lambda c: listes.libelle(listes.SOUS_TYPES_ENTREES, c))
-            if "volume_24h" in champs_voie:
-                volume_24h = champs.nombre_saisi(
-                    st.text_input("Volume /24 h (mL)", value="", placeholder="ex. 1500")
-                )
-            if voie in ("IV", "PSE"):
-                duree_prevue = champs.nombre_saisi(
-                    st.text_input(
-                        "Durée prévue (jours, si antibiotique)", value="", placeholder="ex. 7"
-                    )
-                )
-
-            date_debut = st.date_input(
-                "Date de début", value=date.fromisoformat(date_jour_str), key=f"debut_{voie}"
-            )
-
-            if st.form_submit_button("Ajouter à la pancarte"):
-                if not produit:
-                    st.error("Le produit est obligatoire.")
-                elif contexte.controle(
-                    f"ligne_{voie}",
-                    coherence.verifier_prescription(
-                        date_debut=date_debut,
-                        duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
-                        dose=dose or None, vitesse=vitesse or None,
-                        volume_24h=volume_24h or None,
-                        date_admission=sejour["date_admission"],
-                    ),
-                    cible="prescription_ligne",
-                    ligne_id=sejour["id"],
-                ):
-                    prescriptions_service.ajouter_ligne(
-                        contexte.base(), sejour_id=sejour["id"], voie=voie, produit=produit,
-                        date_debut=str(date_debut),
-                        dose=dose or None, unite=unite, rythme=rythme,
-                        condition_texte=condition or None, dilution=dilution or None,
-                        nb_ampoules=nb_ampoules or None, vitesse=vitesse or None,
-                        volume_dilution=volume_dilution or None, volume_24h=volume_24h or None,
-                        additifs=additifs or None, sous_type=sous_type,
-                        duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
-                        utilisateur_id=contexte.utilisateur_id(),
-                    )
-                    st.rerun()
 
     with st.expander("🧪 Bilans à demander pour le lendemain"):
         demain = date_jour_str
