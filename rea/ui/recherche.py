@@ -8,11 +8,10 @@ compris quand ils rendent « incalculable ».
 
 from __future__ import annotations
 
-from datetime import date
 
 import streamlit as st
 
-from .. import listes, referentiels
+from .. import listes
 from ..db import Base
 from ..services import export as export_service
 from ..services import statistiques as stats

@@ -13,7 +13,6 @@ qui n'existaient jusqu'ici que dans le code :
 from __future__ import annotations
 
 import json
-from datetime import datetime
 
 import streamlit as st
 

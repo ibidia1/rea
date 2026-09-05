@@ -130,32 +130,33 @@ def enregistrer_elements(
 ) -> None:
     """Un élément par clé. Une valeur vide efface l'élément du jour plutôt que
     d'enregistrer un zéro qui serait lu comme une mesure."""
-    for cle, valeur in elements.items():
-        plan = _plan_de(cle)
-        if plan is None:
-            continue
-        existant = base.une_ligne(
-            "SELECT id FROM evolution_element WHERE sejour_id = ? AND date_jour = ? "
-            "AND cle = ?",
-            (sejour_id, date_jour, cle),
-        )
-        est_vide = valeur is None or valeur == "" or valeur == "non_renseigne"
-        champs = {
-            "valeur_num": float(valeur) if isinstance(valeur, (int, float)) else None,
-            "valeur_texte": valeur if isinstance(valeur, str) else None,
-            "supprime": int(est_vide),
-        }
-        if existant:
-            base.mettre_a_jour(
-                "evolution_element", existant["id"], champs, utilisateur_id=utilisateur_id
+    with base.transaction():
+        for cle, valeur in elements.items():
+            plan = _plan_de(cle)
+            if plan is None:
+                continue
+            existant = base.une_ligne(
+                "SELECT id FROM evolution_element WHERE sejour_id = ? AND date_jour = ? "
+                "AND cle = ?",
+                (sejour_id, date_jour, cle),
             )
-        elif not est_vide:
-            base.inserer(
-                "evolution_element",
-                {"sejour_id": sejour_id, "date_jour": date_jour, "plan": plan,
-                 "cle": cle, **champs},
-                utilisateur_id=utilisateur_id,
-            )
+            est_vide = valeur is None or valeur == "" or valeur == "non_renseigne"
+            champs = {
+                "valeur_num": float(valeur) if isinstance(valeur, (int, float)) else None,
+                "valeur_texte": valeur if isinstance(valeur, str) else None,
+                "supprime": int(est_vide),
+            }
+            if existant:
+                base.mettre_a_jour(
+                    "evolution_element", existant["id"], champs, utilisateur_id=utilisateur_id
+                )
+            elif not est_vide:
+                base.inserer(
+                    "evolution_element",
+                    {"sejour_id": sejour_id, "date_jour": date_jour, "plan": plan,
+                     "cle": cle, **champs},
+                    utilisateur_id=utilisateur_id,
+                )
 
 
 def _plan_de(cle: str) -> str | None:

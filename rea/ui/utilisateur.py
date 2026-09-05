@@ -10,16 +10,11 @@ import streamlit as st
 
 from .. import listes
 from ..db import Base
+from ..services import utilisateurs as utilisateurs_service
 
 
 def utilisateurs_actifs(base: Base) -> list[dict]:
-    return base.requete(
-        "SELECT * FROM utilisateur WHERE actif = 1 AND supprime = 0 ORDER BY nom"
-    )
-
-
-def creer_utilisateur(base: Base, nom: str, role: str) -> str:
-    return base.inserer("utilisateur", {"nom": nom.strip(), "role": role})
+    return utilisateurs_service.actifs(base)
 
 
 def selecteur(base: Base) -> str | None:
@@ -51,14 +46,12 @@ def selecteur(base: Base) -> str | None:
                 return None
             # Un nom déjà pris n'est pas une erreur : on se reconnecte comme
             # cet utilisateur plutôt que de planter sur la contrainte UNIQUE.
-            existant = next(
-                (u for u in utilisateurs if u["nom"].strip().lower() == nom_saisi.lower()), None
-            )
+            existant = utilisateurs_service.par_nom(base, nom_saisi)
             if existant:
                 uid = existant["id"]
                 nom_retenu = existant["nom"]
             else:
-                uid = creer_utilisateur(base, nom_saisi, nouveau_role)
+                uid = utilisateurs_service.creer(base, nom_saisi, nouveau_role)
                 nom_retenu = nom_saisi
         else:
             uid = next(u["id"] for u in utilisateurs if u["nom"] == choix)

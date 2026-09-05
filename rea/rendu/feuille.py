@@ -23,18 +23,12 @@ saisi, telle quelle.
 from __future__ import annotations
 
 import html
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 
-from .. import analytes as cat, config, listes, referentiels
-from ..db import Base
+from .. import config, listes, referentiels
 from ..domaine import calculs, prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation, parse_date
-from ..services import bilans as bilans_service
-from ..services import dispositifs as dispositifs_service
-from ..services import microbiologie as micro_service
-from ..services import prescriptions as prescriptions_service
-from ..services import sejours as sejours_service
 from .gabarit import Brut, rendre
 
 MODELE = Path(__file__).resolve().parent.parent.parent / "modeles" / "feuille_reanimation_kairouan.html"
@@ -126,7 +120,7 @@ def _nombre(valeur) -> str:
 # Les blocs
 # --------------------------------------------------------------------------
 
-def _ligne_sedation_pse(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+def _ligne_sedation_pse(dossier) -> list[dict]:
     """La sédation en cours, reportée dans le bloc P.S.E. en plus des abords.
 
     Elle est déjà cochée dans les abords, avec son compteur de jours : c'est
@@ -135,8 +129,7 @@ def _ligne_sedation_pse(base: Base, sejour_id: str, date_jour: str) -> list[dict
     prescrit en ligne — elle doit donc être là où les seringues électriques
     se règlent, pas seulement dans la case des dispositifs.
     """
-    etats = dispositifs_service.etats(base, sejour_id, date_jour)
-    sedation = next((e for e in etats if e.type == "sedation" and e.en_place), None)
+    sedation = next((e for e in dossier.etats_dispositifs if e.type == "sedation" and e.en_place), None)
     if sedation is None:
         return []
     details = sedation.details or {}
@@ -153,17 +146,16 @@ def _ligne_sedation_pse(base: Base, sejour_id: str, date_jour: str) -> list[dict
     }]
 
 
-def _lignes_prescription(base: Base, sejour_id: str, date_jour: str) -> dict:
+def _lignes_prescription(dossier) -> dict:
     """Une ligne par prescription active, un rond par prise."""
-    pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
-    par_voie = prescriptions_service.lignes_par_voie(pancarte["lignes"])
+    par_voie = dossier.lignes_par_voie
     blocs: dict[str, list] = {}
     debordements: list[str] = []
     taux_remplissage: dict[str, float] = {}
 
     # La sédation posée comme dispositif occupe une ligne du bloc P.S.E. avant
     # les lignes prescrites — elle vient du dossier, pas d'une prescription.
-    lignes_synthetiques = {"PSE": _ligne_sedation_pse(base, sejour_id, date_jour)}
+    lignes_synthetiques = {"PSE": _ligne_sedation_pse(dossier)}
 
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
         synthetiques = lignes_synthetiques.get(voie, [])
@@ -241,16 +233,14 @@ def _dose(ligne: dict) -> str:
     return " · ".join(morceaux)
 
 
-def _bilans_a_faire(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+def _bilans_a_faire(dossier) -> list[dict]:
     """Les examens demandés la veille pour aujourd'hui, à leur ligne.
 
     C'est la demande faite hier soir qui devient la consigne d'aujourd'hui :
     sans ce report, elle ne vit que dans la tête de celui qui l'a écrite.
     """
-    veille = (parse_date(date_jour) - timedelta(days=1)).isoformat()
-    demandes = prescriptions_service.pancarte_du_jour(
-        base, sejour_id, date_jour
-    )["bilans_demandes"]
+    veille = (parse_date(dossier.date_jour) - timedelta(days=1)).isoformat()
+    demandes = dossier.pancarte["bilans_demandes"]
     heure_defaut = int(config.HEURE_PRELEVEMENT_DEFAUT.split(":")[0])
     lignes = []
     for demande in demandes[:LIGNES_BILANS_A_FAIRE]:
@@ -283,8 +273,7 @@ def _jours_biologie(date_jour: str) -> list[str]:
 
 
 def _valeurs_biologie(
-    base: Base, sejour_id: str, jours: list[str], codes: list[tuple[str, str]],
-    source: str,
+    dossier, jours: list[str], codes: list[tuple[str, str]], source: str,
 ) -> list[dict]:
     """Une ligne par paramètre, ses valeurs rangées par jour et par créneau.
 
@@ -298,7 +287,7 @@ def _valeurs_biologie(
             dernier = index_jour == len(jours) - 1
             creneaux = [""] * NB_CRENEAUX_PAR_JOUR
             if not dernier:
-                creneaux = _creneaux_du_jour(base, sejour_id, jour, code, source)
+                creneaux = _creneaux_du_jour(dossier, jour, code, source)
             cellules.extend(creneaux)
         lignes.append({
             "libelle": libelle,
@@ -309,19 +298,17 @@ def _valeurs_biologie(
     return lignes
 
 
-def _creneaux_du_jour(
-    base: Base, sejour_id: str, jour: str, code: str, source: str
-) -> list[str]:
+def _creneaux_du_jour(dossier, jour: str, code: str, source: str) -> list[str]:
     """Les valeurs d'un paramètre un jour donné, dans l'ordre des heures."""
     if source == "bilan":
         lignes = [
-            l for l in bilans_service.resultats_du_sejour(base, sejour_id)
+            l for l in dossier.resultats
             if l["analyte"] == code and (l["date_heure"] or "").startswith(jour)
         ]
         valeurs = [_nombre(l["valeur_num"]) for l in lignes]
     else:
         lignes = [
-            g for g in bilans_service.gaz_du_sang_du_sejour(base, sejour_id)
+            g for g in dossier.gaz_du_sang
             if (g["date_heure"] or "").startswith(jour)
         ]
         valeurs = [_nombre(g.get(code)) for g in lignes]
@@ -329,7 +316,7 @@ def _creneaux_du_jour(
     return (valeurs + [""] * NB_CRENEAUX_PAR_JOUR)[:NB_CRENEAUX_PAR_JOUR]
 
 
-def _rapport_pf(base: Base, sejour_id: str, jours: list[str]) -> Brut:
+def _rapport_pf(dossier, jours: list[str]) -> Brut:
     """Le rapport PaO₂/FiO₂, recalculé pour chaque gaz du sang.
 
     C'est le seul chiffre de la feuille qui n'est ni saisi ni recopié : il se
@@ -344,7 +331,7 @@ def _rapport_pf(base: Base, sejour_id: str, jours: list[str]) -> Brut:
         creneaux = [""] * NB_CRENEAUX_PAR_JOUR
         if index_jour < len(jours) - 1:          # le jour en cours reste à la garde
             valeurs = []
-            for gaz in bilans_service.gaz_du_sang_du_sejour(base, sejour_id):
+            for gaz in dossier.gaz_du_sang:
                 if not (gaz["date_heure"] or "").startswith(jour):
                     continue
                 rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
@@ -397,13 +384,13 @@ def _texte_abrege_dispositif(etat) -> str:
     return texte
 
 
-def _abords(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+def _abords(dossier) -> list[dict]:
     """Les dispositifs en place, cochés, avec leur compteur de jours.
 
     Le compteur est calculé, jamais recopié : c'est la seule ligne de la
     feuille qu'un interne ne peut pas se tromper en reportant.
     """
-    etats = dispositifs_service.etats(base, sejour_id, date_jour)
+    etats = dossier.etats_dispositifs
     lignes = []
     for etat in etats:
         coche = "☑" if etat.en_place else "☐"
@@ -416,14 +403,11 @@ def _abords(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     return lignes
 
 
-def _examens_demain(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+def _examens_demain(dossier) -> list[dict]:
     """Les cases « à demander pour demain », cochées d'après la saisie."""
-    demain = (parse_date(date_jour) + timedelta(days=1)).isoformat()
     demandes = {
         d["examen_code"]
-        for d in prescriptions_service.pancarte_du_jour(
-            base, sejour_id, demain
-        )["bilans_demandes"]
+        for d in dossier.pancarte_demain["bilans_demandes"]
     }
     lignes = []
     for codes, libelle in referentiels.charger("feuille_lignes", "examens_demain"):
@@ -436,9 +420,9 @@ def _examens_demain(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     return lignes
 
 
-def _microbiologie(base: Base, sejour_id: str) -> list[dict]:
+def _microbiologie(dossier) -> list[dict]:
     lignes = []
-    for ligne in micro_service.du_sejour(base, sejour_id)[:LIGNES_MICROBIO]:
+    for ligne in dossier.microbiologie[:LIGNES_MICROBIO]:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, ligne["resultat"])
         if ligne["resultat"] == "positif" and ligne.get("germe"):
             resultat = ligne["germe"]
@@ -456,19 +440,23 @@ def _microbiologie(base: Base, sejour_id: str) -> list[dict]:
 # Assemblage
 # --------------------------------------------------------------------------
 
-def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
-    sejour = sejours_service.sejour_avec_patient(base, sejour_id)
-    if sejour is None:
-        raise ValueError(f"Séjour inconnu : {sejour_id}")
+def contexte(dossier) -> dict:
+    """Les valeurs à poser dans la maquette, à partir du dossier rassemblé.
 
-    prescrit = _lignes_prescription(base, sejour_id, date_jour)
+    `dossier` est un `services.feuille_dossier.DossierFeuille` : tout est déjà
+    lu. Ce module ne rouvre pas la base — c'est la règle R3.
+    """
+    sejour = dossier.sejour
+    date_jour = dossier.date_jour
+
+    prescrit = _lignes_prescription(dossier)
     jours = _jours_biologie(date_jour)
     lignes_ref = referentiels.charger("feuille_lignes")
 
     ideal = calculs.poids_ideal_devine(
         taille_cm=sejour.get("taille_cm"), sexe=sejour.get("sexe")
     )
-    allergies = sejours_service.allergies_du_patient(base, sejour["patient_id"])
+    allergies = dossier.allergies
 
     ctx = {
         # En-tête
@@ -484,12 +472,12 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
         # qu'un relecteur pressé doit voir sans la chercher.
         "allergies": (" · ".join(a["libelle"] for a in allergies)
                       if allergies else "ALLERGIE : non renseignée"),
-        "scores": _scores(base, sejour_id, date_jour),
-        "abords": _abords(base, sejour_id, date_jour),
+        "scores": dossier.scores,
+        "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
         **prescrit["blocs"],
-        "bilanPrescRows": _bilans_a_faire(base, sejour_id, date_jour),
+        "bilanPrescRows": _bilans_a_faire(dossier),
         # Verso — surveillance laissée manuscrite
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
@@ -498,16 +486,16 @@ def contexte(base: Base, sejour_id: str, date_jour: str) -> dict:
         # Verso — biologie reportée
         "days": [format_date_fr(j)[:5] for j in jours],
         "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)],
-        "bioHemato": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["hemato"]), "bilan"),
-        "bioIono": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["iono"]), "bilan"),
-        "bioRenal": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["renal"]), "bilan"),
-        "bioHepat": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["hepat"]), "bilan"),
-        "bioAutres": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["autres"]), "bilan"),
-        "gdsGaz": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["gaz"]), "gaz"),
-        "pfRow": _rapport_pf(base, sejour_id, jours),
-        "gdsVent": _valeurs_biologie(base, sejour_id, jours, list(lignes_ref["ventilation"]), "gaz"),
-        "infRows": _microbiologie(base, sejour_id),
-        "examensDemain": _examens_demain(base, sejour_id, date_jour),
+        "bioHemato": _valeurs_biologie(dossier, jours, list(lignes_ref["hemato"]), "bilan"),
+        "bioIono": _valeurs_biologie(dossier, jours, list(lignes_ref["iono"]), "bilan"),
+        "bioRenal": _valeurs_biologie(dossier, jours, list(lignes_ref["renal"]), "bilan"),
+        "bioHepat": _valeurs_biologie(dossier, jours, list(lignes_ref["hepat"]), "bilan"),
+        "bioAutres": _valeurs_biologie(dossier, jours, list(lignes_ref["autres"]), "bilan"),
+        "gdsGaz": _valeurs_biologie(dossier, jours, list(lignes_ref["gaz"]), "gaz"),
+        "pfRow": _rapport_pf(dossier, jours),
+        "gdsVent": _valeurs_biologie(dossier, jours, list(lignes_ref["ventilation"]), "gaz"),
+        "infRows": _microbiologie(dossier),
+        "examensDemain": _examens_demain(dossier),
         "pied": _pied(prescrit["debordements"]),
         "styleDynamique": _style_remplissage(prescrit["taux_remplissage"]),
     }
@@ -552,28 +540,22 @@ def _age(sejour: dict, date_jour: str) -> str:
     return f"{age} ans" if age is not None else ""
 
 
-def _scores(base: Base, sejour_id: str, date_jour: str) -> list[str]:
-    from ..services import scores as scores_service
-
-    sofa = scores_service.sofa(base, sejour_id, date_jour)
-    igs2 = scores_service.igs2(base, sejour_id)
-    return [
-        f"SOFA {sofa.total}" + ("" if sofa.complet else " (incomplet)"),
-        f"IGS II {igs2.total}" + ("" if igs2.complet else " (incomplet)"),
-    ]
-
-
 def _pied(debordements: list[str]) -> str:
     if debordements:
         return "⚠ " + " · ".join(debordements)
     return ""
 
 
-def generer(base: Base, sejour_id: str, date_jour: str) -> str:
-    """La feuille complète, prête à imprimer."""
+def generer(dossier) -> str:
+    """La feuille complète, prête à imprimer.
+
+    Prend un `services.feuille_dossier.DossierFeuille`, jamais une base : ce
+    module ne lit rien et ne décide rien de médical (règle R3). C'est
+    l'appelant qui rassemble ; ici on ne fait que remplir la maquette.
+    """
     gabarit = MODELE.read_text(encoding="utf-8")
-    corps = rendre(gabarit, contexte(base, sejour_id, date_jour))
-    return _document(corps, date_jour)
+    corps = rendre(gabarit, contexte(dossier))
+    return _document(corps, dossier.date_jour)
 
 
 def _document(corps: str, date_jour: str) -> str:

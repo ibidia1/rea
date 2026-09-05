@@ -796,6 +796,64 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.5 — 5 septembre 2026 — reprise d'architecture : atomicité, traçabilité, découpe**
+
+Quatre corrections issues d'une évaluation structurelle du dépôt. Aucune ne
+change ce que le service voit à l'écran ; toutes changent ce sur quoi on peut
+s'appuyer.
+
+1. **Les écritures sont atomiques.** La connexion était en validation
+   automatique, sans un seul `BEGIN`/`COMMIT` dans tout le dépôt. Une
+   admission — créer le patient, puis le séjour — pouvait laisser un patient
+   sans séjour ; une correction de motifs, qui efface tout avant de reposer la
+   nouvelle liste, pouvait laisser un séjour **sans aucun motif**. `Base` a
+   maintenant un gestionnaire de transaction (`base.transaction()`), le verrou
+   est réentrant, et une ligne part désormais avec sa trace au journal, ou pas
+   du tout.
+2. **Les compteurs ne courent plus.** `identifiant_etude`, matricule `XXX-` et
+   `numero_sejour` se calculaient par `COUNT(*) + 1`, lu puis écrit hors
+   transaction. Deux admissions simultanées prenaient le même identifiant — et
+   comme le schéma porte une contrainte d'unicité, la seconde **plantait**.
+   Deux onglets ouverts suffisaient : Streamlit sert chacun dans son propre
+   fil. L'allocation se fait maintenant dans la transaction, sur le premier
+   numéro libre. Vérifié par des tests qui lancent douze admissions en
+   parallèle, et qui échouent bien sur l'ancien code.
+3. **Tout forçage d'un garde-fou laisse une trace.** Un avertissement
+   « impossible » se franchit à un second clic — c'est voulu. Mais seul
+   `bilan_resultat` avait une colonne `saisie_forcee` : sur les cinq autres
+   écrans qui laissent forcer (admission, correction, prescription, sortie,
+   dispositifs), rien dans le dossier ne disait qu'un garde-fou avait été
+   franchi. Le journal enregistre désormais l'écran, l'utilisateur et le texte
+   exact des avertissements passés outre.
+4. **`rea_app.py` n'est plus un monolithe.** 2 040 lignes, 33 fonctions dont 8
+   de plus de cent lignes, et surtout **zéro test** : le fichier n'était pas
+   importable sans exécuter l'application entière. Les écrans vivent maintenant
+   dans `rea/ui/` (lits, admission, identite, prescrit, bilans, evolution,
+   actes, sortie, fiche, champs), et `rea_app.py` se réduit à 70 lignes de
+   montage. `rea/ui/contexte.py` porte ce que les écrans partagent (base,
+   utilisateur courant, garde-fou de cohérence) à la place des variables
+   globales qui les retenaient prisonniers du même fichier.
+5. **Règle R3 tenue.** `rea/rendu/feuille.py` importait `db.Base` et six
+   services : le rendu décidait quoi lire, et `services/pancarte.py` devait un
+   import différé pour éviter le cycle. Un `services/feuille_dossier.py`
+   rassemble maintenant toutes les lectures, et le rendu reçoit ce dossier —
+   il ne connaît plus ni la base ni les services. Au passage, `ui/utilisateur.py`
+   écrivait lui aussi directement en base (règle R1) : c'est un service
+   désormais.
+
+Les règles d'isolation sont **vérifiées par des tests** (`test_architecture.py`)
+et non plus seulement écrites : le domaine reste pur, aucun écran n'écrit en
+base, le rendu ne lit rien, et le paquet n'a aucun cycle d'import. Une règle
+qu'aucun test ne tient finit par ne plus être vraie — les cinq l'avaient été
+au moins une fois.
+
+- 370 tests (pytest, +63), dépôt propre sous pyflakes, et parcours complet des
+  treize écrans plus une impression réelle vérifiés au navigateur.
+- La couverture affichée passe de 90 % à 69 %, ce qui est une **amélioration
+  de la mesure, pas une régression** : `rea/ui/` (1 025 instructions) était
+  jusqu'ici totalement absent du rapport, faute d'être importable. Le cœur
+  métier reste au-dessus de 90 %.
+
 **v2.4 — 4 septembre 2026 — éditeur de règles et de protocoles, sans JSON**
 
 Jusqu'ici, ajouter un rappel ou un protocole pré-rempli demandait d'éditer un

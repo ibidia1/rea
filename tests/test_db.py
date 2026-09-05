@@ -145,7 +145,6 @@ def test_une_base_ancienne_recupere_les_colonnes_ajoutees(base, monkeypatch, tmp
     """
     import sqlite3
     import uuid
-    from pathlib import Path
 
     from rea.db import Base, maintenant
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from .. import listes
 from ..db import Base
-from ..domaine.dates import format_date_fr
 
 
 def enregistrer(
@@ -24,35 +23,36 @@ def enregistrer(
     operateur: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
-    exploration_id = base.inserer(
-        "exploration",
-        {
-            "sejour_id": sejour_id,
-            "date_heure": date_heure,
-            "type": type_,
-            "conclusion": conclusion,
-            "operateur": operateur,
-        },
-        utilisateur_id=utilisateur_id,
-    )
-    definition = listes.TYPES_EXPLORATION.get(type_, {})
-    unites = {cle: unite for cle, _lib, unite, _type in definition.get("valeurs", ())}
-    for cle, valeur in (valeurs or {}).items():
-        if valeur in (None, ""):
-            continue
-        est_nombre = isinstance(valeur, (int, float))
-        base.inserer(
-            "exploration_valeur",
+    with base.transaction():
+        exploration_id = base.inserer(
+            "exploration",
             {
-                "exploration_id": exploration_id,
-                "cle": cle,
-                "valeur_num": float(valeur) if est_nombre else None,
-                "valeur_texte": None if est_nombre else str(valeur),
-                "unite": unites.get(cle, ""),
+                "sejour_id": sejour_id,
+                "date_heure": date_heure,
+                "type": type_,
+                "conclusion": conclusion,
+                "operateur": operateur,
             },
             utilisateur_id=utilisateur_id,
         )
-    return exploration_id
+        definition = listes.TYPES_EXPLORATION.get(type_, {})
+        unites = {cle: unite for cle, _lib, unite, _type in definition.get("valeurs", ())}
+        for cle, valeur in (valeurs or {}).items():
+            if valeur in (None, ""):
+                continue
+            est_nombre = isinstance(valeur, (int, float))
+            base.inserer(
+                "exploration_valeur",
+                {
+                    "exploration_id": exploration_id,
+                    "cle": cle,
+                    "valeur_num": float(valeur) if est_nombre else None,
+                    "valeur_texte": None if est_nombre else str(valeur),
+                    "unite": unites.get(cle, ""),
+                },
+                utilisateur_id=utilisateur_id,
+            )
+        return exploration_id
 
 
 def du_sejour(base: Base, sejour_id: str) -> list[dict]:

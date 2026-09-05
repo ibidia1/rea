@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..db import Base
 from ..domaine import prescription as dom
-from ..domaine.dates import lendemain, parse_date
+from ..domaine.dates import lendemain
 
 
 # --------------------------------------------------------------------------
@@ -198,28 +198,29 @@ def definir_bilans_demandes(
     utilisateur_id: str | None = None,
 ) -> None:
     """`examens` : liste de (code_examen, heure_prelevement)."""
-    journee = obtenir_ou_creer_journee(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
-    base.executer(
-        "UPDATE bilan_demande SET supprime = 1 WHERE journee_id = ?", (journee["id"],)
-    )
-    for code, heure in examens:
-        deja = base.une_ligne(
-            "SELECT id FROM bilan_demande WHERE journee_id = ? AND examen_code = ?",
-            (journee["id"], code),
+    with base.transaction():
+        journee = obtenir_ou_creer_journee(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
+        base.executer(
+            "UPDATE bilan_demande SET supprime = 1 WHERE journee_id = ?", (journee["id"],)
         )
-        if deja:
-            base.mettre_a_jour(
-                "bilan_demande",
-                deja["id"],
-                {"supprime": 0, "heure_prelevement": heure},
-                utilisateur_id=utilisateur_id,
+        for code, heure in examens:
+            deja = base.une_ligne(
+                "SELECT id FROM bilan_demande WHERE journee_id = ? AND examen_code = ?",
+                (journee["id"], code),
             )
-        else:
-            base.inserer(
-                "bilan_demande",
-                {"journee_id": journee["id"], "examen_code": code, "heure_prelevement": heure},
-                utilisateur_id=utilisateur_id,
-            )
+            if deja:
+                base.mettre_a_jour(
+                    "bilan_demande",
+                    deja["id"],
+                    {"supprime": 0, "heure_prelevement": heure},
+                    utilisateur_id=utilisateur_id,
+                )
+            else:
+                base.inserer(
+                    "bilan_demande",
+                    {"journee_id": journee["id"], "examen_code": code, "heure_prelevement": heure},
+                    utilisateur_id=utilisateur_id,
+                )
 
 
 # --------------------------------------------------------------------------
