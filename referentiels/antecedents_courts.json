@@ -1,7 +1,7 @@
 {
   "nom": "antecedents_courts",
   "libelle": "Antécédents fréquents en accès direct",
-  "version": "2026-09-05.1",
+  "version": "2026-09-05.2",
   "date": "2026-09-05",
   "note": "Liste courte à valider par un senior (SPEC §4.2). Format : [code, libellé, catégorie].",
   "valeurs": [
@@ -78,6 +78,46 @@
     [
       "antiagregant",
       "Antiagrégant",
+      "personnel"
+    ],
+    [
+      "obesite",
+      "Obésité",
+      "personnel"
+    ],
+    [
+      "arythmie",
+      "Fibrillation atriale / trouble du rythme",
+      "personnel"
+    ],
+    [
+      "epilepsie",
+      "Épilepsie",
+      "personnel"
+    ],
+    [
+      "hypothyroidie",
+      "Hypothyroïdie",
+      "personnel"
+    ],
+    [
+      "neoplasie",
+      "Néoplasie active",
+      "personnel"
+    ],
+    [
+      "immunodepression",
+      "Immunodépression",
+      "personnel"
+    ],
+    [
+      "demence",
+      "Démence / trouble cognitif",
+      "personnel"
+    ],
+    [
+      "dialyse_chronique",
+      "Insuffisance rénale chronique dialysée",
       "personnel"
     ]
   ]
