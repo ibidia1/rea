@@ -810,6 +810,15 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.2 — 6 septembre 2026 — arrêter un traitement d'un geste sur sa ligne**
+
+Consigne du service : arrêter un traitement se faisait dans un encart
+séparé (« Arrêter une ligne »), à rouvrir et où retrouver la bonne ligne
+dans une liste à part — un détour pour un geste courant. Retiré, remplacé
+par une croix devant chaque traitement actif de la pancarte : un clic dessus
+l'arrête, exactement comme avant (le traitement reste visible, barré, rien
+n'est supprimé physiquement).
+
 **v3.1 — 6 septembre 2026 — courbes sans altair, escarres rattachées au plan infectieux**
 
 Signalé par le service : l'onglet Évolution plantait entièrement sur les

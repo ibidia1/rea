@@ -152,29 +152,49 @@ def _historique_fiches(sejour: dict) -> None:
 
 
 def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) -> None:
+    """Chaque traitement porte sa propre croix « ✕ » : l'arrêter est un
+    geste sur la ligne elle-même, plus une liste séparée à rouvrir."""
     for i, code_voie in enumerate(voies_remplies):
         lignes = pancarte["lignes_par_voie"][code_voie]
         colonne = gauche if i % 2 == 0 else droite
+        couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
         with colonne:
-            elements = []
-            for ligne in lignes:
-                texte = dom.libelle_ligne(ligne, date_jour_str)
-                etiquette = dom.etiquette_jour(ligne, date_jour_str)
-                # Le compteur de jours en bleu, le dernier jour en rouge :
-                # ce sont les deux choses qu'on cherche du regard.
-                if etiquette.dernier_jour:
-                    texte = texte.replace(
-                        "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
-                    )
-                texte = texte.replace(
-                    etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="rea-bloc-titre" style="color:{couleur}">'
+                    f'{listes.VOIES[code_voie]["titre"]}</div>',
+                    unsafe_allow_html=True,
                 )
-                classe = ' class="arretee"' if ligne["statut"] == "arretee" else ""
-                elements.append(f"<span{classe}>{texte}</span>")
-            theme.bloc(
-                listes.VOIES[code_voie]["titre"], elements,
-                theme.COULEUR_VOIE.get(code_voie, theme.GRIS),
-            )
+                for ligne in lignes:
+                    texte = dom.libelle_ligne(ligne, date_jour_str)
+                    etiquette = dom.etiquette_jour(ligne, date_jour_str)
+                    # Le compteur de jours en bleu, le dernier jour en rouge :
+                    # ce sont les deux choses qu'on cherche du regard.
+                    if etiquette.dernier_jour:
+                        texte = texte.replace(
+                            "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
+                        )
+                    texte = texte.replace(
+                        etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
+                    )
+                    active = ligne["statut"] == "active"
+                    classe = "" if active else ' class="arretee"'
+                    col_croix, col_texte = st.columns([1, 7])
+                    with col_croix:
+                        if active and st.button(
+                            "X", key=f"arret_{ligne['id']}",
+                            help="Arrêter ce traitement",
+                        ):
+                            prescriptions_service.arreter_ligne(
+                                contexte.base(), ligne["id"], date_arret=date_jour_str,
+                                utilisateur_id=contexte.utilisateur_id(),
+                            )
+                            st.rerun()
+                    with col_texte:
+                        st.markdown(
+                            f'<span style="font-size:.82rem"{classe}>{texte}</span>',
+                            unsafe_allow_html=True,
+                        )
 
 
 def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
@@ -286,19 +306,6 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
 
 
 def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
-    with st.expander("Arrêter une ligne"):
-        actives = [l for l in pancarte["lignes"] if l["statut"] == "active"]
-        if not actives:
-            st.caption("Aucune ligne active.")
-        for ligne in actives:
-            col1, col2 = st.columns([6, 1])
-            col1.write(dom.libelle_ligne(ligne, date_jour_str))
-            if col2.button("Arrêter", key=f"arret_{ligne['id']}", use_container_width=True):
-                prescriptions_service.arreter_ligne(
-                    contexte.base(), ligne["id"], date_arret=date_jour_str, utilisateur_id=contexte.utilisateur_id()
-                )
-                st.rerun()
-
     with st.expander("Bilans à demander pour le lendemain"):
         demain = date_jour_str
         journee_bilans = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], demain)["bilans_demandes"]

@@ -149,7 +149,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 }}
 .rea-bloc ul {{ margin: 0; padding-left: .95rem; }}
 .rea-bloc li {{ font-size: .82rem; line-height: 1.55; }}
-.rea-bloc li.arretee, .rea-bloc li span.arretee {{ text-decoration: line-through; color: {GRIS}; }}
+.rea-bloc li.arretee, .rea-bloc li span.arretee, .arretee {{ text-decoration: line-through; color: {GRIS}; }}
 .rea-j {{ font-weight: 700; color: {BLEU}; }}
 .rea-fin {{ color: {ROUGE}; font-weight: 700; }}
 
