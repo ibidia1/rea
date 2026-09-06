@@ -194,6 +194,33 @@ def test_la_microbiologie_est_reportee(base, dossier):
     assert "E. coli BLSE" in html
 
 
+def test_la_crp_rejoint_les_bilans_infectieux(base, dossier):
+    """Remarque du service, 6 septembre : la CRP appartient au bilan
+    d'infection avec les prélèvements microbiologiques, pas seulement au
+    récapitulatif de chimie générale."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"crp": 45})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["infRows"] if l["prelevement"] == "CRP")
+    assert "45" in ligne["resultat"]
+
+
+def test_crp_et_microbiologie_partagent_le_meme_tableau_tries_par_date(base, dossier):
+    """J1 (2026-09-04) est plus récent que J2 (2026-09-03) : il passe en
+    tête, comme la microbiologie seule le faisait déjà avant l'ajout de
+    la CRP."""
+    _pid, sid = dossier
+    microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
+                              type_prelevement="hemoculture", resultat="negatif")
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T06:00",
+                                 valeurs={"crp": 60})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    prelevements = [l["prelevement"] for l in contexte["infRows"] if l["prelevement"]]
+    assert prelevements[0] == "Hémoculture"
+    assert prelevements[1] == "CRP"
+
+
 # -- ce que le logiciel laisse vide -----------------------------------------
 
 def test_les_constantes_horaires_restent_manuscrites(base, dossier):

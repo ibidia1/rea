@@ -527,16 +527,35 @@ def _examens_demain(dossier) -> list[dict]:
 
 
 def _microbiologie(dossier) -> list[dict]:
-    lignes = []
-    for ligne in dossier.microbiologie[:LIGNES_MICROBIO]:
+    """« Bilans infectieux » : les prélèvements microbiologiques, et la CRP
+    avec eux — remarque du service, 6 septembre : elle appartient au même
+    bilan d'infection que les cultures, pas au récapitulatif de chimie
+    générale."""
+    brutes = []
+    for ligne in dossier.microbiologie:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, ligne["resultat"])
         if ligne["resultat"] == "positif" and ligne.get("germe"):
             resultat = ligne["germe"]
-        lignes.append({
-            "prelevement": listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
-            "date": format_date_fr(ligne["date_prelevement"])[:5],
-            "resultat": resultat,
-        })
+        brutes.append((
+            ligne["date_prelevement"],
+            {
+                "prelevement": listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
+                "date": format_date_fr(ligne["date_prelevement"])[:5],
+                "resultat": resultat,
+            },
+        ))
+    for r in dossier.resultats:
+        if r["analyte"] == "crp" and r.get("valeur_num") is not None:
+            brutes.append((
+                r["date_heure"],
+                {
+                    "prelevement": "CRP",
+                    "date": format_date_fr(r["date_heure"])[:5],
+                    "resultat": f"{_nombre(r['valeur_num'])} mg/L",
+                },
+            ))
+    brutes.sort(key=lambda t: t[0], reverse=True)
+    lignes = [ligne for _date, ligne in brutes[:LIGNES_MICROBIO]]
     while len(lignes) < LIGNES_MICROBIO:
         lignes.append({"prelevement": "", "date": "", "resultat": ""})
     return lignes
