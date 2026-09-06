@@ -810,6 +810,26 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.9 — 6 septembre 2026 — récapitulatif biologique aligné sur la maquette de référence**
+
+Comparé à `Feuille_Reanimation_Kairouan_A3fin.html`, envoyé par le service :
+plusieurs paramètres, toujours lus ensemble, tenaient sur des lignes
+séparées, et trois paramètres n'étaient pas suivis du tout.
+
+1. **Lignes combinées** (`_valeurs_biologie` accepte désormais plusieurs
+   codes par ligne, affichés séparés par « / ») : TP / INR, Cl⁻ / HCO₃⁻,
+   ASAT / ALAT, Bili / Albumine, Ca²⁺ / Mg²⁺ / Phosphore, FR / AI. Rien
+   n'est retiré de la saisie — seule la ligne imprimée change.
+2. **Trois nouveaux analytes** (`rea/analytes.py`, groupe Ionogramme) :
+   Magnésium, Phosphore, HCO₃⁻ veineux (distinct du HCO₃⁻ artériel posé
+   avec chaque gaz du sang).
+3. **Trois nouvelles colonnes sur `gaz_du_sang`** : SaO₂ (remplace le SpO₂
+   continu — déjà suivi heure par heure sur le verso — dans ce tableau de
+   gaz du sang), Vt, AI (aide inspiratoire).
+4. Gaz du sang : FiO₂ rejoint le tableau des gaz (retiré de la ventilation,
+   où il faisait doublon) ; Débit O₂ reste saisissable mais ne figure plus
+   dans ce récapitulatif imprimé.
+
 **v2.8 — 6 septembre 2026 — correction des constantes de la feuille de surveillance**
 
 Remarque du service : la liste des constantes de la feuille imprimée

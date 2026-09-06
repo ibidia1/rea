@@ -242,7 +242,8 @@ def saisie_bilan(sejour: dict) -> None:
         ("fr", "FR (/min)", "12 – 25"), ("spo2", "SpO₂ (%)", "≥ 94"),
         ("ph", "pH", "7,35 – 7,45"), ("pao2", "PaO₂ (mmHg)", "80 – 100"),
         ("paco2", "PaCO₂ (mmHg)", "35 – 45"), ("hco3", "HCO₃⁻ (mmol/L)", "22 – 26"),
-        ("lactate", "Lactates (mmol/L)", "< 2"),
+        ("lactate", "Lactates (mmol/L)", "< 2"), ("sao2", "SaO₂ (%)", "≥ 94"),
+        ("vt", "Vt (mL)", "6-8 mL/kg"), ("ai", "AI (cmH₂O)", "5 – 20"),
     ]
     colonnes_gaz = st.columns(2)
     for i, (cle, libelle, plage) in enumerate(champs_gaz):

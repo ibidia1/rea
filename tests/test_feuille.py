@@ -557,3 +557,58 @@ def test_chaque_region_et_motif_associe_est_sur_sa_propre_ligne(base, dossier):
     assert "<div>Traumatisme crânien : Hématome extra-dural droit</div>" in html
     assert "<div>Traumatisme thoracique</div>" in html
     assert "<div>Acidocétose diabétique</div>" in html
+
+
+# -- récapitulatif biologique : lignes combinées (6 septembre) ---------------
+
+def test_tp_et_inr_partagent_une_ligne(base, dossier):
+    """Remarque du service : toujours lus ensemble, ils doivent tenir sur
+    une seule ligne du récapitulatif, pas deux."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"tp": 85, "inr": 1.1})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles = [l["libelle"] for l in contexte["bioHemato"]]
+    assert "TP / INR" in libelles
+    assert "TP" not in libelles and "INR" not in libelles
+    ligne = next(l for l in contexte["bioHemato"] if l["libelle"] == "TP / INR")
+    assert "85/1,1" in ligne["valeurs"].html
+
+
+def test_une_seule_valeur_du_couple_ne_perd_pas_le_separateur(base, dossier):
+    """Si seul le TP est arrivé, la case affiche « 85 », pas « 85/ »."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"tp": 85})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["bioHemato"] if l["libelle"] == "TP / INR")
+    assert "85" in ligne["valeurs"].html
+    assert "85/" not in ligne["valeurs"].html
+
+
+def test_calcium_magnesium_phosphore_regroupes(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"ca": 2.3, "mg": 0.8, "phosphore": 1.0})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles = [l["libelle"] for l in contexte["bioAutres"]]
+    assert "Ca²⁺ / Mg²⁺ / Phosphore" in libelles
+    assert "CRP" in libelles  # pas retirée, seulement complétée
+
+
+def test_sao2_vt_ai_sont_reportes(base, dossier):
+    """Nouveaux paramètres de ventilation (remarque du service, 6
+    septembre) : Vt et l'aide inspiratoire (combinée à FR), SaO2 remplace
+    le SpO2 continu dans le tableau des gaz du sang (déjà suivi heure par
+    heure sur le verso)."""
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T07:00", sao2=97, vt=450, ai=12, fr=18)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles_gaz = [l["libelle"] for l in contexte["gdsGaz"]]
+    libelles_vent = [l["libelle"] for l in contexte["gdsVent"]]
+    assert "SaO₂" in libelles_gaz
+    assert "SpO₂" not in libelles_gaz
+    assert "Vt" in libelles_vent
+    assert "FR / AI" in libelles_vent
+    ligne = next(l for l in contexte["gdsGaz"] if l["libelle"] == "SaO₂")
+    assert "97" in ligne["valeurs"].html

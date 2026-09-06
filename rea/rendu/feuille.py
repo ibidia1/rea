@@ -273,26 +273,41 @@ def _jours_biologie(date_jour: str) -> list[str]:
 
 
 def _valeurs_biologie(
-    dossier, jours: list[str], codes: list[tuple[str, str]], source: str,
+    dossier, jours: list[str], lignes_spec: list[tuple], source: str,
 ) -> list[dict]:
     """Une ligne par paramètre, ses valeurs rangées par jour et par créneau.
 
     Le jour en cours est laissé vide : les bilans de la garde s'y écrivent à la
     main pendant la nuit et sont ressaisis le lendemain matin.
+
+    `lignes_spec` : (code, libellé) ou (codes, libellé) — une ligne peut
+    combiner plusieurs paramètres (« TP / INR », « Ca²⁺ / Mg²⁺ / Phosphore »),
+    affichés côte à côte dans la même case, séparés par « / » (remarque du
+    service, 6 septembre : une ligne par paramètre isolé prenait trop de place
+    pour des valeurs toujours lues ensemble).
     """
     lignes = []
-    for code, libelle in codes:
-        cellules: list[str] = []
-        for index_jour, jour in enumerate(jours):
-            dernier = index_jour == len(jours) - 1
-            creneaux = [""] * NB_CRENEAUX_PAR_JOUR
-            if not dernier:
-                creneaux = _creneaux_du_jour(dossier, jour, code, source)
-            cellules.extend(creneaux)
+    for codes, libelle in lignes_spec:
+        if isinstance(codes, str):
+            codes = (codes,)
+        cellules_par_code = []
+        for code in codes:
+            cellules: list[str] = []
+            for index_jour, jour in enumerate(jours):
+                dernier = index_jour == len(jours) - 1
+                creneaux = [""] * NB_CRENEAUX_PAR_JOUR
+                if not dernier:
+                    creneaux = _creneaux_du_jour(dossier, jour, code, source)
+                cellules.extend(creneaux)
+            cellules_par_code.append(cellules)
+        cellules_combinees = [
+            "/".join(v for v in valeurs_du_creneau if v)
+            for valeurs_du_creneau in zip(*cellules_par_code)
+        ]
         lignes.append({
             "libelle": libelle,
             "valeurs": _cellules_valeurs(
-                cellules, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
+                cellules_combinees, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
             ),
         })
     return lignes

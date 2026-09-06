@@ -73,6 +73,14 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
         Analyte("k", "K⁺", "mmol/L", borne_basse=3.5, borne_haute=5.0, code_loinc="2823-3", unite_ucum="mmol/L"),
         Analyte("cl", "Cl⁻", "mmol/L", borne_basse=98, borne_haute=107, code_loinc="2075-0", unite_ucum="mmol/L"),
         Analyte("ca", "Ca²⁺", "mmol/L", borne_basse=2.2, borne_haute=2.6, code_loinc="17861-6", unite_ucum="mmol/L"),
+        Analyte("mg", "Mg²⁺", "mmol/L", borne_basse=0.7, borne_haute=1.0, code_loinc="19123-9", unite_ucum="mmol/L"),
+        Analyte("phosphore", "Phosphore", "mmol/L", borne_basse=0.8, borne_haute=1.5,
+                code_loinc="2777-1", unite_ucum="mmol/L"),
+        # Bicarbonate veineux (ionogramme) — distinct du HCO₃⁻ artériel posé
+        # avec chaque gaz du sang (table gaz_du_sang) : deux prélèvements
+        # différents, jamais la même valeur recopiée.
+        Analyte("hco3_iono", "HCO₃⁻", "mmol/L", borne_basse=22, borne_haute=28,
+                code_loinc="1963-8", unite_ucum="mmol/L"),
     )),
     GroupeAnalytes("metabolique", "Métabolique", (
         # Exigées par l'alignement ANZICS (SPEC §9.5) et indispensables aux
