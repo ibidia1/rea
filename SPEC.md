@@ -810,6 +810,23 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.1 — 6 septembre 2026 — courbes sans altair, escarres rattachées au plan infectieux**
+
+Signalé par le service : l'onglet Évolution plantait entièrement sur les
+postes Windows du service (`TypeError: ... got an unexpected keyword
+argument 'closed'`). Cause : `st.line_chart` importe `altair` à la volée,
+qui entre en conflit de version avec `typing_extensions` sur certaines
+installations — un risque qu'on ne maîtrise pas sur un poste d'hôpital.
+Corrigé en supprimant la dépendance plutôt qu'en figeant une version
+fragile : `theme.courbe()`, un traceur SVG sans dépendance, remplace
+`st.line_chart` aux trois endroits où il était utilisé (SOFA dans
+Évolution, tendance d'un analyte dans Bilans, cinétique d'une exploration
+dans Explorations et actes).
+
+Par la même occasion : les escarres, jusque-là dans un encart séparé et
+sans lien avec le reste, sont désormais saisies à l'intérieur même de la
+carte "Sur le plan Infectieux", où elles ont leur place clinique.
+
 **v3.0 — 6 septembre 2026 — retrait des emojis décoratifs de l'interface**
 
 Consigne du service : une interface sobre, fonctionnelle, peu décorative.

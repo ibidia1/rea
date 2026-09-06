@@ -197,14 +197,8 @@ def panneau_scores(sejour: dict, date_jour_str: str) -> None:
 
         serie = scores_service.evolution_sofa(contexte.base(), sejour["id"])
         if len(serie) >= 2:
-            import pandas as pd
-
             st.caption("SOFA jour par jour — c'est sa variation qui informe.")
-            st.line_chart(
-                pd.DataFrame({"SOFA": [v for _d, v in serie]},
-                             index=[d for d, _v in serie]),
-                height=180,
-            )
+            theme.courbe([(str(d), v) for d, v in serie], hauteur=140)
 
     panneau_definitions(sejour, date_jour_str)
 
@@ -264,6 +258,43 @@ def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
             ))
 
 
+def _bloc_escarres(sejour: dict, date_jour_str: str) -> None:
+    """Une escarre est un risque infectieux — elle vit avec le plan
+    infectieux, pas dans un tiroir séparé sans rapport (remarque du
+    service, 6 septembre)."""
+    st.caption("Escarres")
+    existantes = evolution_service.escarres(contexte.base(), sejour["id"])
+    for e in existantes:
+        col1, col2 = st.columns([4, 1])
+        etat = "guérie le " + format_date_fr(e["date_guerison"]) if e["date_guerison"] else "en cours"
+        col1.markdown(
+            f"**{e['localisation']}** — grade {e['grade'] or '?'} · "
+            f"constatée le {format_date_fr(e['date_constat'])} · {etat}"
+        )
+        if not e["date_guerison"] and col2.button(
+            "Guérie", key=f"escarre_guerie_{e['id']}", use_container_width=True
+        ):
+            evolution_service.modifier_escarre(
+                contexte.base(), e["id"], {"date_guerison": date_jour_str},
+                utilisateur_id=contexte.utilisateur_id(),
+            )
+            st.rerun()
+    with st.form(f"ajout_escarre_{date_jour_str}"):
+        c1, c2 = st.columns(2)
+        localisation = c1.selectbox("Localisation", listes.LOCALISATIONS_ESCARRE)
+        grade = c2.selectbox(
+            "Grade", [g for g, _l in listes.GRADES_ESCARRE],
+            format_func=lambda g: listes.libelle(listes.GRADES_ESCARRE, g),
+        )
+        if st.form_submit_button("Ajouter l'escarre"):
+            evolution_service.ajouter_escarre(
+                contexte.base(), sejour_id=sejour["id"], localisation=localisation,
+                grade=grade, date_constat=date_jour_str,
+                utilisateur_id=contexte.utilisateur_id(),
+            )
+            st.rerun()
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
@@ -303,6 +334,8 @@ def onglet_evolution(sejour: dict) -> None:
                                 cle, libelle, unite, type_, plage,
                                 elements_existants.get(cle), f"evo_{date_jour_str}",
                             )
+                        if cle_plan == "plan_infectieux":
+                            _bloc_escarres(sejour, date_jour_str)
                         texte_libre = st.text_area(
                             "Commentaire", value=entree.get(cle_plan) or "", height=80,
                             key=f"evo_libre_{date_jour_str}_{cle_plan}",
@@ -330,38 +363,6 @@ def onglet_evolution(sejour: dict) -> None:
             )
             st.success("Évolution enregistrée.")
             st.rerun()
-
-        with st.expander("Escarres"):
-            existantes = evolution_service.escarres(contexte.base(), sejour["id"])
-            for e in existantes:
-                col1, col2 = st.columns([4, 1])
-                etat = "guérie le " + format_date_fr(e["date_guerison"]) if e["date_guerison"] else "en cours"
-                col1.markdown(
-                    f"**{e['localisation']}** — grade {e['grade'] or '?'} · "
-                    f"constatée le {format_date_fr(e['date_constat'])} · {etat}"
-                )
-                if not e["date_guerison"] and col2.button(
-                    "Guérie", key=f"escarre_guerie_{e['id']}", use_container_width=True
-                ):
-                    evolution_service.modifier_escarre(
-                        contexte.base(), e["id"], {"date_guerison": date_jour_str},
-                        utilisateur_id=contexte.utilisateur_id(),
-                    )
-                    st.rerun()
-            with st.form(f"ajout_escarre_{date_jour_str}"):
-                c1, c2 = st.columns(2)
-                localisation = c1.selectbox("Localisation", listes.LOCALISATIONS_ESCARRE)
-                grade = c2.selectbox(
-                    "Grade", [g for g, _l in listes.GRADES_ESCARRE],
-                    format_func=lambda g: listes.libelle(listes.GRADES_ESCARRE, g),
-                )
-                if st.form_submit_button("Ajouter l'escarre"):
-                    evolution_service.ajouter_escarre(
-                        contexte.base(), sejour_id=sejour["id"], localisation=localisation,
-                        grade=grade, date_constat=date_jour_str,
-                        utilisateur_id=contexte.utilisateur_id(),
-                    )
-                    st.rerun()
 
     with rendu:
         texte = evolution_service.texte_genere(contexte.base(), sejour["id"], date_jour_str)

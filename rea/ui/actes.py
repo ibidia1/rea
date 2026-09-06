@@ -183,9 +183,8 @@ def onglet_actes(sejour: dict) -> None:
             )
             historique = explorations_service.historique_valeur(contexte.base(), sejour["id"], choix[0], choix[1])
             if len(historique) >= 2:
-                import pandas as pd
-
-                df = pd.DataFrame(historique).set_index("date_heure")
-                st.line_chart(df["valeur_num"])
+                theme.courbe(
+                    [(h["date_heure"][:16].replace("T", " "), h["valeur_num"]) for h in historique]
+                )
             else:
                 st.caption("Au moins deux mesures sont nécessaires pour tracer une courbe.")

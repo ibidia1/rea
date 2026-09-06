@@ -411,14 +411,13 @@ def vue_cinetique(sejour: dict) -> None:
                  if len(bilans_service.historique_analyte(contexte.base(), sejour["id"], i)) >= 2]
     if traçables:
         with st.expander("Courbes", expanded=len(traçables) <= 4):
-            import pandas as pd
-
             colonnes = st.columns(2)
             for i, id_analyte in enumerate(traçables):
                 a = cat.analyte(id_analyte)
                 historique = bilans_service.historique_analyte(contexte.base(), sejour["id"], id_analyte)
                 with colonnes[i % 2]:
                     st.caption(f"{a.libelle} ({a.unite})" if a.unite else a.libelle)
-                    df = pd.DataFrame(historique)
-                    df["date_heure"] = pd.to_datetime(df["date_heure"])
-                    st.line_chart(df.set_index("date_heure")["valeur_num"], height=180)
+                    theme.courbe(
+                        [(h["date_heure"][:16].replace("T", " "), h["valeur_num"]) for h in historique],
+                        hauteur=140,
+                    )
