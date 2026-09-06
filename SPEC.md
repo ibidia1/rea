@@ -810,6 +810,19 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v2.8 — 6 septembre 2026 — correction des constantes de la feuille de surveillance**
+
+Remarque du service : la liste des constantes de la feuille imprimée
+(verso) était fausse — EVA-BPS, RASS et Dextro manquaient, et la diurèse
+avec les drains étaient rangés sous « Constantes vitales » au lieu de
+« Sorties & drains ». Corrigé dans `referentiels/feuille_lignes.json`
+(fichier, pas de code à toucher pour la prochaine correction) :
+
+- **Constantes vitales** : T°, FC, PA (PAS/PAD), FR, SpO₂, Glasgow, Pupilles
+  (D/G), EVA — BPS, RASS, Dextro.
+- **Sorties & drains** : Diurèse, Bandelette urinaire, Redon 1/2/3 (au lieu
+  de deux « Drain » génériques).
+
 **v2.7 — 5 septembre 2026 — retrait du CIM-10, précision par région, motif/ATCD imprimés automatiquement**
 
 1. **Codage CIM-10 retiré** de l'écran Identité : outil interne redondant

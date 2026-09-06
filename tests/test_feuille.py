@@ -201,9 +201,33 @@ def test_les_constantes_horaires_restent_manuscrites(base, dossier):
     les lignes, il ne les remplit pas."""
     _pid, sid = dossier
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    for bloc in ("survRowsA", "survRowsB", "survRowsC"):
+    for bloc in ("survRowsA", "survRowsB", "survRowsC", "bilanRows"):
         for ligne in contexte[bloc]:
             assert ligne["valeurs"].html == ""
+
+
+def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
+    """Remarque du service, 6 septembre : l'ancienne liste (FC/SpO2/T°/FR/
+    Glasgow/Diurèse/Drain) manquait EVA-BPS, RASS et Dextro, et rangeait
+    diurèse/drains sous « Constantes vitales » au lieu de « Sorties &
+    drains »."""
+    _pid, sid = dossier
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles_vitales = (
+        [l["libelle"] for l in contexte["survRowsA"]]
+        + [l["libelle"] for l in contexte["survRowsB"]]
+        + [l["libelle"] for l in contexte["survRowsC"]]
+    )
+    for attendu in ("T° (°C)", "FC (bpm)", "FR (cpm)", "SpO₂ (%)", "Glasgow",
+                    "EVA — BPS", "RASS", "Dextro (g/l)"):
+        assert attendu in libelles_vitales
+    assert not any("Diurèse" in l or "Drain" in l for l in libelles_vitales)
+
+    libelles_sorties = [l["libelle"] for l in contexte["bilanRows"]]
+    assert libelles_sorties == [
+        "Diurèse (ml/h)", "Bandelette urinaire",
+        "Redon 1 (ml)", "Redon 2 (ml)", "Redon 3 (ml)",
+    ]
 
 
 def test_aucun_trou_de_gabarit_sur_la_feuille_imprimee(base, dossier):

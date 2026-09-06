@@ -1,8 +1,8 @@
 {
   "nom": "feuille_lignes",
   "libelle": "Lignes fixes de la feuille de réanimation imprimée",
-  "version": "2026-09-05.2",
-  "date": "2026-09-05",
+  "version": "2026-09-06.1",
+  "date": "2026-09-06",
   "note": "Quels paramètres occupent les lignes pré-imprimées de la feuille, et combien de lignes chaque bloc comporte. Le nombre de lignes vient de la maquette du service (modeles/feuille_reanimation_kairouan.html) : le changer ici sans changer la maquette déborderait de la page. Les codes renvoient au catalogue d'analytes (rea/analytes.py) ; un code inconnu affiche son libellé tel quel. Les codes de la section « gaz » et « ventilation » sont ceux des colonnes de la table gaz_du_sang ; ceux des autres sections sont des identifiants d'analyte. Une case de « à demander pour demain » peut couvrir plusieurs examens (Urée/Créat, CRP/PCT, ECBU/PDP) : elle est cochée dès que l'un d'eux est demandé.",
   "valeurs": {
     "hemato": [
@@ -117,22 +117,22 @@
     ],
     "surveillance_a": [
       [
-        "fc",
-        "FC"
+        "temperature",
+        "T° (°C)"
       ],
       [
-        "spo2",
-        "SpO₂"
+        "fc",
+        "FC (bpm)"
       ]
     ],
     "surveillance_b": [
       [
-        "temperature",
-        "T°"
+        "fr",
+        "FR (cpm)"
       ],
       [
-        "fr",
-        "FR"
+        "spo2",
+        "SpO₂ (%)"
       ],
       [
         "glasgow",
@@ -141,16 +141,38 @@
     ],
     "surveillance_c": [
       [
+        "eva_bps",
+        "EVA — BPS"
+      ],
+      [
+        "rass",
+        "RASS"
+      ],
+      [
+        "dextro",
+        "Dextro (g/l)"
+      ]
+    ],
+    "sorties_drains": [
+      [
         "diurese",
-        "Diurèse"
+        "Diurèse (ml/h)"
       ],
       [
-        "drain_1",
-        "Drain 1"
+        "bandelette_urinaire",
+        "Bandelette urinaire"
       ],
       [
-        "drain_2",
-        "Drain 2"
+        "redon_1",
+        "Redon 1 (ml)"
+      ],
+      [
+        "redon_2",
+        "Redon 2 (ml)"
+      ],
+      [
+        "redon_3",
+        "Redon 3 (ml)"
       ]
     ],
     "examens_demain": [

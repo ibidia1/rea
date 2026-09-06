@@ -562,7 +562,7 @@ def contexte(dossier) -> dict:
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
         "survRowsC": _lignes_manuscrites(lignes_ref["surveillance_c"]),
-        "bilanRows": _lignes_manuscrites([("", "")] * 5),
+        "bilanRows": _lignes_manuscrites(lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
         "days": [format_date_fr(j)[:5] for j in jours],
         "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)],
