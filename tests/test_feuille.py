@@ -496,3 +496,64 @@ def test_sans_antecedent_reste_distingue_de_non_renseigne(base, dossier):
     assert "Non renseignés" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
     sejours.definir_etat_antecedents(base, sejour["patient_id"], "absent")
     assert "Aucun connu" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+
+
+def test_chaque_antecedent_est_sur_sa_propre_ligne(base, dossier):
+    """Remarque du service, 6 septembre : une phrase à virgules se relit
+    mal au pied du lit — un antécédent par ligne."""
+    _pid, sid = dossier
+    sejour = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="HTA")
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="Diabète type 2")
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<div>HTA</div>" in html
+    assert "<div>Diabète type 2</div>" in html
+
+
+def test_les_circonstances_reprennent_le_mecanisme_et_son_detail(base, dossier):
+    """Exemple du service : « Circonstances : AVP deux-roues — heurté par
+    une voiture », sur sa propre ligne, séparée du motif."""
+    _pid, sid = dossier
+    base.mettre_a_jour("sejour", sid, {
+        "traumatique": 1, "mecanisme": "avp_deux_roues",
+        "mecanisme_detail": "heurté par une voiture",
+    })
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<b>Circonstances :</b> AVP deux-roues — heurté par une voiture</div>" in html
+
+
+def test_pas_de_circonstances_si_non_traumatique(base, dossier):
+    _pid, sid = dossier
+    sejours.definir_motifs(base, sid, motif_principal="choc_septique")
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Circonstances" not in html
+
+
+def test_traitement_habituel_absent_n_est_pas_ecrit(base, dossier):
+    """« Si pas de traitement habituel, ne pas l'écrire » — pas de ligne
+    vide, pas de « Ttt habituel — » sans valeur."""
+    _pid, sid = dossier
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Ttt habituel" not in html
+
+
+def test_traitement_habituel_present_est_ecrit(base, dossier):
+    _pid, sid = dossier
+    pid = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))["patient_id"]
+    base.mettre_a_jour("patient", pid, {"traitement_habituel": "Metformine 1000 x2/j"})
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<b>Ttt habituel :</b> Metformine 1000 x2/j</div>" in html
+
+
+def test_chaque_region_et_motif_associe_est_sur_sa_propre_ligne(base, dossier):
+    _pid, sid = dossier
+    base.mettre_a_jour("sejour", sid, {"traumatique": 1})
+    sejours.definir_regions_traumatiques(
+        base, sid, ["cranien", "thoracique"],
+        precisions={"cranien": "Hématome extra-dural droit"},
+    )
+    sejours.definir_motifs(base, sid, motif_principal=None, motifs_associes=["acidocetose"])
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<div>Traumatisme crânien : Hématome extra-dural droit</div>" in html
+    assert "<div>Traumatisme thoracique</div>" in html
+    assert "<div>Acidocétose diabétique</div>" in html
