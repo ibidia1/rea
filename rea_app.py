@@ -38,18 +38,18 @@ if not utilisateur_id:
 # --------------------------------------------------------------------------
 with st.sidebar:
     st.write(f"**{utilisateur_ui.nom_utilisateur_courant()}**")
-    if st.button("↩ Changer d'utilisateur"):
+    if st.button("Changer d'utilisateur"):
         utilisateur_ui.changer_utilisateur()
     st.divider()
-    if st.button("🛏 Tableau des lits", use_container_width=True):
+    if st.button("Tableau des lits", use_container_width=True):
         st.session_state.pop("sejour_id", None)
         st.session_state.pop("ecran", None)
         st.rerun()
-    if st.button("📈 Recherche", use_container_width=True):
+    if st.button("Recherche", use_container_width=True):
         st.session_state.pop("sejour_id", None)
         st.session_state["ecran"] = "recherche"
         st.rerun()
-    if st.button("⚙ Administration", use_container_width=True):
+    if st.button("Administration", use_container_width=True):
         st.session_state.pop("sejour_id", None)
         st.session_state["ecran"] = "administration"
         st.rerun()

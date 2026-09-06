@@ -810,6 +810,21 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.0 — 6 septembre 2026 — retrait des emojis décoratifs de l'interface**
+
+Consigne du service : une interface sobre, fonctionnelle, peu décorative.
+Les emojis en préfixe de bouton, d'expander et de titre (🖨, 📅, ➕, 🧪,
+✏️, 🛏, la barre latérale 🛏/📈/⚙…) étaient purement décoratifs — retirés
+de tous les écrans (`rea/ui/*.py`, `rea_app.py`). Conservés, parce que
+fonctionnels : les cases à cocher ☑/☐ de la fiche imprimée (ce sont de
+vraies cases de formulaire papier), les icônes d'alerte natives Streamlit
+(`icon="⚠️"`, déjà couplées à une couleur sémantique rouge/orange), les
+flèches de tendance ↑/↓ sur les valeurs de bilan, et le favicon de l'onglet
+navigateur. Corrigé au passage : les puces ✅/⬜ de la check-list FAST HUG
+ne respectaient pas la couleur d'état qui leur était assignée (un emoji
+porte sa propre couleur, insensible au CSS) — remplacées par des puces
+pleines/vides (● ○) qui l'affichent correctement.
+
 **v2.9 — 6 septembre 2026 — récapitulatif biologique aligné sur la maquette de référence**
 
 Comparé à `Feuille_Reanimation_Kairouan_A3fin.html`, envoyé par le service :

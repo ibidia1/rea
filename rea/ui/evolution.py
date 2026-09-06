@@ -19,8 +19,8 @@ from . import champs
 
 
 _STYLE_ETAT = {
-    "ok": ("✅", theme.VERT),
-    "a_verifier": ("⬜", theme.ORANGE),
+    "ok": ("●", theme.VERT),
+    "a_verifier": ("○", theme.ORANGE),
     "non_renseigne": ("·", theme.GRIS),
 }
 
@@ -156,7 +156,7 @@ def panneau_scores(sejour: dict, date_jour_str: str) -> None:
 
     Un score décrit, il ne décide pas — et un score incomplet le dit.
     """
-    with st.expander("📊 Scores de gravité"):
+    with st.expander("Scores de gravité"):
         # Le score du jour est affiché de toute façon : autant garder une
         # trace datée pour la recherche (bloc 9), plutôt qu'un calcul qui ne
         # laisse rien derrière lui une fois l'écran refermé.
@@ -237,7 +237,7 @@ def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
     évite de refaire. Le lactate se relit du dernier gaz du sang quand il y en
     a un ; le champ ne sert qu'à combler son absence.
     """
-    with st.expander("📐 Définitions (Berlin, KDIGO, Sepsis-3)"):
+    with st.expander("Définitions (Berlin, KDIGO, Sepsis-3)"):
         c1, c2 = st.columns(2)
         with c1:
             _bloc_definition(definitions_cliniques.sdra(contexte.base(), sejour["id"], date_jour_str))
@@ -331,7 +331,7 @@ def onglet_evolution(sejour: dict) -> None:
             st.success("Évolution enregistrée.")
             st.rerun()
 
-        with st.expander("🩹 Escarres"):
+        with st.expander("Escarres"):
             existantes = evolution_service.escarres(contexte.base(), sejour["id"])
             for e in existantes:
                 col1, col2 = st.columns([4, 1])

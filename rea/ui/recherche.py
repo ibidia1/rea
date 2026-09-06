@@ -42,7 +42,7 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
 
 
 def _filtres() -> stats.Filtres:
-    with st.expander("🔎 Définir la cohorte", expanded=True):
+    with st.expander("Définir la cohorte", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
         debut = c1.date_input("Admissions depuis", value=None, key="coh_debut")
         fin = c2.date_input("Jusqu'au", value=None, key="coh_fin")
@@ -198,7 +198,7 @@ def _export(base: Base, selection: list[dict], filtres: stats.Filtres,
             "nominatif.", icon="⚠️",
         )
     c1, c2 = st.columns(2)
-    if c1.button("📤 Exporter la cohorte", type="primary", use_container_width=True):
+    if c1.button("Exporter la cohorte", type="primary", use_container_width=True):
         dossier = export_service.exporter(
             base, sejour_ids=[s["id"] for s in selection],
             avec_texte_libre=texte_libre, motif=motif or filtres.resume(),
@@ -209,7 +209,7 @@ def _export(base: Base, selection: list[dict], filtres: stats.Filtres,
             "Un export reste une donnée de santé : il se conserve et se "
             "transmet comme telle."
         )
-    if c2.button("🧊 Geler la base pour analyse", use_container_width=True):
+    if c2.button("Geler la base pour analyse", use_container_width=True):
         gel = export_service.geler(
             base, motif=motif or "analyse", utilisateur_id=utilisateur_id
         )

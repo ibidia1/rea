@@ -46,7 +46,7 @@ def onglet_identite(sejour: dict) -> None:
     with c_modifier:
         # Un bouton compact, pas un bandeau : « modifier » est un geste
         # occasionnel, il ne doit pas prendre de la place en permanence.
-        with st.popover("✏️ Modifier l'admission", use_container_width=True):
+        with st.popover("Modifier l'admission", use_container_width=True):
             _modifier_admission(sejour)
 
     with c_identite:
@@ -296,7 +296,7 @@ def _transferer_lit(sejour: dict) -> None:
     """
     from ..services import lits as lits_service
 
-    with st.expander("🛏 Transférer vers un autre lit"):
+    with st.expander("Transférer vers un autre lit"):
         libres = lits_service.lits_libres(contexte.base())
         if not libres:
             st.caption("Aucun autre lit n'est libre actuellement.")

@@ -78,7 +78,7 @@ def onglet_actes(sejour: dict) -> None:
                 theme.GRIS,
             )
 
-    with st.expander("➕ Poser un dispositif / noter un acte"):
+    with st.expander("Poser un dispositif / noter un acte"):
         type_ = st.selectbox(
             "Type", listes.ORDRE_DISPOSITIFS, format_func=listes.libelle_dispositif,
             key="type_dispositif",
@@ -128,7 +128,7 @@ def onglet_actes(sejour: dict) -> None:
             theme.VIOLET,
         )
 
-    with st.expander("➕ Ajouter une exploration"):
+    with st.expander("Ajouter une exploration"):
         type_expl = st.selectbox(
             "Type d'exploration", list(listes.TYPES_EXPLORATION.keys()),
             format_func=lambda c: listes.TYPES_EXPLORATION[c]["libelle"],
@@ -176,7 +176,7 @@ def onglet_actes(sejour: dict) -> None:
     types_presents = {e["type"] for e in explos}
     candidats = [(t, c, l) for t, c, l in historisables if t in types_presents]
     if candidats:
-        with st.expander("📈 Cinétique d'une valeur d'exploration"):
+        with st.expander("Cinétique d'une valeur d'exploration"):
             choix = st.selectbox(
                 "Valeur", candidats,
                 format_func=lambda x: f"{listes.TYPES_EXPLORATION[x[0]]['libelle']} — {x[2]}",
