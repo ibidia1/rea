@@ -810,6 +810,54 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.0 — 6 septembre 2026 — retrait des emojis décoratifs de l'interface**
+
+Consigne du service : une interface sobre, fonctionnelle, peu décorative.
+Les emojis en préfixe de bouton, d'expander et de titre (🖨, 📅, ➕, 🧪,
+✏️, 🛏, la barre latérale 🛏/📈/⚙…) étaient purement décoratifs — retirés
+de tous les écrans (`rea/ui/*.py`, `rea_app.py`). Conservés, parce que
+fonctionnels : les cases à cocher ☑/☐ de la fiche imprimée (ce sont de
+vraies cases de formulaire papier), les icônes d'alerte natives Streamlit
+(`icon="⚠️"`, déjà couplées à une couleur sémantique rouge/orange), les
+flèches de tendance ↑/↓ sur les valeurs de bilan, et le favicon de l'onglet
+navigateur. Corrigé au passage : les puces ✅/⬜ de la check-list FAST HUG
+ne respectaient pas la couleur d'état qui leur était assignée (un emoji
+porte sa propre couleur, insensible au CSS) — remplacées par des puces
+pleines/vides (● ○) qui l'affichent correctement.
+
+**v2.9 — 6 septembre 2026 — récapitulatif biologique aligné sur la maquette de référence**
+
+Comparé à `Feuille_Reanimation_Kairouan_A3fin.html`, envoyé par le service :
+plusieurs paramètres, toujours lus ensemble, tenaient sur des lignes
+séparées, et trois paramètres n'étaient pas suivis du tout.
+
+1. **Lignes combinées** (`_valeurs_biologie` accepte désormais plusieurs
+   codes par ligne, affichés séparés par « / ») : TP / INR, Cl⁻ / HCO₃⁻,
+   ASAT / ALAT, Bili / Albumine, Ca²⁺ / Mg²⁺ / Phosphore, FR / AI. Rien
+   n'est retiré de la saisie — seule la ligne imprimée change.
+2. **Trois nouveaux analytes** (`rea/analytes.py`, groupe Ionogramme) :
+   Magnésium, Phosphore, HCO₃⁻ veineux (distinct du HCO₃⁻ artériel posé
+   avec chaque gaz du sang).
+3. **Trois nouvelles colonnes sur `gaz_du_sang`** : SaO₂ (remplace le SpO₂
+   continu — déjà suivi heure par heure sur le verso — dans ce tableau de
+   gaz du sang), Vt, AI (aide inspiratoire).
+4. Gaz du sang : FiO₂ rejoint le tableau des gaz (retiré de la ventilation,
+   où il faisait doublon) ; Débit O₂ reste saisissable mais ne figure plus
+   dans ce récapitulatif imprimé.
+
+**v2.8 — 6 septembre 2026 — correction des constantes de la feuille de surveillance**
+
+Remarque du service : la liste des constantes de la feuille imprimée
+(verso) était fausse — EVA-BPS, RASS et Dextro manquaient, et la diurèse
+avec les drains étaient rangés sous « Constantes vitales » au lieu de
+« Sorties & drains ». Corrigé dans `referentiels/feuille_lignes.json`
+(fichier, pas de code à toucher pour la prochaine correction) :
+
+- **Constantes vitales** : T°, FC, PA (PAS/PAD), FR, SpO₂, Glasgow, Pupilles
+  (D/G), EVA — BPS, RASS, Dextro.
+- **Sorties & drains** : Diurèse, Bandelette urinaire, Redon 1/2/3 (au lieu
+  de deux « Drain » génériques).
+
 **v2.7 — 5 septembre 2026 — retrait du CIM-10, précision par région, motif/ATCD imprimés automatiquement**
 
 1. **Codage CIM-10 retiré** de l'écran Identité : outil interne redondant

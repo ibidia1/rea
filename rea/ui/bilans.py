@@ -75,10 +75,10 @@ def onglet_bilans(sejour: dict) -> None:
     la cinétique et le texte généré en dessous.
     """
     mode = st.radio(
-        "Mode", ["📝 Saisir un bilan", "📊 Visualiser"], horizontal=True,
+        "Mode", ["Saisir un bilan", "Visualiser"], horizontal=True,
         key=f"bilans_mode_{sejour['id']}",
     )
-    if mode == "📝 Saisir un bilan":
+    if mode == "Saisir un bilan":
         saisie_bilan(sejour)
     else:
         panneau_microbiologie(sejour)
@@ -103,7 +103,7 @@ def panneau_microbiologie(sejour: dict) -> None:
     plus sûrement : les prélèvements en attente sont donc affichés en premier
     et en orange, tant qu'ils ne sont pas complétés.
     """
-    st.markdown("##### 🦠 Microbiologie")
+    st.markdown("##### Microbiologie")
     lignes = micro_service.du_sejour(contexte.base(), sejour["id"])
     attente = [l for l in lignes if l["resultat"] == "en_cours"]
 
@@ -242,7 +242,8 @@ def saisie_bilan(sejour: dict) -> None:
         ("fr", "FR (/min)", "12 – 25"), ("spo2", "SpO₂ (%)", "≥ 94"),
         ("ph", "pH", "7,35 – 7,45"), ("pao2", "PaO₂ (mmHg)", "80 – 100"),
         ("paco2", "PaCO₂ (mmHg)", "35 – 45"), ("hco3", "HCO₃⁻ (mmol/L)", "22 – 26"),
-        ("lactate", "Lactates (mmol/L)", "< 2"),
+        ("lactate", "Lactates (mmol/L)", "< 2"), ("sao2", "SaO₂ (%)", "≥ 94"),
+        ("vt", "Vt (mL)", "6-8 mL/kg"), ("ai", "AI (cmH₂O)", "5 – 20"),
     ]
     colonnes_gaz = st.columns(2)
     for i, (cle, libelle, plage) in enumerate(champs_gaz):
@@ -409,7 +410,7 @@ def vue_cinetique(sejour: dict) -> None:
     traçables = [i for i in ids_affiches
                  if len(bilans_service.historique_analyte(contexte.base(), sejour["id"], i)) >= 2]
     if traçables:
-        with st.expander("📈 Courbes", expanded=len(traçables) <= 4):
+        with st.expander("Courbes", expanded=len(traçables) <= 4):
             import pandas as pd
 
             colonnes = st.columns(2)

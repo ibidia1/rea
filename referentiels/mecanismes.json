@@ -1,11 +1,23 @@
 {
   "nom": "mecanismes",
   "libelle": "Mécanisme du traumatisme",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
+  "version": "2026-09-06.1",
+  "date": "2026-09-06",
   "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
   "avec_detail": [
+    "avp_deux_roues",
+    "avp_quatre_roues",
+    "avp_pieton",
+    "chute_hauteur",
     "chute_lieu_eleve",
+    "arme_blanche",
+    "arme_a_feu",
+    "contondante",
+    "accident_travail",
+    "accident_domestique",
+    "sport",
+    "ecrasement",
+    "blast",
     "autre"
   ],
   "valeurs": [

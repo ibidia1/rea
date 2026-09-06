@@ -194,6 +194,33 @@ def test_la_microbiologie_est_reportee(base, dossier):
     assert "E. coli BLSE" in html
 
 
+def test_la_crp_rejoint_les_bilans_infectieux(base, dossier):
+    """Remarque du service, 6 septembre : la CRP appartient au bilan
+    d'infection avec les prélèvements microbiologiques, pas seulement au
+    récapitulatif de chimie générale."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"crp": 45})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["infRows"] if l["prelevement"] == "CRP")
+    assert "45" in ligne["resultat"]
+
+
+def test_crp_et_microbiologie_partagent_le_meme_tableau_tries_par_date(base, dossier):
+    """J1 (2026-09-04) est plus récent que J2 (2026-09-03) : il passe en
+    tête, comme la microbiologie seule le faisait déjà avant l'ajout de
+    la CRP."""
+    _pid, sid = dossier
+    microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
+                              type_prelevement="hemoculture", resultat="negatif")
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T06:00",
+                                 valeurs={"crp": 60})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    prelevements = [l["prelevement"] for l in contexte["infRows"] if l["prelevement"]]
+    assert prelevements[0] == "Hémoculture"
+    assert prelevements[1] == "CRP"
+
+
 # -- ce que le logiciel laisse vide -----------------------------------------
 
 def test_les_constantes_horaires_restent_manuscrites(base, dossier):
@@ -201,9 +228,33 @@ def test_les_constantes_horaires_restent_manuscrites(base, dossier):
     les lignes, il ne les remplit pas."""
     _pid, sid = dossier
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    for bloc in ("survRowsA", "survRowsB", "survRowsC"):
+    for bloc in ("survRowsA", "survRowsB", "survRowsC", "bilanRows"):
         for ligne in contexte[bloc]:
             assert ligne["valeurs"].html == ""
+
+
+def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
+    """Remarque du service, 6 septembre : l'ancienne liste (FC/SpO2/T°/FR/
+    Glasgow/Diurèse/Drain) manquait EVA-BPS, RASS et Dextro, et rangeait
+    diurèse/drains sous « Constantes vitales » au lieu de « Sorties &
+    drains »."""
+    _pid, sid = dossier
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles_vitales = (
+        [l["libelle"] for l in contexte["survRowsA"]]
+        + [l["libelle"] for l in contexte["survRowsB"]]
+        + [l["libelle"] for l in contexte["survRowsC"]]
+    )
+    for attendu in ("T° (°C)", "FC (bpm)", "FR (cpm)", "SpO₂ (%)", "Glasgow",
+                    "EVA — BPS", "RASS", "Dextro (g/l)"):
+        assert attendu in libelles_vitales
+    assert not any("Diurèse" in l or "Drain" in l for l in libelles_vitales)
+
+    libelles_sorties = [l["libelle"] for l in contexte["bilanRows"]]
+    assert libelles_sorties == [
+        "Diurèse (ml/h)", "Bandelette urinaire",
+        "Redon 1 (ml)", "Redon 2 (ml)", "Redon 3 (ml)",
+    ]
 
 
 def test_aucun_trou_de_gabarit_sur_la_feuille_imprimee(base, dossier):
@@ -472,3 +523,119 @@ def test_sans_antecedent_reste_distingue_de_non_renseigne(base, dossier):
     assert "Non renseignés" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
     sejours.definir_etat_antecedents(base, sejour["patient_id"], "absent")
     assert "Aucun connu" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+
+
+def test_chaque_antecedent_est_sur_sa_propre_ligne(base, dossier):
+    """Remarque du service, 6 septembre : une phrase à virgules se relit
+    mal au pied du lit — un antécédent par ligne."""
+    _pid, sid = dossier
+    sejour = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="HTA")
+    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="Diabète type 2")
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<div>HTA</div>" in html
+    assert "<div>Diabète type 2</div>" in html
+
+
+def test_les_circonstances_reprennent_le_mecanisme_et_son_detail(base, dossier):
+    """Exemple du service : « Circonstances : AVP deux-roues — heurté par
+    une voiture », sur sa propre ligne, séparée du motif."""
+    _pid, sid = dossier
+    base.mettre_a_jour("sejour", sid, {
+        "traumatique": 1, "mecanisme": "avp_deux_roues",
+        "mecanisme_detail": "heurté par une voiture",
+    })
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<b>Circonstances :</b> AVP deux-roues — heurté par une voiture</div>" in html
+
+
+def test_pas_de_circonstances_si_non_traumatique(base, dossier):
+    _pid, sid = dossier
+    sejours.definir_motifs(base, sid, motif_principal="choc_septique")
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Circonstances" not in html
+
+
+def test_traitement_habituel_absent_n_est_pas_ecrit(base, dossier):
+    """« Si pas de traitement habituel, ne pas l'écrire » — pas de ligne
+    vide, pas de « Ttt habituel — » sans valeur."""
+    _pid, sid = dossier
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Ttt habituel" not in html
+
+
+def test_traitement_habituel_present_est_ecrit(base, dossier):
+    _pid, sid = dossier
+    pid = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))["patient_id"]
+    base.mettre_a_jour("patient", pid, {"traitement_habituel": "Metformine 1000 x2/j"})
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<b>Ttt habituel :</b> Metformine 1000 x2/j</div>" in html
+
+
+def test_chaque_region_et_motif_associe_est_sur_sa_propre_ligne(base, dossier):
+    _pid, sid = dossier
+    base.mettre_a_jour("sejour", sid, {"traumatique": 1})
+    sejours.definir_regions_traumatiques(
+        base, sid, ["cranien", "thoracique"],
+        precisions={"cranien": "Hématome extra-dural droit"},
+    )
+    sejours.definir_motifs(base, sid, motif_principal=None, motifs_associes=["acidocetose"])
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "<div>Traumatisme crânien : Hématome extra-dural droit</div>" in html
+    assert "<div>Traumatisme thoracique</div>" in html
+    assert "<div>Acidocétose diabétique</div>" in html
+
+
+# -- récapitulatif biologique : lignes combinées (6 septembre) ---------------
+
+def test_tp_et_inr_partagent_une_ligne(base, dossier):
+    """Remarque du service : toujours lus ensemble, ils doivent tenir sur
+    une seule ligne du récapitulatif, pas deux."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"tp": 85, "inr": 1.1})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles = [l["libelle"] for l in contexte["bioHemato"]]
+    assert "TP / INR" in libelles
+    assert "TP" not in libelles and "INR" not in libelles
+    ligne = next(l for l in contexte["bioHemato"] if l["libelle"] == "TP / INR")
+    assert "85/1,1" in ligne["valeurs"].html
+
+
+def test_une_seule_valeur_du_couple_ne_perd_pas_le_separateur(base, dossier):
+    """Si seul le TP est arrivé, la case affiche « 85 », pas « 85/ »."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"tp": 85})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["bioHemato"] if l["libelle"] == "TP / INR")
+    assert "85" in ligne["valeurs"].html
+    assert "85/" not in ligne["valeurs"].html
+
+
+def test_calcium_magnesium_phosphore_regroupes(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"ca": 2.3, "mg": 0.8, "phosphore": 1.0})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles = [l["libelle"] for l in contexte["bioAutres"]]
+    assert "Ca²⁺ / Mg²⁺ / Phosphore" in libelles
+    assert "CRP" in libelles  # pas retirée, seulement complétée
+
+
+def test_sao2_vt_ai_sont_reportes(base, dossier):
+    """Nouveaux paramètres de ventilation (remarque du service, 6
+    septembre) : Vt et l'aide inspiratoire (combinée à FR), SaO2 remplace
+    le SpO2 continu dans le tableau des gaz du sang (déjà suivi heure par
+    heure sur le verso)."""
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T07:00", sao2=97, vt=450, ai=12, fr=18)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libelles_gaz = [l["libelle"] for l in contexte["gdsGaz"]]
+    libelles_vent = [l["libelle"] for l in contexte["gdsVent"]]
+    assert "SaO₂" in libelles_gaz
+    assert "SpO₂" not in libelles_gaz
+    assert "Vt" in libelles_vent
+    assert "FR / AI" in libelles_vent
+    ligne = next(l for l in contexte["gdsGaz"] if l["libelle"] == "SaO₂")
+    assert "97" in ligne["valeurs"].html

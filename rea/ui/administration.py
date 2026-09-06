@@ -66,7 +66,7 @@ def _sauvegardes(base: Base) -> None:
     gauche, droite = st.columns([1, 2], gap="large")
 
     with gauche:
-        if st.button("💾 Sauvegarder maintenant", use_container_width=True,
+        if st.button("Sauvegarder maintenant", use_container_width=True,
                      type="primary"):
             chemin = base.sauvegarder(motif="manuelle")
             st.success(f"Sauvegarde écrite : {chemin.name}")
@@ -104,7 +104,7 @@ def _sauvegardes(base: Base) -> None:
     choix = st.selectbox("Sauvegarde à restaurer", noms, index=None,
                          placeholder="Choisir une sauvegarde")
     confirme = st.checkbox("Je confirme vouloir remplacer la base actuelle")
-    if st.button("↺ Restaurer", disabled=not (choix and confirme)):
+    if st.button("Restaurer", disabled=not (choix and confirme)):
         selection = disponibles[noms.index(choix)]
         filet = base.restaurer(selection["chemin"])
         st.success(
@@ -218,7 +218,7 @@ def _fiches_imprimees(base: Base) -> None:
             complete = pancarte_service.snapshot(base, fiche["id"])
             if complete:
                 st.download_button(
-                    "⬇ Télécharger",
+                    "Télécharger",
                     data=complete["html"],
                     file_name=f"feuille-lit{fiche['lit_admission']}-{jour}-v{fiche['version']}.html",
                     mime="text/html",
@@ -327,8 +327,8 @@ def _protocoles() -> None:
         return
     for p in tous:
         etat = (
-            f"✅ validé — signé par {p.signe_par}" if p.valide and p.signe_par
-            else "🚧 brouillon — non proposé à l'écran"
+            f"Validé — signé par {p.signe_par}" if p.valide and p.signe_par
+            else "Brouillon — non proposé à l'écran"
         )
         theme.bloc(
             p.titre,
@@ -379,7 +379,7 @@ def _charger_protocole_dans_editeur(code: str | None) -> None:
 
 def _editeur_protocoles() -> None:
     st.divider()
-    st.subheader("✏️ Ajouter ou modifier un protocole")
+    st.subheader("Ajouter ou modifier un protocole")
     st.caption(
         "Un protocole reste un brouillon — jamais proposé à l'admission — "
         "tant que « Validé » n'est pas coché et « Signé par » renseigné "
@@ -388,12 +388,12 @@ def _editeur_protocoles() -> None:
 
     codes_existants = list(protocoles.codes())
     choix = st.selectbox(
-        "Protocole", ["➕ Nouveau protocole…"] + codes_existants, key="ed_proto_choix"
+        "Protocole", ["Nouveau protocole…"] + codes_existants, key="ed_proto_choix"
     )
     if choix != st.session_state.get("ed_proto_charge"):
-        _charger_protocole_dans_editeur(None if choix == "➕ Nouveau protocole…" else choix)
+        _charger_protocole_dans_editeur(None if choix == "Nouveau protocole…" else choix)
         st.session_state["ed_proto_charge"] = choix
-    code_existant = None if choix == "➕ Nouveau protocole…" else choix
+    code_existant = None if choix == "Nouveau protocole…" else choix
 
     code = st.text_input(
         "Code (identifiant unique)", key="ed_proto_code", disabled=bool(code_existant)
@@ -492,7 +492,7 @@ def _editeur_protocoles() -> None:
         st.warning("Indiquer qui valide, sinon le protocole reste un brouillon.")
 
     col_save, col_del = st.columns([3, 1])
-    if col_save.button("💾 Enregistrer le protocole", type="primary"):
+    if col_save.button("Enregistrer le protocole", type="primary"):
         code_normalise = _slug(code)
         if not code_normalise:
             st.error("Le code est obligatoire.")
@@ -523,7 +523,7 @@ def _editeur_protocoles() -> None:
             st.success(f"Protocole « {code_normalise} » enregistré.")
             st.session_state.pop("ed_proto_charge", None)
             st.rerun()
-    if code_existant and col_del.button("🗑 Supprimer"):
+    if code_existant and col_del.button("Supprimer"):
         protocoles.supprimer(code_existant)
         st.success("Protocole supprimé.")
         st.session_state.pop("ed_proto_charge", None)
@@ -539,8 +539,8 @@ def _regles() -> None:
     )
     for jeu in aides.inventaire():
         etat = (
-            f"✅ validé — signé par {jeu['signe_par']}" if jeu["valide"] and jeu["signe_par"]
-            else "🚧 en service mais non signé — à valider par un senior"
+            f"Validé — signé par {jeu['signe_par']}" if jeu["valide"] and jeu["signe_par"]
+            else "En service mais non signé — à valider par un senior"
         )
         lignes = [f"Version {jeu['version']} · {jeu['nb']} règles", etat]
         if jeu["source"]:
@@ -556,7 +556,7 @@ def _regles() -> None:
 
 def _editeur_regles() -> None:
     st.divider()
-    st.subheader("✏️ Ajouter ou modifier une règle")
+    st.subheader("Ajouter ou modifier une règle")
     st.caption(
         "Une règle enregistrée ici s'applique tout de suite, comme si elle "
         "avait été tapée à la main dans le fichier. Le badge « non signé » "
@@ -566,10 +566,10 @@ def _editeur_regles() -> None:
 
     fichiers = list(aides.noms_fichiers())
     choix_fichier = st.selectbox(
-        "Fichier de règles", fichiers + ["➕ Nouveau fichier…"], key="ed_regle_choix_fichier"
+        "Fichier de règles", fichiers + ["Nouveau fichier…"], key="ed_regle_choix_fichier"
     )
 
-    if choix_fichier == "➕ Nouveau fichier…":
+    if choix_fichier == "Nouveau fichier…":
         with st.form("nouveau_fichier_regles"):
             nom = st.text_input("Nom du fichier (ex. « rappels_cardio »)")
             titre = st.text_input("Titre affiché")
@@ -658,7 +658,7 @@ def _editeur_regles() -> None:
             conditions.append(cond)
 
     if conditions:
-        with st.expander("🧪 Tester avec des valeurs d'exemple"):
+        with st.expander("Tester avec des valeurs d'exemple"):
             faits_test = {}
             for cond in conditions:
                 brut = st.text_input(
@@ -683,7 +683,7 @@ def _editeur_regles() -> None:
                 else:
                     st.info("Cette règle ne se déclencherait pas avec ces valeurs.")
 
-    if st.button("💾 Enregistrer la règle", type="primary"):
+    if st.button("Enregistrer la règle", type="primary"):
         code_normalise = _slug(code)
         if not code_normalise:
             st.error("Le code est obligatoire.")

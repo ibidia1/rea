@@ -35,7 +35,7 @@ def _pancarte_de_demain(sejour: dict, date_jour_str: str) -> None:
 
     st.markdown(f"**Pancarte du {format_date_fr(demain)}**")
     if not preparee:
-        if st.button("📅 Préparer la pancarte de demain", use_container_width=True):
+        if st.button("Préparer la pancarte de demain", use_container_width=True):
             prescriptions_service.preparer_pancarte_de_demain(
                 contexte.base(), sejour["id"], aujourdhui=date_jour_str, utilisateur_id=contexte.utilisateur_id()
             )
@@ -44,7 +44,7 @@ def _pancarte_de_demain(sejour: dict, date_jour_str: str) -> None:
 
     if not validee:
         st.caption("Préparée — à relire avant impression.")
-        if st.button("✅ Valider la pancarte de demain", use_container_width=True):
+        if st.button("Valider la pancarte de demain", use_container_width=True):
             prescriptions_service.valider_pancarte_de_demain(
                 contexte.base(), sejour["id"], aujourdhui=date_jour_str, utilisateur_id=contexte.utilisateur_id()
             )
@@ -52,7 +52,7 @@ def _pancarte_de_demain(sejour: dict, date_jour_str: str) -> None:
         return
 
     st.caption(f"Validée le {format_date_fr(journee_demain['validee_le'][:10])}.")
-    if st.button("🖨 Imprimer la pancarte de demain", type="primary", use_container_width=True):
+    if st.button("Imprimer la pancarte de demain", type="primary", use_container_width=True):
         snap = pancarte_service.imprimer(
             contexte.base(), sejour["id"], demain, utilisateur_id=contexte.utilisateur_id()
         )
@@ -81,7 +81,7 @@ def onglet_prescrit(sejour: dict) -> None:
     # (capture du service) plutôt que dans un tiroir qu'il faut rouvrir à
     # chaque ligne — c'est le geste le plus répété de tout l'écran.
     with zone_ajout:
-        if st.button("🖨 Imprimer la pancarte de ce jour", use_container_width=True):
+        if st.button("Imprimer la pancarte de ce jour", use_container_width=True):
             snap = pancarte_service.imprimer(
                 contexte.base(), sejour["id"], date_jour_str, utilisateur_id=contexte.utilisateur_id()
             )
@@ -121,7 +121,7 @@ def _historique_fiches(sejour: dict) -> None:
     snapshots = pancarte_service.snapshots_du_sejour(contexte.base(), sejour["id"])
     if not snapshots:
         return
-    with st.expander(f"📜 Anciennes fiches imprimées ({len(snapshots)})"):
+    with st.expander(f"Anciennes fiches imprimées ({len(snapshots)})"):
         options = [s["id"] for s in snapshots]
         choix = st.selectbox(
             "Jour", options,
@@ -141,7 +141,7 @@ def _historique_fiches(sejour: dict) -> None:
             + (f" par {ancienne['imprime_par_nom']}" if ancienne.get("imprime_par_nom") else "")
         )
         st.download_button(
-            "⬇ Télécharger cette version",
+            "Télécharger cette version",
             data=ancienne["html"],
             file_name=f"feuille-lit{sejour['lit_admission']}-{ancienne['date_jour']}"
                       f"-v{ancienne['version']}.html",
@@ -185,7 +185,7 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
     liste déroulante : c'est le geste le plus répété de l'écran, capturé
     tel que le service l'a demandé.
     """
-    st.markdown("**➕ Ajouter une ligne**")
+    st.markdown("**Ajouter une ligne**")
     voie = st.segmented_control(
         "Voie",
         listes.ORDRE_VOIES,
@@ -286,7 +286,7 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
 
 
 def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
-    with st.expander("⏹ Arrêter une ligne"):
+    with st.expander("Arrêter une ligne"):
         actives = [l for l in pancarte["lignes"] if l["statut"] == "active"]
         if not actives:
             st.caption("Aucune ligne active.")
@@ -299,7 +299,7 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
                 )
                 st.rerun()
 
-    with st.expander("🧪 Bilans à demander pour le lendemain"):
+    with st.expander("Bilans à demander pour le lendemain"):
         demain = date_jour_str
         journee_bilans = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], demain)["bilans_demandes"]
         deja_coches = {b["examen_code"] for b in journee_bilans}
@@ -323,7 +323,7 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
         # remplace pas une impression. Le téléchargement ouvre la feuille dans
         # un vrai onglet, où Ctrl+P sort la bonne page.
         st.download_button(
-            "⬇ Ouvrir la feuille pour l'imprimer (A3 paysage)",
+            "Ouvrir la feuille pour l'imprimer (A3 paysage)",
             data=st.session_state["derniere_impression"],
             file_name=st.session_state.get("nom_impression", "feuille.html"),
             mime="text/html",

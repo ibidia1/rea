@@ -46,7 +46,7 @@ def onglet_identite(sejour: dict) -> None:
     with c_modifier:
         # Un bouton compact, pas un bandeau : « modifier » est un geste
         # occasionnel, il ne doit pas prendre de la place en permanence.
-        with st.popover("✏️ Modifier l'admission", use_container_width=True):
+        with st.popover("Modifier l'admission", use_container_width=True):
             _modifier_admission(sejour)
 
     with c_identite:
@@ -296,7 +296,7 @@ def _transferer_lit(sejour: dict) -> None:
     """
     from ..services import lits as lits_service
 
-    with st.expander("🛏 Transférer vers un autre lit"):
+    with st.expander("Transférer vers un autre lit"):
         libres = lits_service.lits_libres(contexte.base())
         if not libres:
             st.caption("Aucun autre lit n'est libre actuellement.")
@@ -423,6 +423,7 @@ def _modifier_admission(sejour: dict) -> None:
     regions_choisies: list[str] = []
     precisions_regions_choisies: dict[str, str] = {}
     mecanisme = None
+    mecanisme_detail = None
     motif_principal = None
     motifs_associes: list[str] = []
     motifs_actuels = sejours_service.motifs_du_sejour(contexte.base(), sejour["id"])
@@ -448,6 +449,12 @@ def _modifier_admission(sejour: dict) -> None:
             format_func=lambda c: listes.libelle(listes.MECANISMES, c),
             key=f"{prefixe}_mecanisme",
         )
+        mecanisme_detail = ""
+        if mecanisme in listes.MECANISMES_AVEC_DETAIL:
+            mecanisme_detail = st.text_input(
+                "Préciser le mécanisme", value=sejour.get("mecanisme_detail") or "",
+                key=f"{prefixe}_mecanisme_detail",
+            )
         motifs_associes = choix_motifs_associes(
             f"{prefixe}_trauma", defaut=associes_actuels,
         )
@@ -486,7 +493,7 @@ def _modifier_admission(sejour: dict) -> None:
             traumatique=traumatique,
             regions_traumatiques_choisies=regions_choisies,
             regions_traumatiques_precisions=precisions_regions_choisies,
-            mecanisme=mecanisme,
+            mecanisme=mecanisme, mecanisme_detail=mecanisme_detail or None,
             motif_principal=motif_principal, motifs_associes=motifs_associes,
             utilisateur_id=contexte.utilisateur_id(),
         )

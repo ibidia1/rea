@@ -273,26 +273,41 @@ def _jours_biologie(date_jour: str) -> list[str]:
 
 
 def _valeurs_biologie(
-    dossier, jours: list[str], codes: list[tuple[str, str]], source: str,
+    dossier, jours: list[str], lignes_spec: list[tuple], source: str,
 ) -> list[dict]:
     """Une ligne par paramètre, ses valeurs rangées par jour et par créneau.
 
     Le jour en cours est laissé vide : les bilans de la garde s'y écrivent à la
     main pendant la nuit et sont ressaisis le lendemain matin.
+
+    `lignes_spec` : (code, libellé) ou (codes, libellé) — une ligne peut
+    combiner plusieurs paramètres (« TP / INR », « Ca²⁺ / Mg²⁺ / Phosphore »),
+    affichés côte à côte dans la même case, séparés par « / » (remarque du
+    service, 6 septembre : une ligne par paramètre isolé prenait trop de place
+    pour des valeurs toujours lues ensemble).
     """
     lignes = []
-    for code, libelle in codes:
-        cellules: list[str] = []
-        for index_jour, jour in enumerate(jours):
-            dernier = index_jour == len(jours) - 1
-            creneaux = [""] * NB_CRENEAUX_PAR_JOUR
-            if not dernier:
-                creneaux = _creneaux_du_jour(dossier, jour, code, source)
-            cellules.extend(creneaux)
+    for codes, libelle in lignes_spec:
+        if isinstance(codes, str):
+            codes = (codes,)
+        cellules_par_code = []
+        for code in codes:
+            cellules: list[str] = []
+            for index_jour, jour in enumerate(jours):
+                dernier = index_jour == len(jours) - 1
+                creneaux = [""] * NB_CRENEAUX_PAR_JOUR
+                if not dernier:
+                    creneaux = _creneaux_du_jour(dossier, jour, code, source)
+                cellules.extend(creneaux)
+            cellules_par_code.append(cellules)
+        cellules_combinees = [
+            "/".join(v for v in valeurs_du_creneau if v)
+            for valeurs_du_creneau in zip(*cellules_par_code)
+        ]
         lignes.append({
             "libelle": libelle,
             "valeurs": _cellules_valeurs(
-                cellules, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
+                cellules_combinees, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
             ),
         })
     return lignes
@@ -384,32 +399,37 @@ def _texte_abrege_dispositif(etat) -> str:
     return texte
 
 
-def _motif_texte(dossier) -> str:
-    """Reprend le motif d'admission saisi une fois sur l'onglet Identité —
-    l'interne n'a plus à le retranscrire à la main sur la feuille."""
+def _lignes_atcd(dossier) -> list[str]:
+    """Un antécédent par ligne — pas une phrase à reparser, une liste à lire
+    d'un coup d'œil. « Inconnu » et « sans antécédent connu » s'affichent
+    identiquement à la garde — le tiret qui les distingue reste en base
+    (SPEC §4.2 bis), pas sur une feuille que l'infirmier n'a pas à
+    interpréter."""
+    if not dossier.antecedents:
+        return ["Non renseignés" if dossier.etat_antecedents == "non_renseigne" else "Aucun connu"]
+    lignes = []
+    for a in dossier.antecedents:
+        texte = a["libelle"]
+        if a.get("quantification_valeur") is not None:
+            texte += f" ({_nombre(a['quantification_valeur'])} {a.get('quantification_unite') or ''})"
+        elif a.get("precision"):
+            texte += f" ({a['precision']})"
+        lignes.append(texte)
+    return lignes
+
+
+def _circonstances_texte(dossier) -> str | None:
+    """Le mécanisme, en toutes lettres — absent si non traumatique ou si
+    jamais renseigné (rien à afficher plutôt qu'une ligne vide)."""
     sejour = dossier.sejour
-    if sejour.get("traumatique"):
-        elements = [
-            listes.libelle(listes.REGIONS_TRAUMATIQUES, r["region"])
-            + (f" : {r['precision']}" if r.get("precision") else "")
-            for r in dossier.regions_traumatiques
-        ] or ["Régions non précisées"]
-        if sejour.get("mecanisme"):
-            libelle_mec = listes.libelle(listes.MECANISMES, sejour["mecanisme"])
-            if sejour.get("mecanisme_detail"):
-                libelle_mec += f" ({sejour['mecanisme_detail']})"
-            elements.append(f"Mécanisme : {libelle_mec}")
-        associes = [m for m in dossier.motifs if not m["principal"]]
-        if associes:
-            elements.append(
-                "Associé : " + ", ".join(listes.libelle_motif(m["code"]) for m in associes)
-            )
-        return " — ".join(elements)
-    principal = next((m for m in dossier.motifs if m["principal"]), None)
-    associes = [m for m in dossier.motifs if not m["principal"]]
-    elements = [listes.libelle_motif(principal["code"])] if principal else []
-    elements += [listes.libelle_motif(m["code"]) for m in associes]
-    return " — ".join(elements) if elements else "Non renseigné"
+    if not sejour.get("traumatique") or not sejour.get("mecanisme"):
+        return None
+    if sejour["mecanisme"] == "non_renseigne":
+        return None
+    texte = listes.libelle(listes.MECANISMES, sejour["mecanisme"])
+    if sejour.get("mecanisme_detail"):
+        texte += f" — {sejour['mecanisme_detail']}"
+    return texte
 
 
 def _transport_texte(dossier) -> str:
@@ -422,45 +442,52 @@ def _transport_texte(dossier) -> str:
     return libelle
 
 
-def _atcd_texte(dossier) -> str:
-    """« Inconnu » et « sans antécédent connu » s'affichent identiquement à
-    la garde — le tiret qui les distingue reste en base (SPEC §4.2 bis),
-    pas sur une feuille que l'infirmier n'a pas à interpréter."""
-    if not dossier.antecedents:
-        return "Non renseignés" if dossier.etat_antecedents == "non_renseigne" else "Aucun connu"
-    elements = []
-    for a in dossier.antecedents:
-        texte = a["libelle"]
-        if a.get("quantification_valeur") is not None:
-            texte += f" ({_nombre(a['quantification_valeur'])} {a.get('quantification_unite') or ''})"
-        elif a.get("precision"):
-            texte += f" ({a['precision']})"
-        elements.append(texte)
-    return ", ".join(elements)
+def _lignes_motif(dossier) -> list[str]:
+    """Reprend le motif d'admission saisi une fois sur l'onglet Identité —
+    l'interne n'a plus à le retranscrire à la main sur la feuille. Une
+    région ou un motif associé par ligne, jamais recomposés en une seule
+    phrase à virgules."""
+    sejour = dossier.sejour
+    if sejour.get("traumatique"):
+        lignes = [
+            listes.libelle(listes.REGIONS_TRAUMATIQUES, r["region"])
+            + (f" : {r['precision']}" if r.get("precision") else "")
+            for r in dossier.regions_traumatiques
+        ] or ["Régions non précisées"]
+        lignes += [
+            listes.libelle_motif(m["code"]) for m in dossier.motifs if not m["principal"]
+        ]
+        return lignes
+    principal = next((m for m in dossier.motifs if m["principal"]), None)
+    lignes = [listes.libelle_motif(principal["code"])] if principal else []
+    lignes += [listes.libelle_motif(m["code"]) for m in dossier.motifs if not m["principal"]]
+    return lignes or ["Non renseigné"]
 
 
 def _motif_transport_atcd(dossier) -> Brut:
+    """Antécédents, circonstances, transport puis motif — un élément par
+    ligne, comme demandé par le service (remarque du 6 septembre) : une
+    phrase à tirets se relit mal au pied du lit, une liste se relit d'un
+    coup d'œil."""
     sejour = dossier.sejour
-    lignes = [
-        ("Motif", _motif_texte(dossier)),
-        ("Transport", _transport_texte(dossier)),
-        ("ATCD", _atcd_texte(dossier)),
-    ]
-    corps = "".join(
-        f'<div style="margin-bottom:2px"><b>{html.escape(titre)}</b> — '
-        f'{html.escape(texte)}</div>'
-        for titre, texte in lignes
-    )
+
+    def bloc(titre: str, lignes: list[str]) -> str:
+        corps = "".join(f"<div>{html.escape(l)}</div>" for l in lignes)
+        return f'<div style="margin-bottom:2px"><b>{html.escape(titre)} :</b>{corps}</div>'
+
+    def ligne(titre: str, valeur: str) -> str:
+        return f'<div style="margin-bottom:2px"><b>{html.escape(titre)} :</b> {html.escape(valeur)}</div>'
+
+    corps = bloc("Antécédents", _lignes_atcd(dossier))
+    circonstances = _circonstances_texte(dossier)
+    if circonstances:
+        corps += ligne("Circonstances", circonstances)
+    corps += ligne("Transport", _transport_texte(dossier))
+    corps += bloc("Motif", _lignes_motif(dossier))
     ttt = sejour.get("traitement_habituel")
     if ttt:
-        corps += f'<div><b>Ttt habituel</b> — {html.escape(ttt)}</div>'
-    else:
-        corps += (
-            '<div style="display:flex;align-items:baseline;gap:4px">'
-            '<b>Ttt habituel</b> — '
-            '<span style="flex:1;border-bottom:1px dotted #a9b6b5">&nbsp;</span></div>'
-        )
-    return Brut(f'<div style="font-size:9.5px;line-height:1.4;overflow:hidden">{corps}</div>')
+        corps += ligne("Ttt habituel", ttt)
+    return Brut(f'<div style="font-size:9.5px;line-height:1.35;overflow:hidden">{corps}</div>')
 
 
 def _abords(dossier) -> list[dict]:
@@ -500,16 +527,35 @@ def _examens_demain(dossier) -> list[dict]:
 
 
 def _microbiologie(dossier) -> list[dict]:
-    lignes = []
-    for ligne in dossier.microbiologie[:LIGNES_MICROBIO]:
+    """« Bilans infectieux » : les prélèvements microbiologiques, et la CRP
+    avec eux — remarque du service, 6 septembre : elle appartient au même
+    bilan d'infection que les cultures, pas au récapitulatif de chimie
+    générale."""
+    brutes = []
+    for ligne in dossier.microbiologie:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, ligne["resultat"])
         if ligne["resultat"] == "positif" and ligne.get("germe"):
             resultat = ligne["germe"]
-        lignes.append({
-            "prelevement": listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
-            "date": format_date_fr(ligne["date_prelevement"])[:5],
-            "resultat": resultat,
-        })
+        brutes.append((
+            ligne["date_prelevement"],
+            {
+                "prelevement": listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
+                "date": format_date_fr(ligne["date_prelevement"])[:5],
+                "resultat": resultat,
+            },
+        ))
+    for r in dossier.resultats:
+        if r["analyte"] == "crp" and r.get("valeur_num") is not None:
+            brutes.append((
+                r["date_heure"],
+                {
+                    "prelevement": "CRP",
+                    "date": format_date_fr(r["date_heure"])[:5],
+                    "resultat": f"{_nombre(r['valeur_num'])} mg/L",
+                },
+            ))
+    brutes.sort(key=lambda t: t[0], reverse=True)
+    lignes = [ligne for _date, ligne in brutes[:LIGNES_MICROBIO]]
     while len(lignes) < LIGNES_MICROBIO:
         lignes.append({"prelevement": "", "date": "", "resultat": ""})
     return lignes
@@ -562,7 +608,7 @@ def contexte(dossier) -> dict:
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
         "survRowsC": _lignes_manuscrites(lignes_ref["surveillance_c"]),
-        "bilanRows": _lignes_manuscrites([("", "")] * 5),
+        "bilanRows": _lignes_manuscrites(lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
         "days": [format_date_fr(j)[:5] for j in jours],
         "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)],

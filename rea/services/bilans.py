@@ -115,6 +115,9 @@ def enregistrer_gaz_du_sang(
     pep: float | None = None,
     fr: float | None = None,
     spo2: float | None = None,
+    sao2: float | None = None,
+    vt: float | None = None,
+    ai: float | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     return base.inserer(
@@ -133,6 +136,9 @@ def enregistrer_gaz_du_sang(
             "pep": pep,
             "fr": fr,
             "spo2": spo2,
+            "sao2": sao2,
+            "vt": vt,
+            "ai": ai,
         },
         utilisateur_id=utilisateur_id,
     )

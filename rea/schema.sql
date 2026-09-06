@@ -414,6 +414,9 @@ CREATE TABLE IF NOT EXISTS gaz_du_sang (
     pep               REAL,
     fr                REAL,
     spo2              REAL,          -- en %
+    sao2              REAL,          -- en % — saturation artérielle du gaz, distincte du SpO2 continu
+    vt                REAL,          -- volume courant, mL
+    ai                REAL,          -- aide inspiratoire, cmH2O
     cree_le           TEXT NOT NULL,
     cree_par          TEXT REFERENCES utilisateur(id),
     supprime          INTEGER NOT NULL DEFAULT 0
