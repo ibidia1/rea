@@ -283,6 +283,12 @@ def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
     return texte
 
 
+def _nombre_fr(valeur) -> str:
+    """Comme `_nombre`, mais avec la virgule décimale française — pour les
+    phrases lues à l'écran, pas pour les libellés de pancarte."""
+    return _nombre(valeur).replace(".", ",")
+
+
 def _nombre(valeur) -> str:
     if valeur is None:
         return ""
@@ -304,6 +310,141 @@ class BilanEntrees:
         if volume_ml:
             self.total_ml += volume_ml
             self.detail.append((libelle, volume_ml))
+
+
+@dataclass(frozen=True)
+class BilanHydrique:
+    """Le bilan des 24 h : ce qui est entré, ce qui est sorti, ce qui reste.
+
+    Chaque composante est gardée à part plutôt que fondue dans un seul chiffre :
+    un bilan positif de 800 mL ne se lit pas pareil selon qu'il vient d'une
+    diurèse effondrée ou d'un litre de remplissage, et c'est le détail qu'on
+    relit à la visite.
+
+    Ce qui manque manque : le net n'est calculé que si la diurèse et le poids
+    sont là (règle 3 de `calculs.py` — un calcul n'invente jamais une valeur
+    par défaut). Une case vide dit « non mesuré », jamais « zéro ».
+    """
+
+    entrees_ml: float
+    detail_entrees: list[tuple[str, float]]
+    diurese_ml: float | None
+    drains_ml: float
+    detail_drains: list[tuple[str, float]]
+    poids_kg: float | None
+    temperature_c: float | None
+    pertes_base_ml: float | None
+    majoration_fievre_ml: float | None
+    formule_insensibles: str
+
+    @property
+    def pertes_insensibles_ml(self) -> float | None:
+        if self.pertes_base_ml is None:
+            return None
+        return self.pertes_base_ml + (self.majoration_fievre_ml or 0)
+
+    @property
+    def sorties_ml(self) -> float | None:
+        """Sorties mesurées et pertes insensibles réunies."""
+        if self.diurese_ml is None or self.pertes_insensibles_ml is None:
+            return None
+        return self.diurese_ml + self.drains_ml + self.pertes_insensibles_ml
+
+    @property
+    def net_ml(self) -> float | None:
+        sorties = self.sorties_ml
+        return None if sorties is None else self.entrees_ml - sorties
+
+    @property
+    def manquants(self) -> list[str]:
+        """Ce qu'il faudrait saisir pour que le bilan se calcule."""
+        absents = []
+        if self.diurese_ml is None:
+            absents.append("la diurèse des 24 h")
+        if self.poids_kg is None:
+            absents.append("le poids (pertes insensibles)")
+        return absents
+
+
+def pertes_insensibles_24h(
+    poids_kg: float | None,
+    temperature_c: float | None,
+    reglages: dict | None = None,
+) -> tuple[float | None, float | None, str]:
+    """(pertes de base, majoration fièvre, formule) sur 24 h.
+
+    Convention du service (8 septembre 2026), tenue dans
+    `referentiels/bilan_hydrique.json` pour qu'un senior puisse la revoir sans
+    reprogrammer : 0,5 mL/kg/h à 37 °C, majorées de 2 mL/kg/24 h par degré
+    au-dessus — ou d'un forfait par degré, selon le mode choisi.
+
+    Sans poids, rien n'est calculé : une perte insensible sans poids n'existe
+    pas, et un chiffre inventé dans un bilan hydrique est pire que pas de
+    chiffre du tout.
+
+    `reglages` sert à essayer une autre convention sans toucher au fichier —
+    c'est ce que fait le test du mode forfait.
+    """
+    if reglages is None:
+        from .. import referentiels
+
+        reglages = referentiels.charger("bilan_hydrique")
+    par_kg_h = reglages["pertes_insensibles_ml_kg_h"]
+    reference = reglages["temperature_reference_c"]
+    # Une phrase lue par un médecin français : virgule décimale.
+    formule = f"{_nombre_fr(par_kg_h)} mL/kg/h × 24 h à {_nombre_fr(reference)} °C"
+
+    if not poids_kg:
+        return None, None, formule
+    base = par_kg_h * poids_kg * 24
+
+    if temperature_c is None or temperature_c <= reference:
+        return base, 0.0, formule
+
+    degres = temperature_c - reference
+    if reglages["majoration_fievre_mode"] == "forfait":
+        forfait = reglages["majoration_fievre_forfait_ml_par_degre"]
+        majoration = forfait * degres
+        formule += f", + {_nombre_fr(forfait)} mL par degré au-dessus"
+    else:
+        par_kg = reglages["majoration_fievre_ml_kg_24h_par_degre"]
+        majoration = par_kg * poids_kg * degres
+        formule += f", + {_nombre_fr(par_kg)} mL/kg/24 h par degré au-dessus"
+    return base, majoration, formule
+
+
+def bilan_hydrique(
+    lignes_actives: list[dict],
+    *,
+    diurese_ml: float | None,
+    drains: list[tuple[str, float]] | None = None,
+    poids_kg: float | None,
+    temperature_c: float | None,
+) -> BilanHydrique:
+    """Le bilan des 24 h, tel que le service l'a défini (8 septembre 2026) :
+
+        entrées − (diurèse + drains + pertes insensibles)
+
+    Les entrées viennent du prescrit — c'est déjà ce que calcule
+    `volume_entrees_24h`. Les sorties se saisissent dans le plan
+    hémodynamique de l'évolution : elles sont relevées au lit du malade, le
+    logiciel n'a aucun moyen de les deviner.
+    """
+    entrees = volume_entrees_24h(lignes_actives)
+    drains = list(drains or [])
+    base, majoration, formule = pertes_insensibles_24h(poids_kg, temperature_c)
+    return BilanHydrique(
+        entrees_ml=entrees.total_ml,
+        detail_entrees=entrees.detail,
+        diurese_ml=diurese_ml,
+        drains_ml=sum(v for _l, v in drains),
+        detail_drains=drains,
+        poids_kg=poids_kg,
+        temperature_c=temperature_c,
+        pertes_base_ml=base,
+        majoration_fievre_ml=majoration,
+        formule_insensibles=formule,
+    )
 
 
 def volume_entrees_24h(lignes_actives: list[dict]) -> BilanEntrees:

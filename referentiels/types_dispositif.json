@@ -1,9 +1,9 @@
 {
   "nom": "types_dispositif",
   "libelle": "Dispositifs et actes invasifs",
-  "version": "2026-09-08.1",
+  "version": "2026-09-08.2",
   "date": "2026-09-08",
-  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords. Trois clés facultatives : `libelle_repete` et `en_cours_repete` nomment les épisodes suivants du même type chez un même patient (deuxième intubation = réintubation) ; `motifs_retrait` propose une liste de motifs au retrait (une extubation programmée et une extubation accidentelle ne se lisent pas pareil).",
+  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords. Trois clés facultatives : `libelle_repete` et `en_cours_repete` nomment les épisodes suivants du même type chez un même patient (deuxième intubation = réintubation) ; `motifs_retrait` propose une liste de motifs au retrait (une extubation programmée et une extubation accidentelle ne se lisent pas pareil). `draine` marque les dispositifs dont on relève le volume recueilli chaque jour : il entre dans les sorties du bilan hydrique. La sonde urinaire ne le porte pas — son volume est la diurèse, comptée à part.",
   "valeurs": {
     "ordre": [
       "intubation",
@@ -17,6 +17,7 @@
       "voie_peripherique",
       "sonde_urinaire",
       "ktsp",
+      "redon",
       "drain_thoracique",
       "drain_abdominal",
       "dve",
@@ -173,7 +174,8 @@
         "champs": [],
         "en_cours": "Drain thoracique",
         "apres": "Drain thoracique retiré",
-        "verbe_retrait": "Ablation"
+        "verbe_retrait": "Ablation",
+        "draine": true
       },
       "drain_abdominal": {
         "libelle": "Drain abdominal",
@@ -181,7 +183,8 @@
         "champs": [],
         "en_cours": "Drain abdominal",
         "apres": "Drain abdominal retiré",
-        "verbe_retrait": "Ablation"
+        "verbe_retrait": "Ablation",
+        "draine": true
       },
       "dve": {
         "libelle": "Dérivation ventriculaire externe",
@@ -192,7 +195,8 @@
         "champs": [],
         "en_cours": "DVE",
         "apres": "DVE retirée",
-        "verbe_retrait": "Ablation"
+        "verbe_retrait": "Ablation",
+        "draine": true
       },
       "eer": {
         "libelle": "Épuration extra-rénale (cathéter de dialyse)",
@@ -208,6 +212,22 @@
         "en_cours": "EER",
         "apres": "EER arrêtée",
         "verbe_retrait": "Arrêt"
+      },
+      "redon": {
+        "libelle": "Redon",
+        "sites": [
+          "Site opératoire",
+          "Abdomen",
+          "Thorax",
+          "Membre inférieur",
+          "Membre supérieur",
+          "Cervical"
+        ],
+        "champs": [],
+        "draine": true,
+        "en_cours": "Redon",
+        "apres": "Redon retiré",
+        "verbe_retrait": "Ablation"
       }
     },
     "champs": {

@@ -810,6 +810,42 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.5 — 8 septembre 2026 — le bilan hydrique se calcule tout seul**
+
+Demande du service : quantifier les sorties dans le plan hémodynamique et en
+tirer le bilan des 24 h, au lieu de le refaire de tête à chaque visite.
+
+*Les sorties.* La diurèse était déjà là. S'y ajoute le recueil des drains, un
+champ par drain effectivement en place — et rien du tout s'il n'y en a pas.
+« Drainé » se déclare dans `types_dispositif.json` (clé `draine`) : drain
+thoracique, drain abdominal, DVE, et le Redon, qui manquait au référentiel
+alors que la feuille lui réserve trois lignes. La sonde urinaire ne le porte
+pas : son volume, c'est la diurèse, et l'ajouter la compterait deux fois.
+
+*Le calcul*, arrêté par le service :
+
+    entrées − (diurèse + drains + pertes insensibles)
+
+Pertes insensibles : 0,5 mL/kg/h × 24 h à 37 °C, majorées de 2 mL/kg/24 h par
+degré au-dessus — ou d'un forfait par degré, au choix. Ces quatre nombres sont
+dans `referentiels/bilan_hydrique.json`, pas dans le code : un senior peut les
+revoir sans reprogrammer, et basculer du mode « par kilo » au mode « forfait »
+tient en une ligne de fichier.
+
+Le bilan s'affiche sous la carte hémodynamique, se recalcule pendant qu'on
+tape, et rejoint le texte prêt à coller dans le DMI. Il ne s'affiche pas tant
+qu'il manque la diurèse ou le poids : il dit alors ce qui manque. Un chiffre
+inventé dans un bilan hydrique est pire que pas de chiffre du tout.
+
+L'eau endogène (oxydation, ~300 mL/24 h) est nommée dans la demande mais
+absente de l'équation qu'elle donne : elle n'est donc pas comptée, en attendant
+que le service tranche. Le total des entrées reste celui du prescrit
+(SPEC §5.6) : il ne suit pas encore les changements de vitesse de la journée,
+et les boissons per os ne sont pas saisies.
+
+Corrigé au passage : les valeurs relues d'un jour précédent s'affichaient
+« 96,0 » et se réenregistraient avec leur zéro décimal.
+
 **v3.4 — 8 septembre 2026 — antidater la garde, et la vitesse heure par heure**
 
 *Antidater ce qui a été fait pendant la garde.* C'était déjà possible en base
