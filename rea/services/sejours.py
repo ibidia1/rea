@@ -429,6 +429,19 @@ def ajouter_antecedent(
     )
 
 
+def supprimer_antecedent(
+    base: Base, antecedent_id: str, *, utilisateur_id: str | None = None
+) -> None:
+    """Retire un antécédent saisi par erreur (demande du service, 8 septembre).
+
+    Suppression logique, jamais physique (règle de conception 2) : la ligne
+    reste en base avec `supprime = 1`, et le journal garde qui l'a retirée et
+    quand. Un antécédent faux doit pouvoir disparaître de la feuille imprimée
+    — sans quoi il se recopie de garde en garde.
+    """
+    base.supprimer_logiquement("antecedent", antecedent_id, utilisateur_id=utilisateur_id)
+
+
 def antecedents_du_patient(base: Base, patient_id: str) -> list[dict]:
     """N'inclut jamais la catégorie `evaluation` (§4.2 bis) : c'est une note
     interne sur l'état de l'interrogatoire, pas un antécédent à afficher."""

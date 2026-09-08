@@ -65,6 +65,14 @@ FORMATS_PAGE_POSSIBLES = ("A4 portrait", "A4 landscape", "A3 landscape")
 # --------------------------------------------------------------------------
 # Horaires d'administration (SPEC §5.3 — question 6, tranchée en v1.3)
 # --------------------------------------------------------------------------
+# La journée du service commence à 8 h, pas à minuit : la relève du matin
+# ouvre la feuille, et la grille horaire imprimée suit cet ordre (8 h → 7 h le
+# lendemain). C'est aussi la fenêtre dans laquelle se rangent les changements
+# de vitesse d'une seringue : un réglage à 2 h du matin appartient à la
+# journée ouverte la veille à 8 h, pas à celle qui commence six heures plus
+# tard.
+HEURE_DEBUT_JOURNEE = 8
+
 # ×4/j et ×6/j sont calés sur minuit plutôt que sur 8 h : les relèves du
 # service tombent ainsi sur des heures rondes. À contre-valider par un senior ;
 # ces horaires restent modifiables ligne par ligne dans l'écran Prescrit.

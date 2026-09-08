@@ -149,7 +149,13 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 }}
 .rea-bloc ul {{ margin: 0; padding-left: .95rem; }}
 .rea-bloc li {{ font-size: .82rem; line-height: 1.55; }}
-.rea-bloc li.arretee, .rea-bloc li span.arretee {{ text-decoration: line-through; color: {GRIS}; }}
+/* Variante « grand » — pour les trois blocs de tête de l'écran Identité, lus
+   de loin et rarement plus de six lignes : la place est là (demande du
+   service, 8 septembre). */
+.rea-bloc.grand {{ padding: 10px 13px 9px 13px; }}
+.rea-bloc.grand .rea-bloc-titre {{ font-size: .72rem; margin-bottom: 6px; }}
+.rea-bloc.grand li {{ font-size: 1rem; line-height: 1.75; }}
+.rea-bloc li.arretee, .rea-bloc li span.arretee, .arretee {{ text-decoration: line-through; color: {GRIS}; }}
 .rea-j {{ font-weight: 700; color: {BLEU}; }}
 .rea-fin {{ color: {ROUGE}; font-weight: 700; }}
 
@@ -180,12 +186,17 @@ def chips(elements: list[tuple[str, str]]) -> None:
     )
 
 
-def bloc(titre: str, lignes_html: list[str], couleur: str = GRIS) -> None:
+def bloc(titre: str, lignes_html: list[str], couleur: str = GRIS, *, grand: bool = False) -> None:
     """Bloc de section : un titre coloré et une liste. Bien plus compact
-    qu'un `st.subheader` suivi de `st.write` ligne à ligne."""
+    qu'un `st.subheader` suivi de `st.write` ligne à ligne.
+
+    `grand` agrandit le texte : réservé aux blocs qu'on lit de loin et qui
+    tiennent en quelques lignes (les trois blocs de tête de l'écran Identité).
+    """
     corps = "".join(f"<li>{l}</li>" for l in lignes_html) if lignes_html else ""
+    classe = "rea-bloc grand" if grand else "rea-bloc"
     st.markdown(
-        f'<div class="rea-bloc" style="border-left-color:{couleur}">'
+        f'<div class="{classe}" style="border-left-color:{couleur}">'
         f'<div class="rea-bloc-titre" style="color:{couleur}">{titre}</div>'
         f"<ul>{corps}</ul></div>",
         unsafe_allow_html=True,
@@ -199,3 +210,53 @@ def bloc_html(titre: str, contenu: str, couleur: str = GRIS) -> None:
         f"{contenu}</div>",
         unsafe_allow_html=True,
     )
+
+
+def courbe(points: list[tuple[str, float]], *, hauteur: int = 160, couleur: str = BLEU) -> None:
+    """Une courbe simple en SVG — pas `st.line_chart` (Altair), dont une
+    version incompatible avec l'environnement Python du poste peut planter
+    tout l'écran (remarque du service, 6 septembre). Chaque poste installe
+    ses dépendances lui-même ; ce logiciel ne doit dépendre que de ce qui
+    est indispensable.
+
+    `points` : (étiquette, valeur), dans l'ordre chronologique.
+    """
+    valeurs = [v for _e, v in points]
+    if len(valeurs) < 2:
+        st.caption("Pas assez de points pour tracer une courbe.")
+        return
+    minimum, maximum = min(valeurs), max(valeurs)
+    etendue = (maximum - minimum) or 1
+    largeur, marge = 600, 8
+    pas = (largeur - 2 * marge) / (len(points) - 1)
+
+    def xy(i: int, v: float) -> tuple[float, float]:
+        x = marge + i * pas
+        y = hauteur - marge - ((v - minimum) / etendue) * (hauteur - 2 * marge)
+        return x, y
+
+    coords = [xy(i, v) for i, v in enumerate(valeurs)]
+    polyligne = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    cercles = "".join(
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{couleur}"/>' for x, y in coords
+    )
+    st.markdown(
+        f'<svg viewBox="0 0 {largeur} {hauteur}" style="width:100%;height:{hauteur}px" '
+        'preserveAspectRatio="none">'
+        f'<line x1="{marge}" y1="{hauteur - marge}" x2="{largeur - marge}" y2="{hauteur - marge}" '
+        f'stroke="{BORDURE}" stroke-width="1"/>'
+        f'<polyline points="{polyligne}" fill="none" stroke="{couleur}" stroke-width="2" '
+        'vector-effect="non-scaling-stroke"/>'
+        f"{cercles}</svg>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"{points[0][0]} → {points[-1][0]} · min {_virgule(minimum)} · "
+        f"max {_virgule(maximum)}"
+    )
+
+
+def _virgule(valeur: float) -> str:
+    from . import champs
+
+    return champs.format_valeur(valeur).replace(".", ",")

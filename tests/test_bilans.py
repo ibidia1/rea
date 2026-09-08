@@ -92,3 +92,41 @@ def test_resultats_du_jour_ne_reprend_pas_un_autre_jour(base):
     sid = _sejour(base)
     bilans.enregistrer_resultats(base, sid, "2026-08-31T08:00", {"hb": 9.2})
     assert bilans.resultats_du_jour(base, sid, "2026-09-01") == {}
+
+
+# --- ordre de saisie demandé par le service (8 septembre) ------------------
+
+def test_le_gaz_du_sang_ne_fait_pas_partie_des_groupes_saisis():
+    """Il est traité à part, en tête de l'écran : c'est le seul bilan qu'on
+    refait plusieurs fois dans la journée."""
+    from rea import analytes
+
+    courants, occasionnels = analytes.groupes_de_saisie()
+    codes = [g.code for g in courants + occasionnels]
+    assert "gaz" not in codes
+
+
+def test_la_chimie_precede_lhemato():
+    from rea import analytes
+
+    courants, _occasionnels = analytes.groupes_de_saisie()
+    codes = [g.code for g in courants]
+    assert codes.index("ionogramme") < codes.index("nfs")
+    assert codes.index("renale") < codes.index("hemostase")
+
+
+def test_les_bilans_non_systematiques_passent_derriere():
+    from rea import analytes
+
+    _courants, occasionnels = analytes.groupes_de_saisie()
+    assert [g.code for g in occasionnels][:2] == ["hepatique", "lipidique"]
+
+
+def test_aucun_groupe_du_catalogue_nest_perdu():
+    """Un groupe ajouté au catalogue et oublié dans l'ordre de saisie doit
+    rester saisissable : un analyte qu'on ne peut plus taper vaut un analyte
+    perdu."""
+    from rea import analytes
+
+    courants, occasionnels = analytes.groupes_de_saisie()
+    assert {g.code for g in courants + occasionnels} == {g.code for g in analytes.GROUPES}

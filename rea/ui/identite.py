@@ -41,13 +41,11 @@ def _ligne_poids(sejour: dict) -> str:
 
 def onglet_identite(sejour: dict) -> None:
     age = age_ans(sejour.get("date_naissance"))
-    c_identite, c_motif, c_antecedents, c_modifier = st.columns([1, 1, 1, 0.4])
-
-    with c_modifier:
-        # Un bouton compact, pas un bandeau : « modifier » est un geste
-        # occasionnel, il ne doit pas prendre de la place en permanence.
-        with st.popover("Modifier l'admission", use_container_width=True):
-            _modifier_admission(sejour)
+    # Trois blocs à parts égales, en grand : ce sont les seules lignes de
+    # l'écran qu'on relit debout, à distance (demande du service, 8 septembre).
+    # « Modifier l'admission » a quitté cette rangée pour rejoindre
+    # « Transférer vers un autre lit », plus bas.
+    c_identite, c_motif, c_antecedents = st.columns(3)
 
     with c_identite:
         theme.bloc(
@@ -63,6 +61,7 @@ def onglet_identite(sejour: dict) -> None:
                 _ligne_poids(sejour),
             ],
             theme.BLEU,
+            grand=True,
         )
 
     with c_motif:
@@ -88,7 +87,7 @@ def onglet_identite(sejour: dict) -> None:
                 elements.append(
                     "Associé : " + ", ".join(listes.libelle_motif(m["code"]) for m in associes)
                 )
-            theme.bloc("Motif traumatique", elements, theme.ORANGE)
+            theme.bloc("Motif traumatique", elements, theme.ORANGE, grand=True)
         else:
             motifs = sejours_service.motifs_du_sejour(contexte.base(), sejour["id"])
             principal = next((m for m in motifs if m["principal"]), None)
@@ -97,7 +96,9 @@ def onglet_identite(sejour: dict) -> None:
             if principal:
                 elements.append(f"<b>{listes.libelle_motif(principal['code'])}</b>")
             elements += [listes.libelle_motif(m["code"]) for m in associes]
-            theme.bloc("Motif d'admission", elements or ["Non renseigné"], theme.ORANGE)
+            theme.bloc(
+                "Motif d'admission", elements or ["Non renseigné"], theme.ORANGE, grand=True
+            )
 
     antecedents = sejours_service.antecedents_du_patient(contexte.base(), sejour["patient_id"])
     allergies = [a for a in antecedents if a["categorie"] == "allergie"]
@@ -107,26 +108,37 @@ def onglet_identite(sejour: dict) -> None:
                 "Allergies",
                 [f"<b>{a['libelle']}</b>" for a in allergies],
                 theme.ROUGE,
+                grand=True,
             )
         theme.bloc(
             "Antécédents",
             [
-                f"{a['libelle']}"
-                + (
-                    f" — {champs.format_valeur(a['quantification_valeur'])} {a['quantification_unite']}"
-                    if a.get("quantification_valeur") is not None
-                    else ""
-                )
-                + (f" — {a['precision']}" if a["precision"] else "")
+                _texte_antecedent(a)
                 for a in antecedents if a["categorie"] != "allergie"
             ] or ["Aucun antécédent enregistré"],
             theme.GRIS,
+            grand=True,
         )
 
     _transferer_lit(sejour)
+    # Deux gestes occasionnels, deux tiroirs de même forme, l'un sous l'autre
+    # (demande du service, 8 septembre) : transférer déplace un patient,
+    # modifier répare une saisie — ni l'un ni l'autre ne mérite un bandeau
+    # permanent en haut de l'écran.
+    with st.expander("Modifier l'admission"):
+        _modifier_admission(sejour)
 
     st.markdown("**Antécédents**")
     _antecedents_editeur(sejour)
+
+
+def _texte_antecedent(a: dict) -> str:
+    texte = a["libelle"]
+    if a.get("quantification_valeur") is not None:
+        texte += f" — {champs.format_valeur(a['quantification_valeur'])} {a['quantification_unite']}"
+    if a.get("precision"):
+        texte += f" — {a['precision']}"
+    return texte
 
 
 def _antecedents_editeur(sejour: dict) -> None:
@@ -143,7 +155,8 @@ def _antecedents_editeur(sejour: dict) -> None:
     etat_actuel = sejours_service.etat_antecedents(base, patient_id)
 
     if etat_actuel == "oui":
-        st.caption("Antécédents renseignés — ajouter un autre antécédent :")
+        _liste_antecedents(sejour)
+        st.caption("Ajouter un autre antécédent :")
         _formulaire_categorie(sejour, prefixe)
         return
 
@@ -169,6 +182,39 @@ def _antecedents_editeur(sejour: dict) -> None:
         st.rerun()
     elif reponse == "oui":
         _formulaire_categorie(sejour, prefixe)
+
+
+def _liste_antecedents(sejour: dict) -> None:
+    """Les antécédents déjà saisis, chacun avec sa croix pour le retirer
+    (demande du service, 8 septembre).
+
+    Un antécédent se saisit vite et se trompe vite — coché sur le mauvais
+    patient, tapé deux fois, ou démenti par la famille le lendemain. Sans
+    moyen de le retirer, il se recopie ensuite sur chaque feuille imprimée.
+    La suppression est logique : la ligne reste en base, tracée au journal.
+    """
+    antecedents = sejours_service.antecedents_du_patient(
+        contexte.base(), sejour["patient_id"]
+    )
+    if not antecedents:
+        return
+    for a in antecedents:
+        col_croix, col_texte = st.columns([1, 20])
+        if col_croix.button(
+            "X", key=f"suppr_atcd_{a['id']}", help="Retirer cet antécédent"
+        ):
+            sejours_service.supprimer_antecedent(
+                contexte.base(), a["id"], utilisateur_id=contexte.utilisateur_id()
+            )
+            st.rerun()
+        categorie = listes.libelle(listes.CATEGORIES_ANTECEDENT, a["categorie"], "")
+        col_texte.markdown(
+            f"<span style='font-size:.9rem'>{_texte_antecedent(a)}"
+            + (f" <span style='color:{theme.GRIS};font-size:.78rem'>· {categorie}</span>"
+               if categorie else "")
+            + "</span>",
+            unsafe_allow_html=True,
+        )
 
 
 def _formulaire_categorie(sejour: dict, prefixe: str) -> None:

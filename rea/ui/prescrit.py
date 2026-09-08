@@ -13,8 +13,10 @@ import streamlit as st
 from .. import config, listes
 from ..domaine import coherence, prescription as dom
 from ..domaine.dates import format_date_fr, lendemain
+from ..services import dispositifs as dispositifs_service
 from ..services import pancarte as pancarte_service
 from ..services import prescriptions as prescriptions_service
+from ..services import vitesses as vitesses_service
 from . import contexte, theme
 
 from . import champs
@@ -67,15 +69,34 @@ def onglet_prescrit(sejour: dict) -> None:
 
     pancarte = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], date_jour_str)
 
+    # La sédation est posée comme dispositif, pas prescrite en ligne : sans
+    # cette reprise, la seule vitesse que l'infirmier règle sur une pompe
+    # n'apparaissait nulle part sur l'écran du prescrit (demande du service,
+    # 8 septembre). Elle est déjà reportée ainsi sur la feuille imprimée.
+    sedation = _ligne_sedation(sejour, date_jour_str)
     voies_remplies = [
-        v for v in listes.ORDRE_VOIES if pancarte["lignes_par_voie"].get(v)
+        v for v in listes.ORDRE_VOIES
+        if pancarte["lignes_par_voie"].get(v) or (v == "PSE" and sedation)
     ]
     zone_pancarte, zone_ajout = st.columns([2.1, 1])
+
+    # Les vitesses réglées dans la journée, lues une fois pour toutes : la
+    # pancarte les affiche, le panneau du dessous les complète.
+    vitesses_jour = {
+        ligne["id"]: vitesses_service.par_heure(
+            contexte.base(), vitesses_service.LIGNE, ligne["id"],
+            ligne["vitesse"], date_jour_str,
+        )
+        for ligne in pancarte["lignes"] if ligne.get("vitesse") is not None
+    }
 
     with zone_pancarte:
         st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
         gauche, droite = st.columns(2)
-        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite)
+        _afficher_pancarte(
+            voies_remplies, pancarte, date_jour_str, gauche, droite, sedation, vitesses_jour,
+        )
+        _panneau_vitesses(sejour, pancarte, date_jour_str)
 
     # Le panneau d'ajout reste à l'écran en permanence à côté de la pancarte
     # (capture du service) plutôt que dans un tiroir qu'il faut rouvrir à
@@ -151,30 +172,182 @@ def _historique_fiches(sejour: dict) -> None:
         st.components.v1.html(ancienne["html"], height=700, scrolling=True)
 
 
-def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) -> None:
-    for i, code_voie in enumerate(voies_remplies):
-        lignes = pancarte["lignes_par_voie"][code_voie]
-        colonne = gauche if i % 2 == 0 else droite
-        with colonne:
-            elements = []
-            for ligne in lignes:
-                texte = dom.libelle_ligne(ligne, date_jour_str)
-                etiquette = dom.etiquette_jour(ligne, date_jour_str)
-                # Le compteur de jours en bleu, le dernier jour en rouge :
-                # ce sont les deux choses qu'on cherche du regard.
-                if etiquette.dernier_jour:
-                    texte = texte.replace(
-                        "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
-                    )
-                texte = texte.replace(
-                    etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
-                )
-                classe = ' class="arretee"' if ligne["statut"] == "arretee" else ""
-                elements.append(f"<span{classe}>{texte}</span>")
-            theme.bloc(
-                listes.VOIES[code_voie]["titre"], elements,
-                theme.COULEUR_VOIE.get(code_voie, theme.GRIS),
+def _sedation_en_place(sejour: dict, date_jour_str: str):
+    """La sédation en cours, s'il y en a une.
+
+    Elle n'est pas prescrite en ligne : elle est posée comme dispositif, dans
+    l'écran « Explorations et actes », avec sa molécule et sa vitesse. Mais
+    c'est une seringue électrique comme une autre pour l'infirmier qui règle
+    la pompe — elle se lit et se règle là où les seringues se règlent.
+    """
+    etats = dispositifs_service.etats(contexte.base(), sejour["id"], date_jour_str)
+    return next((e for e in etats if e.type == "sedation" and e.en_place), None)
+
+
+def _ligne_sedation(sejour: dict, date_jour_str: str) -> str | None:
+    sedation = _sedation_en_place(sejour, date_jour_str)
+    if sedation is None:
+        return None
+    details = sedation.details or {}
+    texte = details.get("molecules") or "Sédation"
+    par_heure = vitesses_service.par_heure(
+        contexte.base(), vitesses_service.DISPOSITIF, sedation.id,
+        details.get("vitesse"), date_jour_str,
+    )
+    if par_heure:
+        texte += f" — {_texte_vitesses(par_heure)}"
+    return f"{texte} <span style='color:{theme.GRIS}'>· {sedation.texte}</span>"
+
+
+def _texte_vitesses(par_heure: dict[int, float]) -> str:
+    """« 8 h : 25 · 16 h : 15 » — dans l'ordre de la journée du service."""
+    return " · ".join(
+        f"{heure} h : {champs.format_valeur(par_heure[heure])}"
+        for heure in dom.heures_de_la_journee() if heure in par_heure
+    )
+
+
+def _elements_qui_coulent(sejour: dict, pancarte: dict, date_jour_str: str) -> list[dict]:
+    """Tout ce qui coule ce jour-là : les lignes prescrites qui portent une
+    vitesse, et la sédation posée comme dispositif."""
+    elements = [
+        {
+            "cible": vitesses_service.LIGNE,
+            "id": ligne["id"],
+            "libelle": ligne["produit"],
+            "initiale": ligne["vitesse"],
+        }
+        for ligne in pancarte["lignes"]
+        if ligne.get("vitesse") is not None and ligne["statut"] == "active"
+    ]
+    sedation = _sedation_en_place(sejour, date_jour_str)
+    if sedation is not None:
+        details = sedation.details or {}
+        elements.append({
+            "cible": vitesses_service.DISPOSITIF,
+            "id": sedation.id,
+            "libelle": f"{details.get('molecules') or 'Sédation'} — sédation",
+            "initiale": details.get("vitesse"),
+        })
+    return elements
+
+
+def _panneau_vitesses(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
+    """Régler une vitesse à une heure donnée (demande du service, 8 septembre).
+
+    Une seringue ne se règle pas une fois pour toutes : elle part à 25 cc/h et
+    on la descend à 15 à 16 h. Jusqu'ici seule la vitesse de départ existait, et
+    la suite se réécrivait à la main sur chaque feuille. Ce qui est noté ici
+    s'imprime dans les cases horaires, à l'heure du réglage.
+    """
+    elements = _elements_qui_coulent(sejour, pancarte, date_jour_str)
+    if not elements:
+        return
+    with st.expander("Vitesses des seringues et perfusions"):
+        st.caption(
+            "La journée du service va de 8 h à 8 h : une vitesse notée à 2 h "
+            "appartient à la nuit de cette feuille-là, pas à la suivante."
+        )
+        heures = dom.heures_de_la_journee()
+        for element in elements:
+            par_heure = vitesses_service.par_heure(
+                contexte.base(), element["cible"], element["id"],
+                element["initiale"], date_jour_str,
             )
+            st.markdown(f"**{element['libelle']}**")
+            st.caption(_texte_vitesses(par_heure) or "Aucune vitesse notée ce jour-là.")
+            cle = f"{element['cible']}_{element['id']}"
+            c_heure, c_vitesse, c_bouton = st.columns([1, 1, 1])
+            heure = c_heure.selectbox(
+                "Heure", heures, format_func=lambda h: f"{h} h", key=f"vh_{cle}",
+            )
+            nouvelle = champs.nombre_saisi(c_vitesse.text_input(
+                "Vitesse (cc/h)", value="", placeholder="ex. 15", key=f"vv_{cle}",
+            ))
+            if c_bouton.button("Noter", key=f"vb_{cle}", use_container_width=True):
+                if nouvelle is None:
+                    st.error("Indiquer la vitesse en cc/h.")
+                else:
+                    horodatage = dom.horodatage_dans_journee(date_jour_str, heure)
+                    if element["cible"] == vitesses_service.DISPOSITIF:
+                        # Un dispositif porte aussi sa vitesse courante sur sa
+                        # carte : le service des dispositifs tient les deux.
+                        dispositifs_service.regler_vitesse(
+                            contexte.base(), element["id"], date_heure=horodatage,
+                            vitesse=nouvelle, utilisateur_id=contexte.utilisateur_id(),
+                        )
+                    else:
+                        vitesses_service.regler(
+                            contexte.base(), cible=element["cible"], cible_id=element["id"],
+                            date_heure=horodatage, vitesse=nouvelle,
+                            utilisateur_id=contexte.utilisateur_id(),
+                        )
+                    st.rerun()
+
+
+def _afficher_pancarte(
+    voies_remplies, pancarte, date_jour_str, gauche, droite,
+    sedation: str | None = None, vitesses_jour: dict | None = None,
+) -> None:
+    """Chaque traitement porte sa propre croix « X » : l'arrêter est un
+    geste sur la ligne elle-même, plus une liste séparée à rouvrir."""
+    for i, code_voie in enumerate(voies_remplies):
+        lignes = pancarte["lignes_par_voie"].get(code_voie, [])
+        colonne = gauche if i % 2 == 0 else droite
+        couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
+        with colonne:
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="rea-bloc-titre" style="color:{couleur}">'
+                    f'{listes.VOIES[code_voie]["titre"]}</div>',
+                    unsafe_allow_html=True,
+                )
+                if code_voie == "PSE" and sedation:
+                    # Pas de croix : une sédation s'arrête depuis l'écran des
+                    # actes, là où elle a été posée, avec sa date de retrait.
+                    st.markdown(
+                        f'<div style="font-size:.82rem;margin-left:2.3rem">{sedation}</div>',
+                        unsafe_allow_html=True,
+                    )
+                for ligne in lignes:
+                    texte = dom.libelle_ligne(ligne, date_jour_str)
+                    etiquette = dom.etiquette_jour(ligne, date_jour_str)
+                    # Le compteur de jours en bleu, le dernier jour en rouge :
+                    # ce sont les deux choses qu'on cherche du regard.
+                    if etiquette.dernier_jour:
+                        texte = texte.replace(
+                            "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
+                        )
+                    texte = texte.replace(
+                        etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
+                    )
+                    # Une vitesse réglée plusieurs fois dans la journée se lit
+                    # heure par heure ; une seule valeur est déjà dans le
+                    # libellé de la ligne.
+                    par_heure = (vitesses_jour or {}).get(ligne["id"]) or {}
+                    if len(par_heure) > 1:
+                        texte += (
+                            f" <span style='color:{theme.GRIS}'>"
+                            f"[{_texte_vitesses(par_heure)}]</span>"
+                        )
+                    active = ligne["statut"] == "active"
+                    classe = "" if active else ' class="arretee"'
+                    col_croix, col_texte = st.columns([1, 7])
+                    with col_croix:
+                        if active and st.button(
+                            "X", key=f"arret_{ligne['id']}",
+                            help="Arrêter ce traitement",
+                        ):
+                            prescriptions_service.arreter_ligne(
+                                contexte.base(), ligne["id"], date_arret=date_jour_str,
+                                utilisateur_id=contexte.utilisateur_id(),
+                            )
+                            st.rerun()
+                    with col_texte:
+                        st.markdown(
+                            f'<span style="font-size:.82rem"{classe}>{texte}</span>',
+                            unsafe_allow_html=True,
+                        )
 
 
 def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
@@ -197,6 +370,22 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
     if not voie:
         st.caption("Choisir une voie ci-dessus.")
         return
+
+    # La date de début est hors du formulaire, à dessein : c'est elle qui fixe
+    # le compteur de jours, et un traitement introduit pendant la garde se
+    # saisit le lendemain (demande du service, 8 septembre). Dans le
+    # formulaire, elle ne pourrait pas dire tout de suite quel « J » elle
+    # produit — un formulaire Streamlit ne se réaffiche qu'une fois soumis.
+    date_debut = st.date_input(
+        "Début du traitement", value=date.fromisoformat(date_jour_str),
+        key=f"debut_{voie}_{sejour['id']}",
+    )
+    jour_affiche = dom.etiquette_jour({"date_debut": str(date_debut)}, date_jour_str)
+    if str(date_debut) != date_jour_str:
+        st.caption(
+            f"Introduit le {format_date_fr(str(date_debut))} — la pancarte du "
+            f"{format_date_fr(date_jour_str)} l'affichera « {jour_affiche.texte} »."
+        )
 
     champs_voie = listes.VOIES[voie]["champs"]
     with st.form(f"ajout_ligne_{voie}"):
@@ -229,8 +418,19 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
             vitesse = champs.nombre_saisi(
                 st.text_input("Vitesse (cc/h)", value="", placeholder="ex. 2")
             )
+        heures_saisies = None
         if "rythme" in champs_voie:
             rythme = st.selectbox("Rythme", listes.codes(listes.RYTHMES), format_func=lambda c: listes.libelle(listes.RYTHMES, c))
+            # L'heure de prise se choisit à la ligne. Laissée vide, elle suit
+            # l'horaire habituel du produit et du rythme : 8 h pour une prise
+            # unique, 20 h pour l'enoxaparine (demande du service,
+            # 8 septembre). Le champ reste libre parce que le formulaire ne se
+            # réaffiche pas tant qu'il n'est pas soumis : proposer une valeur
+            # calculée ici la figerait au rythme affiché à l'ouverture.
+            heures_saisies = st.text_input(
+                "Heure(s) de prise", value="",
+                placeholder="ex. 20 ou 8,14,20 — vide : horaire habituel",
+            )
         if "condition" in champs_voie:
             condition = st.text_input("Condition (si conditionnel)")
         if "volume_dilution" in champs_voie:
@@ -252,10 +452,6 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                 )
             )
 
-        date_debut = st.date_input(
-            "Début", value=date.fromisoformat(date_jour_str), key=f"debut_{voie}"
-        )
-
         if st.form_submit_button("Ajouter à la pancarte", type="primary", use_container_width=True):
             if not produit:
                 st.error("Le produit est obligatoire.")
@@ -271,9 +467,13 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                 cible="prescription_ligne",
                 ligne_id=sejour["id"],
             ):
+                horaires = dom.analyser_horaires(heures_saisies)
+                if horaires is None and rythme:
+                    heures = dom.horaires_par_defaut(produit, rythme)
+                    horaires = ",".join(str(h) for h in heures) or None
                 prescriptions_service.ajouter_ligne(
                     contexte.base(), sejour_id=sejour["id"], voie=voie, produit=produit,
-                    date_debut=str(date_debut),
+                    date_debut=str(date_debut), horaires_override=horaires,
                     dose=dose or None, unite=unite, rythme=rythme,
                     condition_texte=condition or None, dilution=dilution or None,
                     nb_ampoules=nb_ampoules or None, vitesse=vitesse or None,
@@ -286,19 +486,6 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
 
 
 def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
-    with st.expander("Arrêter une ligne"):
-        actives = [l for l in pancarte["lignes"] if l["statut"] == "active"]
-        if not actives:
-            st.caption("Aucune ligne active.")
-        for ligne in actives:
-            col1, col2 = st.columns([6, 1])
-            col1.write(dom.libelle_ligne(ligne, date_jour_str))
-            if col2.button("Arrêter", key=f"arret_{ligne['id']}", use_container_width=True):
-                prescriptions_service.arreter_ligne(
-                    contexte.base(), ligne["id"], date_arret=date_jour_str, utilisateur_id=contexte.utilisateur_id()
-                )
-                st.rerun()
-
     with st.expander("Bilans à demander pour le lendemain"):
         demain = date_jour_str
         journee_bilans = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], demain)["bilans_demandes"]

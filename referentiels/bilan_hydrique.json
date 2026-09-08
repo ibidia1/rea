@@ -1,0 +1,14 @@
+{
+  "nom": "bilan_hydrique",
+  "libelle": "Constantes du bilan hydrique des 24 h",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Convention du service (8 septembre 2026). Ces nombres décident du bilan affiché dans le plan hémodynamique : ils sont ici, dans un fichier, pour qu'un senior puisse les revoir sans reprogrammer le logiciel. `majoration_fievre_mode` vaut `ml_kg` (2 ml/kg/24 h par degré au-dessus de la référence) ou `forfait` (un nombre fixe de mL par degré) ; les deux valeurs sont conservées pour qu'on puisse basculer de l'une à l'autre.",
+  "valeurs": {
+    "pertes_insensibles_ml_kg_h": 0.5,
+    "temperature_reference_c": 37,
+    "majoration_fievre_mode": "ml_kg",
+    "majoration_fievre_ml_kg_24h_par_degre": 2,
+    "majoration_fievre_forfait_ml_par_degre": 250
+  }
+}

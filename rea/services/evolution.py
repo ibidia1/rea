@@ -159,11 +159,76 @@ def enregistrer_elements(
                 )
 
 
+# Le volume recueilli par un drain se relève un drain à la fois, et un patient
+# n'a pas toujours les mêmes : la clé porte donc l'identifiant du dispositif et
+# ne peut pas figurer dans la liste fixe des éléments de plan.
+PREFIXE_VOLUME_DRAIN = "volume_drain_"
+
+
 def _plan_de(cle: str) -> str | None:
+    if cle.startswith(PREFIXE_VOLUME_DRAIN):
+        return "hemodynamique"
     for plan, elements in listes.ELEMENTS_PLAN.items():
         if any(c == cle for c, *_reste in elements):
             return plan
     return None
+
+
+def drains_du_jour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+    """Les drains en place ce jour-là, avec le volume déjà relevé.
+
+    « Drainé » veut dire : dispositif dont `types_dispositif.json` déclare
+    `draine`. La sonde urinaire n'en est pas — son volume, c'est la diurèse,
+    comptée à part, et l'ajouter la compterait deux fois.
+
+    « Ce jour-là » compte dans les deux sens : un drain posé aujourd'hui n'a
+    rien recueilli avant-hier, et ne doit pas apparaître en rouvrant
+    l'évolution d'avant-hier — sans quoi le bilan hydrique d'un jour passé
+    changerait chaque fois qu'on pose un drain.
+    """
+    valeurs = elements_du_jour(base, sejour_id, date_jour)
+    drains = []
+    for etat in dispositifs_service.etats(base, sejour_id, date_jour):
+        if not etat.en_place or not listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine"):
+            continue
+        if etat.date_pose and etat.date_pose > date_jour:
+            continue
+        cle = f"{PREFIXE_VOLUME_DRAIN}{etat.id}"
+        drains.append({
+            "cle": cle,
+            "libelle": etat.libelle_type + (f" ({etat.site.lower()})" if etat.site else ""),
+            "valeur": valeurs.get(cle),
+            "dispositif_id": etat.id,
+        })
+    return drains
+
+
+def bilan_hydrique(base: Base, sejour_id: str, date_jour: str) -> dom.BilanHydrique:
+    """Le bilan des 24 h : entrées prescrites, sorties relevées, pertes
+    insensibles calculées.
+
+    Les entrées se lisent du prescrit, les sorties de l'évolution du jour :
+    rien n'est ressaisi deux fois, et rien n'est deviné — sans diurèse ni
+    poids, le bilan le dit au lieu d'afficher un chiffre faux.
+    """
+    sejour = base.une_ligne("SELECT * FROM sejour WHERE id = ?", (sejour_id,))
+    elements = elements_du_jour(base, sejour_id, date_jour)
+    drains = [
+        (d["libelle"], float(d["valeur"]))
+        for d in drains_du_jour(base, sejour_id, date_jour)
+        if d["valeur"] is not None
+    ]
+    return dom.bilan_hydrique(
+        prescriptions_service.lignes_actives_le(base, sejour_id, date_jour),
+        diurese_ml=_nombre_ou_none(elements.get("diurese_24h")),
+        drains=drains,
+        poids_kg=(sejour or {}).get("poids_kg"),
+        temperature_c=_nombre_ou_none(elements.get("temperature")),
+    )
+
+
+def _nombre_ou_none(valeur) -> float | None:
+    return float(valeur) if isinstance(valeur, (int, float)) else None
 
 
 def elements_du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[str, float | str]:
@@ -289,6 +354,30 @@ def _unite_collee(unite: str) -> str:
     return unite if unite.startswith("/") else f" {unite}"
 
 
+def texte_bilan_hydrique(base: Base, sejour_id: str, date_jour: str) -> str:
+    """« Bilan hydrique −910 mL (entrées 1560 · diurèse 1200 · drains 150 ·
+    pertes insensibles 1120) » — le net d'abord, son détail ensuite.
+
+    Rien tant qu'il manque une donnée : un bilan à moitié calculé se recopie
+    dans l'observation comme s'il était complet.
+    """
+    bilan = bilan_hydrique(base, sejour_id, date_jour)
+    if bilan.net_ml is None:
+        return ""
+    detail = [
+        f"entrées {_nombre_fr(round(bilan.entrees_ml))} mL",
+        f"diurèse {_nombre_fr(round(bilan.diurese_ml))} mL",
+    ]
+    if bilan.drains_ml:
+        detail.append(f"drains {_nombre_fr(round(bilan.drains_ml))} mL")
+    detail.append(f"pertes insensibles {_nombre_fr(round(bilan.pertes_insensibles_ml))} mL")
+    signe = "+" if bilan.net_ml > 0 else ""
+    return (
+        f"Bilan hydrique {signe}{_nombre_fr(round(bilan.net_ml))} mL "
+        f"({' · '.join(detail)})"
+    )
+
+
 def _elements_automatiques(base: Base, sejour_id: str, plan: str, date_jour: str) -> str:
     """Ce que le logiciel sait déjà et que personne ne devrait retaper :
     « Sédaté J4 », « Extubé J2 », le mode ventilatoire du dernier gaz du sang,
@@ -318,6 +407,9 @@ def _elements_automatiques(base: Base, sejour_id: str, plan: str, date_jour: str
             for l in amines
         ]
         morceaux += [e.texte for e in etats if e.type == "eer"]
+        bilan = texte_bilan_hydrique(base, sejour_id, date_jour)
+        if bilan:
+            morceaux.append(bilan)
     elif plan == "infectieux":
         antibiotiques = [
             l for l in prescriptions_service.lignes_actives_le(base, sejour_id, date_jour)

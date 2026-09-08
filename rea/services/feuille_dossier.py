@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from ..db import Base
+from ..domaine import prescription as dom
 from ..domaine.dates import parse_date
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service
@@ -24,6 +25,7 @@ from . import microbiologie as micro_service
 from . import prescriptions as prescriptions_service
 from . import scores as scores_service
 from . import sejours as sejours_service
+from . import vitesses as vitesses_service
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,34 @@ class DossierFeuille:
     motifs: list = field(default_factory=list)
     antecedents: list = field(default_factory=list)
     etat_antecedents: str = "non_renseigne"
+    # Vitesse heure par heure de tout ce qui coule ce jour-là, par identifiant
+    # de ligne de prescription ou de dispositif : {id: {heure: vitesse}}.
+    vitesses: dict = field(default_factory=dict)
+
+
+def _vitesses(base: Base, sejour_id: str, date_jour: str, lignes: list, etats) -> dict:
+    """La vitesse heure par heure de tout ce qui coule, ce jour-là.
+
+    Le calcul est fait ici, pas au rendu : décider quelle vitesse est en
+    vigueur à l'ouverture de la journée est une question métier (règle R3).
+    """
+    reglages = vitesses_service.reglages_du_sejour(base, sejour_id)
+    par_cible: dict[str, dict[int, float]] = {}
+    coulantes = [
+        (ligne["id"], ligne.get("vitesse")) for ligne in lignes
+    ] + [
+        (etat.id, (etat.details or {}).get("vitesse"))
+        for etat in etats if etat.en_place and etat.id
+    ]
+    for cible_id, vitesse_initiale in coulantes:
+        if vitesse_initiale is None and cible_id not in reglages:
+            continue
+        par_heure = dom.vitesses_par_heure(
+            vitesse_initiale, reglages.get(cible_id, []), date_jour
+        )
+        if par_heure:
+            par_cible[cible_id] = par_heure
+    return par_cible
 
 
 def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
@@ -61,6 +91,7 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
 
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
     demain = (parse_date(date_jour) + timedelta(days=1)).isoformat()
+    etats = tuple(dispositifs_service.etats(base, sejour_id, date_jour))
 
     sofa = scores_service.sofa(base, sejour_id, date_jour)
     igs2 = scores_service.igs2(base, sejour_id)
@@ -72,7 +103,7 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
         pancarte=pancarte,
         lignes_par_voie=prescriptions_service.lignes_par_voie(pancarte["lignes"]),
         pancarte_demain=prescriptions_service.pancarte_du_jour(base, sejour_id, demain),
-        etats_dispositifs=tuple(dispositifs_service.etats(base, sejour_id, date_jour)),
+        etats_dispositifs=etats,
         resultats=list(bilans_service.resultats_du_sejour(base, sejour_id)),
         gaz_du_sang=list(bilans_service.gaz_du_sang_du_sejour(base, sejour_id)),
         microbiologie=list(micro_service.du_sejour(base, sejour_id)),
@@ -93,4 +124,5 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
             if a["categorie"] != "allergie"
         ],
         etat_antecedents=sejours_service.etat_antecedents(base, sejour["patient_id"]),
+        vitesses=_vitesses(base, sejour_id, date_jour, pancarte["lignes"], etats),
     )

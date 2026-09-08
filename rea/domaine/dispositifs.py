@@ -43,17 +43,33 @@ class EtatDispositif:
     en_place: bool
     jour: int
     texte: str            # « Intubé J3 », « Extubé J2 », « KTA radial G J5 »
+    # L'identifiant de la ligne dont cet état est tiré : c'est par lui que se
+    # retrouvent les réglages de vitesse d'une sédation.
+    id: str | None = None
     site: str | None = None
     details: dict | None = None
     date_pose: str | None = None
     date_retrait: str | None = None
+    # Rang de l'épisode pour ce type chez ce patient : 1 pour le premier,
+    # 2 pour le suivant… C'est ce qui distingue une intubation d'une
+    # réintubation (demande du service, 8 septembre).
+    rang: int = 1
+    motif_retrait: str | None = None
 
     @property
     def libelle_type(self) -> str:
+        config = listes.TYPES_DISPOSITIF.get(self.type, {})
+        if self.rang > 1 and config.get("libelle_repete"):
+            return config["libelle_repete"]
         return listes.libelle_dispositif(self.type)
 
 
-def _details(ligne: dict) -> dict:
+def lire_details(ligne: dict) -> dict:
+    """Les détails d'un dispositif, stockés en JSON dans une colonne texte.
+
+    Tolérante à dessein : une colonne vide ou abîmée rend un dictionnaire
+    vide plutôt que de faire tomber l'écran d'un patient.
+    """
     brut = ligne.get("details")
     if not brut:
         return {}
@@ -61,6 +77,14 @@ def _details(ligne: dict) -> dict:
         return json.loads(brut)
     except (TypeError, ValueError):
         return {}
+
+
+def _texte_valeur(valeur) -> str:
+    """« 4 » plutôt que « 4.0 » : ces valeurs viennent de colonnes REAL, et un
+    zéro décimal de plus sur une vitesse de pompe n'apprend rien à personne."""
+    if isinstance(valeur, float) and valeur.is_integer():
+        return str(int(valeur))
+    return str(valeur)
 
 
 def _precisions(ligne: dict, details: dict) -> str:
@@ -72,18 +96,34 @@ def _precisions(ligne: dict, details: dict) -> str:
         if valeur in (None, "", 0):
             continue
         _libelle, prefixe, unite = listes.CHAMPS_DISPOSITIF.get(cle, (cle, "", ""))
-        morceaux.append(" ".join(m for m in (prefixe, str(valeur), unite) if m))
+        morceaux.append(" ".join(m for m in (prefixe, _texte_valeur(valeur), unite) if m))
     return ", ".join(morceaux)
 
 
-def etat(ligne: dict, a_la_date: str | date | None = None) -> EtatDispositif:
+def libelle_motif_retrait(type_: str, code: str | None) -> str:
+    """Le motif de retrait en toutes lettres, ex. « Extubation accidentelle ».
+
+    Les motifs sont déclarés par type dans `types_dispositif.json` : un
+    dispositif qui n'en propose aucun n'en affiche aucun.
+    """
+    if not code:
+        return ""
+    motifs = listes.TYPES_DISPOSITIF.get(type_, {}).get("motifs_retrait") or []
+    return next((l for c, l in motifs if c == code), code)
+
+
+def etat(ligne: dict, a_la_date: str | date | None = None, rang: int = 1) -> EtatDispositif:
     """État d'un dispositif à une date donnée, compteur compris.
 
     Un dispositif retiré reste affiché : c'est ce qui permet de lire
     « Extubé J2 » ou « KT retiré J4 » sans rien ressaisir.
+
+    `rang` est le numéro de l'épisode pour ce type chez ce patient. Au-delà du
+    premier, un type peut porter un autre nom : une deuxième intubation est
+    une réintubation, et ça ne se lit pas pareil au pied du lit.
     """
     config = listes.TYPES_DISPOSITIF.get(ligne["type"], {})
-    details = _details(ligne)
+    details = lire_details(ligne)
     precisions = _precisions(ligne, details)
 
     if ligne.get("date_retrait"):
@@ -93,23 +133,62 @@ def etat(ligne: dict, a_la_date: str | date | None = None) -> EtatDispositif:
         en_place = False
     else:
         jour = jour_en_cours(ligne["date_pose"], a_la_date)
-        base = config.get("en_cours", ligne["type"])
+        cle = "en_cours_repete" if rang > 1 and config.get("en_cours_repete") else "en_cours"
+        base = config.get(cle, ligne["type"])
         texte = f"{base} J{jour}"
         en_place = True
 
     if precisions:
         texte = f"{texte} ({precisions})"
+    # Une extubation accidentelle ne se lit pas comme une extubation
+    # programmée : le motif suit le compteur, sur la même ligne.
+    motif = libelle_motif_retrait(ligne["type"], ligne.get("motif_retrait"))
+    if motif and not en_place:
+        texte = f"{texte} — {motif.lower()}"
 
     return EtatDispositif(
         type=ligne["type"],
         en_place=en_place,
         jour=jour,
         texte=texte,
+        id=ligne.get("id"),
         site=ligne.get("site"),
         details=details,
         date_pose=ligne.get("date_pose"),
         date_retrait=ligne.get("date_retrait"),
+        rang=rang,
+        motif_retrait=ligne.get("motif_retrait"),
     )
+
+
+def rangs(lignes: list[dict]) -> list[int]:
+    """Numéro d'épisode de chaque ligne, par type — liste parallèle à `lignes`.
+
+    `lignes` arrive du plus récent au plus ancien (ordre de lecture en base) ;
+    le rang, lui, se compte du plus ancien au plus récent, sans quoi la
+    première intubation serait celle d'aujourd'hui. Rien d'autre n'est exigé
+    des lignes que leur type et leur date de pose : ce module se lit aussi
+    depuis un test, avec des dictionnaires écrits à la main.
+    """
+    chronologique = sorted(
+        range(len(lignes)),
+        key=lambda i: (lignes[i].get("date_pose") or "", lignes[i].get("cree_le") or ""),
+    )
+    numeros = [1] * len(lignes)
+    compteur: dict[str, int] = {}
+    for i in chronologique:
+        type_ = lignes[i]["type"]
+        compteur[type_] = compteur.get(type_, 0) + 1
+        numeros[i] = compteur[type_]
+    return numeros
+
+
+def etats(lignes: list[dict], a_la_date: str | date | None = None) -> list[EtatDispositif]:
+    """L'état de chaque ligne, son rang d'épisode calculé sur l'ensemble."""
+    return [
+        etat(ligne, a_la_date, rang)
+        for ligne, rang in zip(lignes, rangs(lignes))
+    ]
 
 
 def pose_le_jour(ligne: dict, a_la_date: str | date | None = None) -> bool:
@@ -134,9 +213,9 @@ def duree_totale_jours(lignes: list[dict], type_: str, a_la_date: str | date | N
 def resume(lignes: list[dict], a_la_date: str | date | None = None, en_place_seulement: bool = True) -> str:
     """Ligne compacte pour la pancarte et l'évolution, ex.
     « Intubé J3 · Sédaté J3 · KT central J5 (jugulaire interne droite) »."""
-    etats = [etat(l, a_la_date) for l in lignes]
+    lus = etats(lignes, a_la_date)
     if en_place_seulement:
-        etats = [e for e in etats if e.en_place]
+        lus = [e for e in lus if e.en_place]
     ordre = {code: i for i, code in enumerate(listes.ORDRE_DISPOSITIFS)}
-    etats.sort(key=lambda e: ordre.get(e.type, 99))
-    return " · ".join(e.texte for e in etats)
+    lus.sort(key=lambda e: ordre.get(e.type, 99))
+    return " · ".join(e.texte for e in lus)

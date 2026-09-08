@@ -80,10 +80,13 @@ def onglet_bilans(sejour: dict) -> None:
     )
     if mode == "Saisir un bilan":
         saisie_bilan(sejour)
-    else:
-        panneau_microbiologie(sejour)
-
+        # La microbiologie est une saisie, pas une relecture : un prélèvement
+        # se note quand on le fait, et son résultat quand il revient (demande
+        # du service, 8 septembre). En mode « Visualiser », elle obligeait à
+        # changer d'onglet pour taper trois mots.
         st.divider()
+        panneau_microbiologie(sejour)
+    else:
         vue_cinetique(sejour)
 
         st.subheader("Texte généré")
@@ -94,6 +97,32 @@ def onglet_bilans(sejour: dict) -> None:
             value=texte or "(aucun bilan ce jour-là)",
             height=200,
         )
+
+
+def _antibiogramme_saisi(ligne_id: str) -> dict[str, list[str]]:
+    """Trois listes à cocher plutôt qu'un champ libre (demande du service,
+    8 septembre) : sensible, intermédiaire, résistant.
+
+    L'antibiogramme se tapait à la main, molécule par molécule, avec autant
+    d'orthographes que de gardes — impossible d'en tirer le moindre profil de
+    résistance du service ensuite. Les molécules viennent maintenant d'une
+    liste fermée ; ce qui n'est pas rendu par le laboratoire reste simplement
+    décoché.
+    """
+    molecules = listes.codes(listes.ANTIBIOTIQUES_ANTIBIOGRAMME)
+    st.caption("Antibiogramme")
+    colonnes = st.columns(3)
+    etiquettes = ("Sensible", "Intermédiaire", "Résistant")
+    cles = [nom for _lettre, nom in micro_service.CATEGORIES_ANTIBIOGRAMME]
+    choix: dict[str, list[str]] = {}
+    for colonne, etiquette, cle in zip(colonnes, etiquettes, cles):
+        with colonne:
+            choix[cle] = st.multiselect(
+                etiquette, molecules,
+                format_func=lambda c: listes.libelle(listes.ANTIBIOTIQUES_ANTIBIOGRAMME, c),
+                placeholder="Aucun", key=f"atb_{cle}_{ligne_id}",
+            )
+    return choix
 
 
 def panneau_microbiologie(sejour: dict) -> None:
@@ -160,14 +189,12 @@ def panneau_microbiologie(sejour: dict) -> None:
                         key=f"res_{ligne['id']}",
                     )
                     germe = c2.text_input("Germe", key=f"germe_{ligne['id']}")
-                    antibiogramme = st.text_area(
-                        "Antibiogramme", key=f"atb_{ligne['id']}", height=70
-                    )
+                    choix = _antibiogramme_saisi(ligne["id"])
                     if st.form_submit_button("Enregistrer le résultat"):
                         micro_service.completer(
                             contexte.base(), ligne["id"],
                             {"resultat": resultat, "germe": germe or None,
-                             "antibiogramme": antibiogramme or None},
+                             "antibiogramme": micro_service.texte_antibiogramme(**choix)},
                             utilisateur_id=contexte.utilisateur_id(),
                         )
                         st.rerun()
@@ -180,6 +207,8 @@ def panneau_microbiologie(sejour: dict) -> None:
                     f"{listes.libelle(listes.PRELEVEMENTS, l['type_prelevement'])} — "
                     f"{listes.libelle(listes.RESULTATS_MICROBIO, l['resultat'])}"
                     + (f" : {l['germe']}" if l["germe"] else "")
+                    + (f"<br><span style='color:{theme.GRIS};font-size:.78rem'>"
+                       f"{l['antibiogramme']}</span>" if l.get("antibiogramme") else "")
                     for l in rendus
                 ],
                 theme.VIOLET,
@@ -202,33 +231,13 @@ def panneau_microbiologie(sejour: dict) -> None:
             st.caption("Aucun prélèvement enregistré pour ce séjour.")
 
 
-def saisie_bilan(sejour: dict) -> None:
-    st.markdown("##### Saisir un bilan")
-    haut1, haut2 = st.columns(2)
-    date_heure = haut1.text_input(
-        "Date / heure du prélèvement",
-        value=datetime.now().isoformat(timespec="minutes"),
-        key="bilan_date_heure",
-    )
-    unite_lipides = haut2.radio(
-        "Lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
-    )
+def _saisie_gaz_du_sang() -> tuple[str, float | None, dict[str, float | None]]:
+    """Le gaz du sang, en tête de la saisie (demande du service, 8 septembre).
 
-    valeurs: dict[str, float | None] = {}
-
-    # Deux colonnes : c'est ce qui tient dans une fenêtre en demi-écran, à
-    # côté du DMI.
-    for groupe in cat.GROUPES:
-        st.markdown(f"**{groupe.titre}**")
-        colonnes = st.columns(2)
-        saisissables = [a for a in groupe.analytes if not a.calcule]
-        for i, a in enumerate(saisissables):
-            with colonnes[i % 2]:
-                valeur = _champ_analyte(a, f"bilan_{a.id}")
-                if groupe.code == "lipidique" and valeur is not None and unite_lipides == "g/L":
-                    valeur = bilans_service.gl_vers_mmol(a.id, valeur)
-                valeurs[a.id] = valeur
-
+    C'est le seul bilan qu'on refait plusieurs fois dans la même journée : le
+    chercher sous trente champs de biologie, à chaque fois, coûtait plus que
+    tout le reste de l'écran.
+    """
     st.markdown("**Gaz du sang & ventilation**")
     g1, g2 = st.columns(2)
     mode_vent = g1.selectbox("Mode ventilatoire", ["—", *cat.MODES_VENTILATOIRES], key="gds_mode")
@@ -262,6 +271,54 @@ def saisie_bilan(sejour: dict) -> None:
                     unsafe_allow_html=True,
                 )
             gaz[cle] = valeur
+    return mode_vent, debit_o2, gaz
+
+
+def _saisie_groupe(groupe, valeurs: dict, unite_lipides: str) -> None:
+    """Un groupe d'analytes, en deux colonnes — ce qui tient dans une fenêtre
+    en demi-écran, à côté du DMI."""
+    st.markdown(f"**{groupe.titre}**")
+    colonnes = st.columns(2)
+    saisissables = [a for a in groupe.analytes if not a.calcule]
+    for i, a in enumerate(saisissables):
+        with colonnes[i % 2]:
+            valeur = _champ_analyte(a, f"bilan_{a.id}")
+            if groupe.code == "lipidique" and valeur is not None and unite_lipides == "g/L":
+                valeur = bilans_service.gl_vers_mmol(a.id, valeur)
+            valeurs[a.id] = valeur
+
+
+def saisie_bilan(sejour: dict) -> None:
+    st.markdown("##### Saisir un bilan")
+    # Un jour et une heure séparés, plutôt qu'une ligne à l'anglaise
+    # (« 2026-09-08T06:30 ») à corriger caractère par caractère : le bilan de
+    # la garde se saisit le lendemain matin, et il doit porter l'heure du
+    # prélèvement, pas celle de la frappe (demande du service, 8 septembre).
+    c_jour, c_heure = st.columns([1, 1])
+    jour = c_jour.date_input("Jour du prélèvement", value=date.today(), key="bilan_jour")
+    heure = c_heure.time_input("Heure", value=datetime.now().time(), key="bilan_heure")
+    date_heure = f"{jour}T{heure:%H:%M}"
+    if jour < date.today():
+        st.caption(
+            f"Bilan antidaté au {format_date_fr(str(jour))} — il se rangera à sa "
+            "date, dans la colonne de ce jour-là."
+        )
+
+    # Gaz du sang, puis chimie, puis hémato, puis ce qui ne se demande pas
+    # tous les jours : l'ordre de la visite, pas celui du catalogue.
+    mode_vent, debit_o2, gaz = _saisie_gaz_du_sang()
+
+    valeurs: dict[str, float | None] = {}
+    courants, occasionnels = cat.groupes_de_saisie()
+    for groupe in courants:
+        _saisie_groupe(groupe, valeurs, "mmol/L")
+
+    with st.expander("Bilans non systématiques"):
+        unite_lipides = st.radio(
+            "Lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
+        )
+        for groupe in occasionnels:
+            _saisie_groupe(groupe, valeurs, unite_lipides)
 
     # Valeurs dérivées, affichées dès que leurs ingrédients sont là.
     age = age_ans(sejour.get("date_naissance"))
@@ -324,8 +381,12 @@ def saisie_bilan(sejour: dict) -> None:
                 mode_ventilatoire=None if mode_vent == "—" else mode_vent,
                 debit_o2=debit_o2, utilisateur_id=contexte.utilisateur_id(), **gaz,
             )
+        # Le jour et l'heure du prélèvement survivent à l'enregistrement : un
+        # même prélèvement donne souvent deux panneaux saisis l'un après
+        # l'autre, et les retaper à chaque fois est le meilleur moyen de les
+        # voir diverger.
         for cle in list(st.session_state):
-            if cle.startswith(("bilan_", "gds_")) and cle != "bilan_date_heure":
+            if cle.startswith(("bilan_", "gds_")) and cle not in ("bilan_jour", "bilan_heure"):
                 del st.session_state[cle]
         st.success("Bilan enregistré.")
         st.rerun()
@@ -411,14 +472,13 @@ def vue_cinetique(sejour: dict) -> None:
                  if len(bilans_service.historique_analyte(contexte.base(), sejour["id"], i)) >= 2]
     if traçables:
         with st.expander("Courbes", expanded=len(traçables) <= 4):
-            import pandas as pd
-
             colonnes = st.columns(2)
             for i, id_analyte in enumerate(traçables):
                 a = cat.analyte(id_analyte)
                 historique = bilans_service.historique_analyte(contexte.base(), sejour["id"], id_analyte)
                 with colonnes[i % 2]:
                     st.caption(f"{a.libelle} ({a.unite})" if a.unite else a.libelle)
-                    df = pd.DataFrame(historique)
-                    df["date_heure"] = pd.to_datetime(df["date_heure"])
-                    st.line_chart(df.set_index("date_heure")["valeur_num"], height=180)
+                    theme.courbe(
+                        [(h["date_heure"][:16].replace("T", " "), h["valeur_num"]) for h in historique],
+                        hauteur=140,
+                    )

@@ -279,6 +279,33 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
 CREATE INDEX IF NOT EXISTS idx_prescription_sejour ON prescription_ligne(sejour_id, supprime);
 CREATE INDEX IF NOT EXISTS idx_prescription_periode ON prescription_ligne(sejour_id, date_debut, date_arret);
 
+-- Les changements de vitesse d'une seringue ou d'une perfusion.
+--
+-- Une vitesse n'est pas une donnée figée : on part à 25 cc/h et on descend à
+-- 15 à 16 h. La ligne de prescription porte la vitesse de départ ; cette table
+-- porte la suite des réglages, horodatés, et c'est elle que la feuille imprime
+-- heure par heure (demande du service, 8 septembre).
+--
+-- `cible` désigne ce qui coule : une ligne de prescription (noradrénaline en
+-- P.S.E.) ou un dispositif (la sédation, posée dans l'écran des actes et
+-- reportée dans le bloc P.S.E.). Deux origines, une seule façon de lire la
+-- vitesse — sans quoi la sédation, justement celle qu'on allège tous les
+-- jours, serait la seule à ne pas pouvoir être suivie.
+CREATE TABLE IF NOT EXISTS vitesse_reglage (
+    id          TEXT PRIMARY KEY,
+    cible       TEXT NOT NULL,   -- prescription_ligne / dispositif
+    cible_id    TEXT NOT NULL,
+    date_heure  TEXT NOT NULL,   -- « 2026-09-08T16:00 »
+    vitesse     REAL NOT NULL,   -- cc/h
+    cree_le     TEXT NOT NULL,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id),
+    supprime    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_vitesse_cible
+    ON vitesse_reglage(cible, cible_id, date_heure);
+
 -- Une journée de pancarte. Créée par « Préparer la pancarte de demain ».
 -- Elle ne contient pas les lignes de prescription (elles se calculent) mais
 -- porte les bilans demandés pour ce jour et la trace de qui a préparé.

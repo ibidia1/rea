@@ -2,8 +2,39 @@
 
 from __future__ import annotations
 
+from .. import listes
 from ..db import Base
 from ..domaine.dates import parse_date
+
+# Ordre d'écriture d'un antibiogramme : sensible, intermédiaire, résistant.
+# C'est l'ordre dans lequel on le lit à la visite — ce à quoi le germe répond
+# d'abord, ce qui ne marchera pas ensuite.
+CATEGORIES_ANTIBIOGRAMME = (("S", "sensibles"), ("I", "intermediaires"), ("R", "resistants"))
+
+
+def texte_antibiogramme(
+    sensibles: list[str] | None = None,
+    intermediaires: list[str] | None = None,
+    resistants: list[str] | None = None,
+) -> str | None:
+    """Compose l'antibiogramme à partir des molécules cochées, S / I / R.
+
+    Le champ était libre jusqu'ici (demande du service, 8 septembre) : chacun
+    écrivait « Pipé-tazo », « pip/tazo » ou « TZP », et rien ne se comptait
+    d'un séjour à l'autre. Les molécules viennent maintenant d'une liste
+    fermée (`referentiels/antibiotiques_antibiogramme.json`) ; ce texte n'est
+    que leur mise en forme, lisible telle quelle dans le dossier.
+    """
+    molecules = listes.ANTIBIOTIQUES_ANTIBIOGRAMME
+    parties = []
+    for lettre, cles in zip(
+        [c for c, _n in CATEGORIES_ANTIBIOGRAMME],
+        (sensibles or [], intermediaires or [], resistants or []),
+    ):
+        if cles:
+            noms = ", ".join(listes.libelle(molecules, c, c) for c in cles)
+            parties.append(f"{lettre} : {noms}")
+    return " · ".join(parties) or None
 
 
 def enregistrer(

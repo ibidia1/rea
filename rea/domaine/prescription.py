@@ -31,6 +31,135 @@ def horaires_affiches(rythme: str | None, override: str | None = None) -> str:
     return "-".join(f"{h}h" if h < 24 else "24h" for h in heures)
 
 
+def _sans_accent(texte: str) -> str:
+    import unicodedata
+
+    return "".join(
+        c for c in unicodedata.normalize("NFD", texte.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def horaires_par_defaut(produit: str | None, rythme: str | None) -> tuple[int, ...]:
+    """L'heure de prise proposée à la saisie d'une ligne.
+
+    C'est l'horaire du rythme (une prise → 8 h), sauf pour les produits qui se
+    donnent traditionnellement à une autre heure : l'enoxaparine préventive
+    est du soir, et la prescrire à 8 h obligeait à corriger l'horaire à chaque
+    ligne (demande du service, 8 septembre). Les exceptions sont déclarées
+    dans `referentiels/horaires_par_produit.json`, pas ici.
+    """
+    from .. import referentiels
+
+    nom = _sans_accent(produit or "")
+    if nom:
+        for regle in referentiels.charger("horaires_par_produit"):
+            rythmes = regle.get("rythmes")
+            if rythmes and rythme not in rythmes:
+                continue
+            if any(_sans_accent(f) in nom for f in regle.get("fragments", ())):
+                return tuple(regle["horaires"])
+    return horaires_pour_rythme(rythme)
+
+
+def analyser_horaires(texte: str | None) -> str | None:
+    """Lit des heures tapées à la main — « 20 », « 8h 20h », « 8, 14, 20 ».
+
+    Renvoie la forme normalisée « 8,14,20 » que stocke `horaires_override`, ou
+    None si rien d'exploitable n'a été tapé : une saisie illisible ne doit pas
+    effacer silencieusement l'horaire du rythme.
+    """
+    if not texte or not texte.strip():
+        return None
+    heures = []
+    for morceau in texte.replace("h", " ").replace(";", " ").replace(",", " ").split():
+        try:
+            heure = int(morceau)
+        except ValueError:
+            continue
+        if 0 <= heure <= 24:
+            heures.append(heure)
+    return ",".join(str(h) for h in heures) or None
+
+
+# --------------------------------------------------------------------------
+# Vitesses réglées dans la journée (P.S.E. et perfusions)
+# --------------------------------------------------------------------------
+
+def heures_de_la_journee() -> tuple[int, ...]:
+    """Les 24 heures dans l'ordre de la feuille : 8 h d'abord, 7 h en dernier.
+
+    La colonne « 0 » en tête n'a jamais rien voulu dire pour personne : la
+    relève du matin ouvre la feuille, et la grille imprimée suit cet ordre.
+    """
+    debut = config.HEURE_DEBUT_JOURNEE
+    return tuple(range(debut, 24)) + tuple(range(0, debut))
+
+
+def horodatage_dans_journee(date_jour: str | date, heure: int) -> str:
+    """L'horodatage d'une heure de la journée du service (8 h → 8 h).
+
+    Une heure d'avant l'ouverture appartient au petit matin du lendemain :
+    c'est la nuit de *cette* feuille-là, pas celle de la précédente.
+    """
+    from .dates import lendemain
+
+    jour = parse_date(date_jour)
+    if heure < config.HEURE_DEBUT_JOURNEE:
+        jour = lendemain(jour)
+    return f"{jour.isoformat()}T{heure % 24:02d}:00"
+
+
+def fenetre_journee(date_jour: str | date) -> tuple[str, str]:
+    """La journée du service : de 8 h à 8 h le lendemain.
+
+    C'est la fenêtre que couvre la grille horaire imprimée (8 h → 7 h). Un
+    réglage noté à 2 h du matin appartient donc à la journée ouverte la veille,
+    pas à celle qui commencera six heures plus tard — c'est ce que dit la
+    feuille, et c'est ainsi que la garde la remplit.
+    """
+    jour = parse_date(date_jour)
+    heure = config.HEURE_DEBUT_JOURNEE
+    from .dates import lendemain
+
+    return (f"{jour.isoformat()}T{heure:02d}:00",
+            f"{lendemain(jour).isoformat()}T{heure:02d}:00")
+
+
+def vitesses_par_heure(
+    vitesse_initiale: float | None, reglages: list[dict], date_jour: str | date
+) -> dict[int, float]:
+    """La vitesse à écrire dans chaque case horaire d'une journée.
+
+    Une seringue ne se règle pas une fois pour toutes : elle part à 25 cc/h et
+    on la descend à 15 à 16 h. Jusqu'ici la feuille n'imprimait que la vitesse
+    de départ, dans la colonne dose — la suite se réécrivait à la main tous les
+    jours (demande du service, 8 septembre).
+
+    Ce qui est rendu : la vitesse en vigueur à l'ouverture de la journée, puis
+    chaque changement à son heure. Un réglage antérieur à la journée ne
+    s'imprime pas, il fixe seulement la vitesse d'ouverture.
+    """
+    ouverture = config.HEURE_DEBUT_JOURNEE
+    debut, fin = fenetre_journee(date_jour)
+    en_vigueur = vitesse_initiale
+    par_heure: dict[int, float] = {}
+    for reglage in sorted(reglages, key=lambda r: r.get("date_heure") or ""):
+        horodatage = reglage.get("date_heure") or ""
+        if horodatage < debut:
+            en_vigueur = reglage["vitesse"]
+        elif horodatage < fin:
+            try:
+                par_heure[int(horodatage[11:13]) % 24] = reglage["vitesse"]
+            except ValueError:
+                continue
+    # La vitesse d'ouverture ne s'écrit que si rien ne la remplace déjà à cette
+    # heure-là : un réglage noté à 8 h pile prime sur elle.
+    if en_vigueur is not None and ouverture not in par_heure:
+        par_heure[ouverture] = en_vigueur
+    return par_heure
+
+
 # --------------------------------------------------------------------------
 # Nombre de prises par jour — utile au bilan hydrique (SPEC §5.6)
 # --------------------------------------------------------------------------
@@ -154,6 +283,12 @@ def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
     return texte
 
 
+def _nombre_fr(valeur) -> str:
+    """Comme `_nombre`, mais avec la virgule décimale française — pour les
+    phrases lues à l'écran, pas pour les libellés de pancarte."""
+    return _nombre(valeur).replace(".", ",")
+
+
 def _nombre(valeur) -> str:
     if valeur is None:
         return ""
@@ -175,6 +310,141 @@ class BilanEntrees:
         if volume_ml:
             self.total_ml += volume_ml
             self.detail.append((libelle, volume_ml))
+
+
+@dataclass(frozen=True)
+class BilanHydrique:
+    """Le bilan des 24 h : ce qui est entré, ce qui est sorti, ce qui reste.
+
+    Chaque composante est gardée à part plutôt que fondue dans un seul chiffre :
+    un bilan positif de 800 mL ne se lit pas pareil selon qu'il vient d'une
+    diurèse effondrée ou d'un litre de remplissage, et c'est le détail qu'on
+    relit à la visite.
+
+    Ce qui manque manque : le net n'est calculé que si la diurèse et le poids
+    sont là (règle 3 de `calculs.py` — un calcul n'invente jamais une valeur
+    par défaut). Une case vide dit « non mesuré », jamais « zéro ».
+    """
+
+    entrees_ml: float
+    detail_entrees: list[tuple[str, float]]
+    diurese_ml: float | None
+    drains_ml: float
+    detail_drains: list[tuple[str, float]]
+    poids_kg: float | None
+    temperature_c: float | None
+    pertes_base_ml: float | None
+    majoration_fievre_ml: float | None
+    formule_insensibles: str
+
+    @property
+    def pertes_insensibles_ml(self) -> float | None:
+        if self.pertes_base_ml is None:
+            return None
+        return self.pertes_base_ml + (self.majoration_fievre_ml or 0)
+
+    @property
+    def sorties_ml(self) -> float | None:
+        """Sorties mesurées et pertes insensibles réunies."""
+        if self.diurese_ml is None or self.pertes_insensibles_ml is None:
+            return None
+        return self.diurese_ml + self.drains_ml + self.pertes_insensibles_ml
+
+    @property
+    def net_ml(self) -> float | None:
+        sorties = self.sorties_ml
+        return None if sorties is None else self.entrees_ml - sorties
+
+    @property
+    def manquants(self) -> list[str]:
+        """Ce qu'il faudrait saisir pour que le bilan se calcule."""
+        absents = []
+        if self.diurese_ml is None:
+            absents.append("la diurèse des 24 h")
+        if self.poids_kg is None:
+            absents.append("le poids (pertes insensibles)")
+        return absents
+
+
+def pertes_insensibles_24h(
+    poids_kg: float | None,
+    temperature_c: float | None,
+    reglages: dict | None = None,
+) -> tuple[float | None, float | None, str]:
+    """(pertes de base, majoration fièvre, formule) sur 24 h.
+
+    Convention du service (8 septembre 2026), tenue dans
+    `referentiels/bilan_hydrique.json` pour qu'un senior puisse la revoir sans
+    reprogrammer : 0,5 mL/kg/h à 37 °C, majorées de 2 mL/kg/24 h par degré
+    au-dessus — ou d'un forfait par degré, selon le mode choisi.
+
+    Sans poids, rien n'est calculé : une perte insensible sans poids n'existe
+    pas, et un chiffre inventé dans un bilan hydrique est pire que pas de
+    chiffre du tout.
+
+    `reglages` sert à essayer une autre convention sans toucher au fichier —
+    c'est ce que fait le test du mode forfait.
+    """
+    if reglages is None:
+        from .. import referentiels
+
+        reglages = referentiels.charger("bilan_hydrique")
+    par_kg_h = reglages["pertes_insensibles_ml_kg_h"]
+    reference = reglages["temperature_reference_c"]
+    # Une phrase lue par un médecin français : virgule décimale.
+    formule = f"{_nombre_fr(par_kg_h)} mL/kg/h × 24 h à {_nombre_fr(reference)} °C"
+
+    if not poids_kg:
+        return None, None, formule
+    base = par_kg_h * poids_kg * 24
+
+    if temperature_c is None or temperature_c <= reference:
+        return base, 0.0, formule
+
+    degres = temperature_c - reference
+    if reglages["majoration_fievre_mode"] == "forfait":
+        forfait = reglages["majoration_fievre_forfait_ml_par_degre"]
+        majoration = forfait * degres
+        formule += f", + {_nombre_fr(forfait)} mL par degré au-dessus"
+    else:
+        par_kg = reglages["majoration_fievre_ml_kg_24h_par_degre"]
+        majoration = par_kg * poids_kg * degres
+        formule += f", + {_nombre_fr(par_kg)} mL/kg/24 h par degré au-dessus"
+    return base, majoration, formule
+
+
+def bilan_hydrique(
+    lignes_actives: list[dict],
+    *,
+    diurese_ml: float | None,
+    drains: list[tuple[str, float]] | None = None,
+    poids_kg: float | None,
+    temperature_c: float | None,
+) -> BilanHydrique:
+    """Le bilan des 24 h, tel que le service l'a défini (8 septembre 2026) :
+
+        entrées − (diurèse + drains + pertes insensibles)
+
+    Les entrées viennent du prescrit — c'est déjà ce que calcule
+    `volume_entrees_24h`. Les sorties se saisissent dans le plan
+    hémodynamique de l'évolution : elles sont relevées au lit du malade, le
+    logiciel n'a aucun moyen de les deviner.
+    """
+    entrees = volume_entrees_24h(lignes_actives)
+    drains = list(drains or [])
+    base, majoration, formule = pertes_insensibles_24h(poids_kg, temperature_c)
+    return BilanHydrique(
+        entrees_ml=entrees.total_ml,
+        detail_entrees=entrees.detail,
+        diurese_ml=diurese_ml,
+        drains_ml=sum(v for _l, v in drains),
+        detail_drains=drains,
+        poids_kg=poids_kg,
+        temperature_c=temperature_c,
+        pertes_base_ml=base,
+        majoration_fievre_ml=majoration,
+        formule_insensibles=formule,
+    )
 
 
 def volume_entrees_24h(lignes_actives: list[dict]) -> BilanEntrees:

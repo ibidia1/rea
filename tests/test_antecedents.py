@@ -70,3 +70,49 @@ def test_etat_invalide_refuse(base):
     pid = _patient(base)
     with pytest.raises(ValueError):
         sejours.definir_etat_antecedents(base, pid, "present")
+
+
+# --- retirer un antécédent (demande du service, 8 septembre) ---------------
+
+def test_supprimer_un_antecedent_le_retire_de_la_liste(base):
+    """Un antécédent se saisit vite et se trompe vite : sans moyen de le
+    retirer, il se recopie ensuite sur chaque feuille imprimée."""
+    pid = _patient(base)
+    aid = sejours.ajouter_antecedent(base, patient_id=pid, categorie="personnel",
+                                     libelle="Diabète", code="diabete")
+    sejours.ajouter_antecedent(base, patient_id=pid, categorie="personnel", libelle="HTA")
+
+    sejours.supprimer_antecedent(base, aid)
+
+    libelles = [a["libelle"] for a in sejours.antecedents_du_patient(base, pid)]
+    assert libelles == ["HTA"]
+
+
+def test_la_suppression_est_logique_jamais_physique(base):
+    """Règle de conception 2 : la ligne reste en base, marquée supprimée."""
+    pid = _patient(base)
+    aid = sejours.ajouter_antecedent(base, patient_id=pid, categorie="personnel",
+                                     libelle="Diabète")
+    sejours.supprimer_antecedent(base, aid)
+    ligne = base.une_ligne("SELECT supprime FROM antecedent WHERE id = ?", (aid,))
+    assert ligne["supprime"] == 1
+
+
+def test_retirer_le_dernier_antecedent_ramene_letat_a_non_renseigne(base):
+    """Plus aucun antécédent réel : la réponse Oui/Non/Inconnu redevient
+    ouverte, elle n'est pas figée sur « oui »."""
+    pid = _patient(base)
+    aid = sejours.ajouter_antecedent(base, patient_id=pid, categorie="personnel",
+                                     libelle="Diabète")
+    assert sejours.etat_antecedents(base, pid) == "oui"
+    sejours.supprimer_antecedent(base, aid)
+    assert sejours.etat_antecedents(base, pid) == "non_renseigne"
+
+
+def test_une_allergie_supprimee_disparait_des_allergies(base):
+    pid = _patient(base)
+    aid = sejours.ajouter_antecedent(base, patient_id=pid, categorie="allergie",
+                                     libelle="Pénicilline")
+    assert len(sejours.allergies_du_patient(base, pid)) == 1
+    sejours.supprimer_antecedent(base, aid)
+    assert sejours.allergies_du_patient(base, pid) == []

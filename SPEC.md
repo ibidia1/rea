@@ -810,6 +810,172 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.5 — 8 septembre 2026 — le bilan hydrique se calcule tout seul**
+
+Demande du service : quantifier les sorties dans le plan hémodynamique et en
+tirer le bilan des 24 h, au lieu de le refaire de tête à chaque visite.
+
+*Les sorties.* La diurèse était déjà là. S'y ajoute le recueil des drains, un
+champ par drain effectivement en place — et rien du tout s'il n'y en a pas.
+« Drainé » se déclare dans `types_dispositif.json` (clé `draine`) : drain
+thoracique, drain abdominal, DVE, et le Redon, qui manquait au référentiel
+alors que la feuille lui réserve trois lignes. La sonde urinaire ne le porte
+pas : son volume, c'est la diurèse, et l'ajouter la compterait deux fois.
+
+*Le calcul*, arrêté par le service :
+
+    entrées − (diurèse + drains + pertes insensibles)
+
+Pertes insensibles : 0,5 mL/kg/h × 24 h à 37 °C, majorées de 2 mL/kg/24 h par
+degré au-dessus — ou d'un forfait par degré, au choix. Ces quatre nombres sont
+dans `referentiels/bilan_hydrique.json`, pas dans le code : un senior peut les
+revoir sans reprogrammer, et basculer du mode « par kilo » au mode « forfait »
+tient en une ligne de fichier.
+
+Le bilan s'affiche sous la carte hémodynamique, se recalcule pendant qu'on
+tape, et rejoint le texte prêt à coller dans le DMI. Il ne s'affiche pas tant
+qu'il manque la diurèse ou le poids : il dit alors ce qui manque. Un chiffre
+inventé dans un bilan hydrique est pire que pas de chiffre du tout.
+
+L'eau endogène (oxydation, ~300 mL/24 h) est nommée dans la demande mais
+absente de l'équation qu'elle donne : elle n'est donc pas comptée, en attendant
+que le service tranche. Le total des entrées reste celui du prescrit
+(SPEC §5.6) : il ne suit pas encore les changements de vitesse de la journée,
+et les boissons per os ne sont pas saisies.
+
+Corrigé au passage : les valeurs relues d'un jour précédent s'affichaient
+« 96,0 » et se réenregistraient avec leur zéro décimal.
+
+*Le lien entre les deux écrans.* Les quatre types drainés se posent depuis
+« Explorations et actes » comme n'importe quel dispositif, et apparaissent
+aussitôt dans le recueil de l'évolution — le Redon compris, désormais. À la
+pose, l'écran le dit : « son recueil des 24 h se relève dans l'évolution, plan
+hémodynamique ». Sans cette phrase, on cherche sur l'écran des actes un champ
+« volume » qui n'y est pas et n'a pas à y être : un drain se pose une fois,
+son recueil se relève tous les jours.
+
+Défaut corrigé du même coup : un drain posé aujourd'hui apparaissait dans
+l'évolution des jours précédents, où il n'avait rien pu recueillir — le bilan
+hydrique d'un jour passé changeait donc chaque fois qu'on posait un drain.
+
+**v3.4 — 8 septembre 2026 — antidater la garde, et la vitesse heure par heure**
+
+*Antidater ce qui a été fait pendant la garde.* C'était déjà possible en base
+— le compteur de jours se calcule depuis `date_debut`, jamais depuis la date
+de frappe — mais la saisie ne s'y prêtait pas. Le bilan se datait sur une
+ligne à l'anglaise (« 2026-09-08T06:30 ») à corriger caractère par caractère :
+elle laisse place à un jour et une heure séparés, et un bilan daté d'hier
+l'annonce. La date de début d'un traitement sort du formulaire, où elle ne
+pouvait rien dire, et affiche tout de suite le compteur qu'elle produira :
+« Introduit le 07/09 — la pancarte du 08/09 l'affichera J2 ». Trois tests
+tiennent le calcul, un quatrième vérifie qu'un bilan antidaté tombe bien dans
+la colonne de sa nuit.
+
+*La vitesse d'une seringue, heure par heure.* Une vitesse n'est pas une donnée
+figée : on part à 25 cc/h et on descend à 15 à 16 h. La feuille n'imprimait
+que la vitesse de départ, dans la colonne dose — la suite se réécrivait à la
+main tous les jours, alors même que la maquette du service annonce déjà
+« débit ml/h dans les cases ». Une table `vitesse_reglage` porte les réglages
+horodatés, et la grille horaire les écrit : la vitesse en vigueur à
+l'ouverture de la journée, puis chaque changement à son heure.
+
+La journée du service va de 8 h à 8 h (`config.HEURE_DEBUT_JOURNEE`), comme la
+grille imprimée : un réglage noté à 2 h appartient à la nuit de cette
+feuille-là, pas à la suivante. Deux choses coulent et se règlent pareil — une
+ligne prescrite (noradrénaline) et un dispositif (la sédation, posée dans
+l'écran des actes) ; `cible` dit seulement d'où vient ce qui coule.
+
+Deux défauts trouvés en chemin, et corrigés : la vitesse courante d'un
+dispositif (celle de sa carte et de la pastille du bandeau) servait aussi de
+vitesse d'origine — descendre une sédation aujourd'hui aurait réécrit les
+feuilles des jours passés à la nouvelle valeur ; la pose ouvre donc désormais
+l'historique des vitesses, et c'est la dernière vitesse *dans le temps* qui
+devient la courante, pas la dernière saisie. Et ces vitesses s'affichaient
+« 4.0 cc/h » : un zéro décimal de plus sur une pompe n'apprend rien à personne.
+
+Reste en l'état, faute d'avoir été demandé : le bilan des entrées sur 24 h
+compte toujours `vitesse × 24` (SPEC §5.6), c'est-à-dire la vitesse de départ,
+sans tenir compte des changements de la journée.
+
+**v3.3 — 8 septembre 2026 — quatorze retours du service, écran par écran**
+
+*Identité.* « Modifier l'admission » descend sous « Transférer vers un autre
+lit », dans un tiroir de même forme : deux gestes occasionnels, au même
+endroit, plutôt qu'un bouton en permanence dans la rangée de tête. Les trois
+blocs de tête (identité, motif, antécédents) reprennent la largeur libérée et
+passent en grand — ce sont les seules lignes de l'écran qu'on relit debout, à
+distance. Chaque antécédent porte enfin sa croix : un antécédent se saisit
+vite et se trompe vite, et sans moyen de le retirer il se recopiait sur
+chaque feuille imprimée. La suppression reste logique, tracée au journal
+(règle de conception 2).
+
+*Prescrit.* Vérification demandée : imprimer la pancarte d'un jour choisi
+imprime bien **ce jour-là**, pas le jour courant — c'était déjà le cas, trois
+tests le tiennent désormais. L'heure de prise se choisit à la ligne ; laissée
+vide, elle suit l'horaire habituel du produit et du rythme, et l'enoxaparine
+en une prise part à 20 h (`referentiels/horaires_par_produit.json`, une règle
+en données, pas en code). La sédation, posée comme dispositif, se lit
+maintenant dans le bloc P.S.E. de l'écran comme elle se lisait déjà sur la
+feuille — et sa vitesse se règle en cours de route, ce qui manquait
+complètement : une sédation se conduit surtout en descendant. Enfin la
+colonne dose de la feuille porte le nombre de prises, « 1 g × 3 » : la dose
+d'une prise ne dit pas la dose de la journée.
+
+*Feuille imprimée.* Un jour passé qui ne porte qu'un seul bilan n'a plus ses
+quatre créneaux numérotés : la valeur tient dans le premier, les trois
+suivants redeviennent du papier réglé. Le bloc « Bilans infectieux » perd sa
+colonne Date, qui suit désormais le libellé entre parenthèses —
+« Hémoculture (06/09) » : 62 px pour cinq caractères prenaient la place du
+résultat, seul texte du bloc dont la longueur soit imprévisible.
+
+*Explorations et actes.* Une deuxième intubation s'appelle une réintubation,
+et le logiciel le dit avant la saisie comme après (`libelle_repete` /
+`en_cours_repete` dans le référentiel des dispositifs, rang d'épisode calculé
+sur l'ensemble du séjour). Le retrait peut porter un motif : « extubation
+programmée » ou « extubation accidentelle » ne se lisent pas pareil, et seule
+la seconde est un événement à compter.
+
+*Bilans.* La microbiologie rejoint le mode « Saisir » : c'est une saisie, pas
+une relecture. L'antibiogramme se coche au lieu de se taper — trois listes
+S / I / R puisées dans une liste fermée de molécules
+(`referentiels/antibiotiques_antibiogramme.json`) ; en texte libre, la même
+molécule s'écrivait de six façons et aucun profil de résistance du service ne
+se comptait. L'ordre de saisie suit enfin celui de la visite : gaz du sang
+d'abord — le seul bilan refait plusieurs fois par jour —, puis la chimie,
+puis l'hémato, le bilan hépatique et le bilan lipidique repliés derrière.
+
+*Évolution.* La check-list FAST HUG est retirée de l'écran : elle occupait la
+moitié de la page pour redire ce que l'interne relit dans les quatre plans
+juste en dessous. Le moteur de règles qui la calculait reste en place — ce
+sont les mêmes règles qui produisent les rappels — et elle se rebranche en
+une ligne si le service la redemande.
+
+**v3.2 — 6 septembre 2026 — arrêter un traitement d'un geste sur sa ligne**
+
+Consigne du service : arrêter un traitement se faisait dans un encart
+séparé (« Arrêter une ligne »), à rouvrir et où retrouver la bonne ligne
+dans une liste à part — un détour pour un geste courant. Retiré, remplacé
+par une croix devant chaque traitement actif de la pancarte : un clic dessus
+l'arrête, exactement comme avant (le traitement reste visible, barré, rien
+n'est supprimé physiquement).
+
+**v3.1 — 6 septembre 2026 — courbes sans altair, escarres rattachées au plan infectieux**
+
+Signalé par le service : l'onglet Évolution plantait entièrement sur les
+postes Windows du service (`TypeError: ... got an unexpected keyword
+argument 'closed'`). Cause : `st.line_chart` importe `altair` à la volée,
+qui entre en conflit de version avec `typing_extensions` sur certaines
+installations — un risque qu'on ne maîtrise pas sur un poste d'hôpital.
+Corrigé en supprimant la dépendance plutôt qu'en figeant une version
+fragile : `theme.courbe()`, un traceur SVG sans dépendance, remplace
+`st.line_chart` aux trois endroits où il était utilisé (SOFA dans
+Évolution, tendance d'un analyte dans Bilans, cinétique d'une exploration
+dans Explorations et actes).
+
+Par la même occasion : les escarres, jusque-là dans un encart séparé et
+sans lien avec le reste, sont désormais saisies à l'intérieur même de la
+carte "Sur le plan Infectieux", où elles ont leur place clinique.
+
 **v3.0 — 6 septembre 2026 — retrait des emojis décoratifs de l'interface**
 
 Consigne du service : une interface sobre, fonctionnelle, peu décorative.

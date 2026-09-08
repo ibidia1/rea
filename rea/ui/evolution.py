@@ -8,21 +8,16 @@ from datetime import date
 import streamlit as st
 
 from .. import listes
+from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr
 from ..services import aides as aides_service
 from ..services import definitions_cliniques
 from ..services import evolution as evolution_service
+from ..services import prescriptions as prescriptions_service
 from ..services import scores as scores_service
 from . import contexte, theme
 
 from . import champs
-
-
-_STYLE_ETAT = {
-    "ok": ("●", theme.VERT),
-    "a_verifier": ("○", theme.ORANGE),
-    "non_renseigne": ("·", theme.GRIS),
-}
 
 
 _STYLE_GRAVITE = {
@@ -30,6 +25,18 @@ _STYLE_GRAVITE = {
     "attention": theme.ORANGE,
     "info": theme.BLEU,
 }
+
+
+def _texte_nombre(valeur) -> str:
+    """« 96 » et « 38,6 », jamais « 96.0 ».
+
+    Les valeurs reviennent de colonnes REAL : sans ce passage, une fréquence
+    cardiaque relue le lendemain s'affichait « 96,0 », et le zéro décimal se
+    réenregistrait tel quel à chaque relecture.
+    """
+    if valeur is None:
+        return ""
+    return champs.format_valeur(valeur).replace(".", ",")
 
 
 def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
@@ -42,7 +49,7 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
         return champs.nombre_saisi(
             st.text_input(
                 etiquette,
-                value="" if valeur_actuelle is None else str(valeur_actuelle).replace(".", ","),
+                value=_texte_nombre(valeur_actuelle),
                 placeholder=plage,
                 key=cle_widget,
             )
@@ -70,51 +77,32 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
 
 
 def panneau_aides(sejour: dict, date_jour_str: str) -> None:
-    """Check-list du jour et rappels — des questions, jamais des consignes.
+    """Rappels du jour — des questions, jamais des consignes.
 
-    Le logiciel coche ce qu'il sait lire de ce qui est déjà saisi, laisse
-    « non renseigné » ce qu'il ne sait pas, et ne prescrit rien.
+    La check-list FAST HUG occupait la moitié de l'écran pour redire ce que
+    l'interne relit déjà dans les quatre plans juste en dessous ; le service
+    l'a fait retirer (8 septembre). Le moteur de règles qui la calculait
+    (`regles/*.json`, `services.aides.checklist`) reste en place : ce sont les
+    mêmes règles qui produisent les rappels ci-dessous, et la check-list se
+    rebranche en une ligne si le service la redemande.
     """
-    items = aides_service.checklist(contexte.base(), sejour["id"], date_jour_str)
     rappels = aides_service.rappels(contexte.base(), sejour["id"], date_jour_str)
-    if not items and not rappels:
-        return
-
-    gauche, droite = st.columns([1.1, 1], gap="large")
-    with gauche:
-        if items:
-            lignes = []
-            for i in items:
-                marque, couleur = _STYLE_ETAT.get(i.etat, ("·", theme.GRIS))
-                titre = f"<b>{i.lettre}</b> · {i.libelle}"
-                question = (
-                    f"<br><span style='color:#94a3b8'>{i.question}</span>"
-                    if i.etat != "ok" and i.question else ""
-                )
-                lignes.append(
-                    f"<span style='color:{couleur}'>{marque}</span> {titre}{question}"
-                )
-            reste = sum(1 for i in items if i.etat != "ok")
-            theme.bloc_html(
-                f"Check-list du jour — {len(items) - reste}/{len(items)}",
-                "<br>".join(lignes),
-                theme.VERT if reste == 0 else theme.ORANGE,
+    if rappels:
+        # En colonnes plutôt qu'empilés : un rappel par bloc pleine largeur
+        # repousserait les quatre plans hors de l'écran.
+        colonnes = st.columns(min(len(rappels), 3))
+        for i, r in enumerate(rappels):
+            note = "" if r["valide"] else (
+                "<br><span style='color:#94a3b8;font-size:0.78rem'>"
+                "Règle de service non encore signée par un senior.</span>"
             )
-    with droite:
-        if rappels:
-            for r in rappels:
-                note = "" if r["valide"] else (
-                    "<br><span style='color:#94a3b8;font-size:0.78rem'>"
-                    "Règle de service non encore signée par un senior.</span>"
-                )
+            with colonnes[i % len(colonnes)]:
                 theme.bloc_html(
                     r["libelle"], r["message"] + note,
                     _STYLE_GRAVITE.get(r["gravite"], theme.GRIS),
                 )
-        else:
-            theme.bloc_html(
-                "Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT
-            )
+    else:
+        theme.bloc_html("Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT)
     st.caption(
         "Ces rappels sont déclaratifs : leurs seuils se modifient dans "
         "`regles/*.json`, sans reprogrammer le logiciel. Aucun ne propose de "
@@ -197,14 +185,8 @@ def panneau_scores(sejour: dict, date_jour_str: str) -> None:
 
         serie = scores_service.evolution_sofa(contexte.base(), sejour["id"])
         if len(serie) >= 2:
-            import pandas as pd
-
             st.caption("SOFA jour par jour — c'est sa variation qui informe.")
-            st.line_chart(
-                pd.DataFrame({"SOFA": [v for _d, v in serie]},
-                             index=[d for d, _v in serie]),
-                height=180,
-            )
+            theme.courbe([(str(d), v) for d, v in serie], hauteur=140)
 
     panneau_definitions(sejour, date_jour_str)
 
@@ -264,6 +246,139 @@ def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
             ))
 
 
+def _champs_drains(sejour: dict, date_jour_str: str, elements: dict, prefixe: str) -> None:
+    """Un champ par drain en place — et rien du tout s'il n'y en a pas.
+
+    Le volume recueilli se relève drain par drain (demande du service,
+    8 septembre) : c'est ce qui entre dans les sorties du bilan hydrique, à
+    côté de la diurèse.
+    """
+    drains = evolution_service.drains_du_jour(contexte.base(), sejour["id"], date_jour_str)
+    if not drains:
+        return
+    st.caption("Recueil des drains")
+    for drain in drains:
+        elements[drain["cle"]] = champs.nombre_saisi(
+            st.text_input(
+                f"{drain['libelle']} (mL)",
+                value=_texte_nombre(drain["valeur"]),
+                placeholder="mL /24 h",
+                key=f"{prefixe}_{drain['cle']}",
+            )
+        )
+
+
+def _valeur_en_cours(prefixe: str, cle: str, sauvegardees: dict) -> float | None:
+    """La valeur telle qu'elle est à l'écran, sinon celle déjà enregistrée.
+
+    Le bilan hydrique se recalcule pendant qu'on tape, avant d'enregistrer :
+    il lit donc les champs affichés. La température, saisie dans le plan
+    infectieux, est rendue après le plan hémodynamique — d'où la lecture par
+    clé de widget plutôt que par la variable, qui n'existe pas encore.
+    """
+    saisie = st.session_state.get(f"{prefixe}_{cle}")
+    if isinstance(saisie, str):
+        valeur = champs.nombre_saisi(saisie)
+        if valeur is not None:
+            return valeur
+    sauvegardee = sauvegardees.get(cle)
+    return sauvegardee if isinstance(sauvegardee, (int, float)) else None
+
+
+def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
+                         prefixe: str, sauvegardees: dict) -> None:
+    """Entrées − (diurèse + drains + pertes insensibles).
+
+    Formule arrêtée par le service le 8 septembre 2026 ; ses constantes sont
+    dans `referentiels/bilan_hydrique.json`, pas dans le code. Le bilan
+    n'affiche rien tant qu'il manque une donnée : un chiffre inventé dans un
+    bilan hydrique est pire que pas de chiffre du tout.
+    """
+    drains = [
+        (d["libelle"], float(elements[d["cle"]]))
+        for d in evolution_service.drains_du_jour(contexte.base(), sejour["id"], date_jour_str)
+        if elements.get(d["cle"]) is not None
+    ]
+    bilan = dom.bilan_hydrique(
+        prescriptions_service.lignes_actives_le(contexte.base(), sejour["id"], date_jour_str),
+        diurese_ml=_valeur_en_cours(prefixe, "diurese_24h", sauvegardees),
+        drains=drains,
+        poids_kg=sejour.get("poids_kg"),
+        temperature_c=_valeur_en_cours(prefixe, "temperature", sauvegardees),
+    )
+
+    if bilan.net_ml is None:
+        theme.bloc_html(
+            "Bilan hydrique /24 h",
+            "<span style='color:#94a3b8'>Non calculable — il manque "
+            + " et ".join(bilan.manquants) + ".</span>",
+            theme.GRIS,
+        )
+        return
+
+    detail = [
+        f"Entrées {champs.format_valeur(round(bilan.entrees_ml))} mL",
+        f"Diurèse {champs.format_valeur(round(bilan.diurese_ml))} mL",
+    ]
+    if bilan.drains_ml:
+        detail.append(f"Drains {champs.format_valeur(round(bilan.drains_ml))} mL")
+    detail.append(
+        f"Pertes insensibles {champs.format_valeur(round(bilan.pertes_insensibles_ml))} mL"
+    )
+    signe = "+" if bilan.net_ml > 0 else ""
+    note = f"{bilan.formule_insensibles} — {_texte_nombre(bilan.poids_kg)} kg"
+    if bilan.majoration_fievre_ml:
+        note += (
+            f", {_texte_nombre(bilan.temperature_c)} °C "
+            f"(+ {_texte_nombre(round(bilan.majoration_fievre_ml))} mL)"
+        )
+    theme.bloc_html(
+        "Bilan hydrique /24 h",
+        f"<span style='font-size:1.4rem;font-weight:600'>{signe}"
+        f"{champs.format_valeur(round(bilan.net_ml))} mL</span>"
+        f"<br><span style='font-size:.8rem'>{' · '.join(detail)}</span>"
+        f"<br><span style='color:#94a3b8;font-size:.75rem'>{note}</span>",
+        theme.BLEU,
+    )
+
+
+def _bloc_escarres(sejour: dict, date_jour_str: str) -> None:
+    """Une escarre est un risque infectieux — elle vit avec le plan
+    infectieux, pas dans un tiroir séparé sans rapport (remarque du
+    service, 6 septembre)."""
+    st.caption("Escarres")
+    existantes = evolution_service.escarres(contexte.base(), sejour["id"])
+    for e in existantes:
+        col1, col2 = st.columns([4, 1])
+        etat = "guérie le " + format_date_fr(e["date_guerison"]) if e["date_guerison"] else "en cours"
+        col1.markdown(
+            f"**{e['localisation']}** — grade {e['grade'] or '?'} · "
+            f"constatée le {format_date_fr(e['date_constat'])} · {etat}"
+        )
+        if not e["date_guerison"] and col2.button(
+            "Guérie", key=f"escarre_guerie_{e['id']}", use_container_width=True
+        ):
+            evolution_service.modifier_escarre(
+                contexte.base(), e["id"], {"date_guerison": date_jour_str},
+                utilisateur_id=contexte.utilisateur_id(),
+            )
+            st.rerun()
+    with st.form(f"ajout_escarre_{date_jour_str}"):
+        c1, c2 = st.columns(2)
+        localisation = c1.selectbox("Localisation", listes.LOCALISATIONS_ESCARRE)
+        grade = c2.selectbox(
+            "Grade", [g for g, _l in listes.GRADES_ESCARRE],
+            format_func=lambda g: listes.libelle(listes.GRADES_ESCARRE, g),
+        )
+        if st.form_submit_button("Ajouter l'escarre"):
+            evolution_service.ajouter_escarre(
+                contexte.base(), sejour_id=sejour["id"], localisation=localisation,
+                grade=grade, date_constat=date_jour_str,
+                utilisateur_id=contexte.utilisateur_id(),
+            )
+            st.rerun()
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
@@ -303,12 +418,25 @@ def onglet_evolution(sejour: dict) -> None:
                                 cle, libelle, unite, type_, plage,
                                 elements_existants.get(cle), f"evo_{date_jour_str}",
                             )
+                        if cle_plan == "plan_hemodynamique":
+                            _champs_drains(
+                                sejour, date_jour_str, elements, f"evo_{date_jour_str}"
+                            )
+                        if cle_plan == "plan_infectieux":
+                            _bloc_escarres(sejour, date_jour_str)
                         texte_libre = st.text_area(
                             "Commentaire", value=entree.get(cle_plan) or "", height=80,
                             key=f"evo_libre_{date_jour_str}_{cle_plan}",
                             label_visibility="collapsed", placeholder="Commentaire libre…",
                         )
                         elements[f"__libre__{cle_plan}"] = texte_libre
+                        if cle_plan == "plan_hemodynamique":
+                            # Sous la carte, pas dedans : le bilan est une
+                            # synthèse, il se lit après ce qui le compose.
+                            _bloc_bilan_hydrique(
+                                sejour, date_jour_str, elements,
+                                f"evo_{date_jour_str}", elements_existants,
+                            )
 
         conduite = st.text_area(
             "Conduite", value=entree.get("conduite") or "", height=90,
@@ -330,38 +458,6 @@ def onglet_evolution(sejour: dict) -> None:
             )
             st.success("Évolution enregistrée.")
             st.rerun()
-
-        with st.expander("Escarres"):
-            existantes = evolution_service.escarres(contexte.base(), sejour["id"])
-            for e in existantes:
-                col1, col2 = st.columns([4, 1])
-                etat = "guérie le " + format_date_fr(e["date_guerison"]) if e["date_guerison"] else "en cours"
-                col1.markdown(
-                    f"**{e['localisation']}** — grade {e['grade'] or '?'} · "
-                    f"constatée le {format_date_fr(e['date_constat'])} · {etat}"
-                )
-                if not e["date_guerison"] and col2.button(
-                    "Guérie", key=f"escarre_guerie_{e['id']}", use_container_width=True
-                ):
-                    evolution_service.modifier_escarre(
-                        contexte.base(), e["id"], {"date_guerison": date_jour_str},
-                        utilisateur_id=contexte.utilisateur_id(),
-                    )
-                    st.rerun()
-            with st.form(f"ajout_escarre_{date_jour_str}"):
-                c1, c2 = st.columns(2)
-                localisation = c1.selectbox("Localisation", listes.LOCALISATIONS_ESCARRE)
-                grade = c2.selectbox(
-                    "Grade", [g for g, _l in listes.GRADES_ESCARRE],
-                    format_func=lambda g: listes.libelle(listes.GRADES_ESCARRE, g),
-                )
-                if st.form_submit_button("Ajouter l'escarre"):
-                    evolution_service.ajouter_escarre(
-                        contexte.base(), sejour_id=sejour["id"], localisation=localisation,
-                        grade=grade, date_constat=date_jour_str,
-                        utilisateur_id=contexte.utilisateur_id(),
-                    )
-                    st.rerun()
 
     with rendu:
         texte = evolution_service.texte_genere(contexte.base(), sejour["id"], date_jour_str)
