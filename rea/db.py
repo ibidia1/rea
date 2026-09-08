@@ -115,6 +115,45 @@ class Base:
                     "INSERT INTO meta(cle, valeur) VALUES ('version_schema', ?)",
                     (config.__dict__.get("VERSION_SCHEMA", "1"),),
                 )
+        self._rattraper_posologies_initiales()
+
+    def _rattraper_posologies_initiales(self) -> None:
+        """Donne sa première version de posologie à chaque ligne écrite avant
+        qu'elles n'existent (SPEC §5.1, v3.8).
+
+        Une base ouverte par la version précédente contient des lignes de
+        prescription sans aucune version : elles s'afficheraient sans dose. La
+        posologie d'introduction est restée sur la ligne — c'est elle qu'on
+        recopie, datée du début du traitement.
+
+        Idempotent : ne touche qu'aux lignes qui n'ont encore aucune version.
+        Une ligne dont toutes les versions ont été retirées logiquement en
+        garde la trace et n'est donc pas rattrapée non plus.
+        """
+        with self._verrou:
+            lignes = self.connexion.execute(
+                "SELECT l.* FROM prescription_ligne l "
+                "WHERE NOT EXISTS (SELECT 1 FROM prescription_posologie p "
+                "                  WHERE p.ligne_id = l.id)"
+            ).fetchall()
+            for ligne in lignes:
+                self.connexion.execute(
+                    "INSERT INTO prescription_posologie("
+                    "  id, ligne_id, date_debut, dose, unite, rythme,"
+                    "  horaires_override, condition_texte, dilution, nb_ampoules,"
+                    "  vitesse, volume_dilution, volume_24h, additifs,"
+                    "  motif_changement, cree_le, cree_par"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        nouvel_id(), ligne["id"], ligne["date_debut"],
+                        ligne["dose"], ligne["unite"], ligne["rythme"],
+                        ligne["horaires_override"], ligne["condition_texte"],
+                        ligne["dilution"], ligne["nb_ampoules"], ligne["vitesse"],
+                        ligne["volume_dilution"], ligne["volume_24h"],
+                        ligne["additifs"], None,
+                        ligne["cree_le"], ligne["cree_par"],
+                    ),
+                )
 
     def _completer_colonnes_manquantes(self, sql: str) -> None:
         """Ajoute aux tables existantes les colonnes apparues dans le schéma.

@@ -70,6 +70,23 @@ PRESCRIPTIONS = [
     ("KINE", "Verticalisation au fauteuil", None, None, "x1/j", None),
 ]
 
+# Le produit, son indication : les deux tiers de l'identité d'un épisode.
+INDICATIONS = {
+    "Imipénème": "pneumopathie acquise sous ventilation",
+    "Amikacine": "pneumopathie acquise sous ventilation",
+    "Vancomycine": "couverture probabiliste du cathéter",
+    "Métronidazole": "péritonite post-opératoire",
+    "Enoxaparine 4000 UI": "prophylaxie thrombo-embolique",
+    "Lévétiracétam": "prophylaxie des crises, traumatisme crânien",
+    "Oméprazole": "prophylaxie de l'ulcère de stress",
+}
+
+# Une posologie adaptée en cours de route, pour éprouver les deux niveaux.
+CHANGEMENTS_DE_DOSE = {
+    "Amikacine": (1000, "mg", "adaptation à la fonction rénale"),
+    "Vancomycine": (750, "mg", "taux résiduel à 28 mg/L"),
+}
+
 SERINGUES = [
     # (produit, dilution, vitesse de départ, changements [(heure, vitesse)])
     ("Noradrénaline", "0,5 mg/cc", 25, [(12, 18), (16, 15), (22, 8)]),
@@ -128,13 +145,23 @@ def charger(base: Base) -> str:
                                quantification_unite="paquets-année")
 
     for voie, produit, dose, unite, rythme, duree in PRESCRIPTIONS:
-        prescriptions.ajouter_ligne(
+        ligne = prescriptions.ajouter_ligne(
             base, sejour_id=sid, voie=voie, produit=produit, date_debut=J1,
             dose=dose, unite=unite, rythme=rythme, duree_prevue_jours=duree,
+            indication=INDICATIONS.get(produit),
             horaires_override=",".join(
                 str(h) for h in dom_prescription.horaires_par_defaut(produit, rythme)
             ) or None,
         )
+        # Un changement de dose n'ouvre pas un nouveau traitement : le compteur
+        # doit toujours afficher J2, et la durée d'antibiothérapie courir
+        # depuis la première dose (SPEC §5.1).
+        if produit in CHANGEMENTS_DE_DOSE:
+            nouvelle, unite_nouvelle, motif = CHANGEMENTS_DE_DOSE[produit]
+            prescriptions.changer_posologie(
+                base, ligne, a_partir_du=AUJ,
+                dose=nouvelle, unite=unite_nouvelle, motif=motif,
+            )
 
     for produit, dilution, vitesse, changements in SERINGUES:
         ligne = prescriptions.ajouter_ligne(

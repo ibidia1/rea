@@ -183,6 +183,86 @@ def nb_prises_par_jour(rythme: str | None) -> float:
 
 
 # --------------------------------------------------------------------------
+# Deux niveaux : l'épisode et ses versions de posologie (SPEC §5.1)
+# --------------------------------------------------------------------------
+
+#: Ce qu'une version de posologie décide, et que l'épisode ne décide pas.
+CHAMPS_POSOLOGIE = (
+    "dose", "unite", "rythme", "horaires_override", "condition_texte",
+    "dilution", "nb_ampoules", "vitesse", "volume_dilution", "volume_24h",
+    "additifs",
+)
+
+
+def posologie_en_vigueur(posologies: list[dict], a_la_date: str | date) -> dict | None:
+    """La posologie qui s'applique ce jour-là : la dernière commencée avant ou
+    ce jour même.
+
+    Une version vaut jusqu'à ce que la suivante commence — il n'y a pas de date
+    de fin à tenir à jour, donc pas de trou ni de recouvrement possible entre
+    deux versions. Deux versions commencées le même jour (une dose corrigée
+    dans la foulée) se départagent par l'ordre d'écriture : la dernière écrite
+    est celle qui vaut.
+
+    Rien avant la première : une posologie ne s'applique pas rétroactivement à
+    des jours où elle n'était pas prescrite. Relire la pancarte de J2 doit
+    montrer ce qui a été donné à J2, pas ce qu'on donne aujourd'hui.
+    """
+    reference = parse_date(a_la_date)
+    applicables = [
+        p for p in posologies
+        if not p.get("supprime") and parse_date(p["date_debut"]) <= reference
+    ]
+    if not applicables:
+        return None
+    return max(
+        applicables,
+        key=lambda p: (parse_date(p["date_debut"]), p.get("cree_le") or ""),
+    )
+
+
+def appliquer_posologie(ligne: dict, posologie: dict | None) -> dict:
+    """L'épisode vu avec la posologie d'un jour donné.
+
+    Le reste du logiciel lit une « ligne » qui porte à la fois l'identité du
+    traitement et sa dose ; c'est ici que les deux niveaux se recomposent, une
+    fois, au lieu que chaque écran refasse la jointure à sa façon.
+
+    Sans posologie pour ce jour-là — cas d'une base ancienne, avant que les
+    versions n'existent — la ligne est rendue telle quelle : sa posologie
+    d'introduction reste la seule qu'on connaisse, et l'inventer serait pire.
+    """
+    if posologie is None:
+        return dict(ligne)
+    fusion = dict(ligne)
+    for champ in CHAMPS_POSOLOGIE:
+        fusion[champ] = posologie.get(champ)
+    fusion["posologie_id"] = posologie["id"]
+    fusion["posologie_depuis"] = posologie["date_debut"]
+    fusion["posologie_motif"] = posologie.get("motif_changement")
+    return fusion
+
+
+def posologie_differente(posologie: dict, champs: dict) -> bool:
+    """Y a-t-il vraiment un changement ? Réenregistrer une ligne sans rien
+    toucher ne doit pas créer une version : l'historique deviendrait illisible
+    et « J4 : dose inchangée » n'apprend rien à personne."""
+    return any(
+        _comparable(posologie.get(c)) != _comparable(champs.get(c))
+        for c in CHAMPS_POSOLOGIE
+    )
+
+
+def _comparable(valeur):
+    """1 et 1.0 sont la même dose ; "" et None sont la même absence."""
+    if valeur is None or valeur == "":
+        return None
+    if isinstance(valeur, (int, float)):
+        return float(valeur)
+    return valeur
+
+
+# --------------------------------------------------------------------------
 # Ligne active à une date, compteur de jours (SPEC §5.1, §5.4)
 # --------------------------------------------------------------------------
 
@@ -237,6 +317,25 @@ def etiquette_jour(ligne: dict, a_la_date: str | date) -> EtiquetteJour:
         dernier_jour=bool(duree) and jour == duree,
         echue=bool(duree) and jour > duree,
     )
+
+
+def dose_affichee(posologie: dict) -> str:
+    """« 1g x3/j », « 25 cc/h » — la posologie seule, sans le compteur ni le
+    produit. Sert à comparer deux versions d'un même traitement, là où répéter
+    le nom du produit à chaque ligne n'apprendrait rien.
+    """
+    morceaux = []
+    if posologie.get("dose") is not None:
+        morceaux.append(f"{_nombre(posologie['dose'])}{posologie.get('unite') or ''}")
+    if posologie.get("dilution"):
+        morceaux.append(str(posologie["dilution"]))
+    if posologie.get("vitesse") is not None:
+        morceaux.append(f"{_nombre(posologie['vitesse'])} cc/h")
+    if posologie.get("volume_24h") is not None:
+        morceaux.append(f"{_nombre(posologie['volume_24h'])} mL/24 h")
+    if posologie.get("rythme") and posologie["rythme"] != "continu":
+        morceaux.append(str(posologie["rythme"]))
+    return " ".join(morceaux)
 
 
 def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:

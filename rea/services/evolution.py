@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .. import config, listes
 from ..db import Base
+from ..domaine import calculs
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from . import bilans as bilans_service
@@ -355,17 +356,24 @@ def _texte_elements(plan: str, elements: dict) -> str:
         else:
             etat = listes.libelle(listes.TROIS_ETATS_PRESENCE, valeur).lower()
             morceaux.append(f"{libelle} : {etat}")
-    # Une pression artérielle se lit « 105/58 », jamais en deux morceaux.
+    # Une pression artérielle se lit « 105/58 (74) », jamais en trois morceaux.
+    # La PAM entre parenthèses est calculée, pas saisie : la case a disparu de
+    # l'évolution (demande du service, 8 septembre).
     pas, pad = elements.get("pas"), elements.get("pad")
     if pas is not None and pad is not None:
+        position = next(
+            (i for i, m in enumerate(morceaux) if m.startswith("PA systolique")),
+            len(morceaux),
+        )
         morceaux = [
             m for m in morceaux
-            if not m.startswith(("PA systolique", "PA diastolique"))
+            if not m.startswith(("PA systolique", "PA diastolique", "PAM"))
         ]
-        position = next(
-            (i for i, m in enumerate(morceaux) if m.startswith("PAM")), len(morceaux)
-        )
-        morceaux.insert(position, f"PA {_nombre_fr(pas)}/{_nombre_fr(pad)} mmHg")
+        pam = calculs.pression_arterielle_moyenne(pas=pas, pad=pad).valeur
+        texte_pa = f"PA {_nombre_fr(pas)}/{_nombre_fr(pad)}"
+        if pam is not None:
+            texte_pa += f" ({_nombre_fr(pam)})"
+        morceaux.insert(min(position, len(morceaux)), f"{texte_pa} mmHg")
     return " · ".join(morceaux)
 
 

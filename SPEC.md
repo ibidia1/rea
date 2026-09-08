@@ -404,27 +404,75 @@ Bouton « copier » pour collage dans le DMI.
 
 # 5. PRESCRIPTION — cœur du logiciel
 
-## 5.1 Structure d'une ligne
+## 5.1 Structure d'une ligne — deux niveaux
+
+Une ligne de prescription porte deux choses de nature différente : **quel
+traitement** (le produit, pourquoi il a été introduit, depuis quand) et **à
+quelle dose** (dose, rythme, dilution, vitesse). Les confondre coûte cher.
+
+Tienam 1 g × 3/j introduit à J1 passe à 500 mg × 3/j à J4 pour une
+insuffisance rénale. Avec un seul niveau, il faut choisir entre deux erreurs :
+
+- modifier la ligne — et la posologie initiale disparaît, la pancarte de J2 se
+  met à afficher une dose qui n'y a jamais été donnée ;
+- ouvrir une seconde ligne — et le compteur repart à J1, alors que
+  l'antibiothérapie court depuis la première dose.
+
+**La durée d'antibiothérapie est fausse dans les deux cas**, et c'est un
+chiffre qui sort du service, vers le comité des infections. D'où deux niveaux.
+
+### L'épisode de traitement
+
+Ce qu'on traite, et depuis quand. Porte le compteur J{n} et la durée.
 
 | Champ | Notes |
 |---|---|
 | categorie | Voir §5.2 |
 | produit | Nom du médicament |
+| **indication** | Le même produit redonné pour autre chose est un autre épisode |
+| date_debut | **Début de l'épisode : détermine le compteur de jours** |
+| duree_prevue_jours | **Nécessaire pour afficher « J7/7 »** |
+| date_arret | Si arrêtée |
+| statut | Active / Arrêtée |
+| prescripteur | Utilisateur ayant créé la ligne |
+| code_atc | Posé même vide — voir §5 (consommation en DDD) |
+
+### La version de posologie
+
+Combien on donne, et à partir de quand. Un épisode en a au moins une.
+
+| Champ | Notes |
+|---|---|
+| date_debut | Premier jour où cette posologie s'applique |
 | dose + unite | Ex. 1 g |
 | rythme | Ex. ×3/j, ×4/j, continu, conditionnel |
 | horaires | **Calculés** à partir du rythme — voir §5.3 |
 | condition | Ex. « si T ≥ 38,5 °C » |
 | dilution | PSE — ex. 0,5 mg/cc |
-| vitesse | PSE et perfusions — cc/h |
+| vitesse | PSE et perfusions — cc/h, vitesse de départ (§5.5) |
 | nb_ampoules | Affiché entre parenthèses pour les infirmiers |
 | additifs | Ex. « + 3 KCl + 2 NaCl » |
-| date_debut | Détermine le compteur de jours |
-| duree_prevue_jours | **Nécessaire pour afficher « J7/7 »** |
-| date_arret | Si arrêtée |
-| statut | Active / Arrêtée |
-| prescripteur | Utilisateur ayant créé la ligne |
+| motif_changement | Ex. « adaptation à la fonction rénale » |
 
-**Arrêt d'un traitement :** la ligne reste visible, **barrée**. Jamais supprimée.
+**Pas de date de fin.** Une version vaut jusqu'à ce que la suivante commence.
+Une date de fin stockée à côté de la date de début de la suivante, ce sont deux
+façons de dire la même chose — donc tôt ou tard deux réponses différentes à la
+même question.
+
+**Règles qui en découlent :**
+
+- Changer une dose crée une version, jamais un épisode. Le compteur affiche
+  J4, pas J1.
+- La pancarte d'un jour donné montre la posologie **de ce jour-là**. Relire
+  J2 doit montrer ce qui a été donné à J2.
+- Une posologie ne s'applique jamais rétroactivement.
+- Réenregistrer la même dose ne crée pas de version ; une correction saisie le
+  jour même remplace la version du jour au lieu de s'empiler à côté d'elle.
+- La durée d'antibiothérapie et le DOT se comptent **par épisode**. Compter les
+  versions doublerait la durée de tout patient dont la dose a été adaptée.
+
+**Arrêt d'un traitement :** l'épisode reste visible, **barré**. Jamais
+supprimé. L'arrêt porte sur l'épisode, pas sur une version.
 
 ## 5.2 Composition par voie d'administration
 
@@ -877,6 +925,48 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v3.8 — 8 septembre 2026 — un changement de dose n'est pas un nouveau traitement**
+
+Lacune du §5.1, remontée par le service : la ligne de prescription portait à la
+fois l'identité du traitement et sa posologie. Tienam 1 g × 3/j passé à
+500 mg × 3/j à J4 laissait le choix entre modifier la ligne — et perdre la
+posologie initiale — ou en ouvrir une seconde — et faire repartir le compteur à
+J1, alors que l'antibiothérapie court depuis la première dose. La durée de
+traitement rendue au comité des infections était fausse dans les deux cas.
+
+Deux niveaux, décrits au §5.1 réécrit. L'**épisode** (`prescription_ligne`) :
+produit, indication, date de début ; il porte le compteur J{n} et la durée.
+La **version de posologie** (`prescription_posologie`) : dose, rythme,
+dilution, vitesse, à partir de quel jour. Pas de date de fin — une version vaut
+jusqu'à ce que la suivante commence, sinon deux façons de dire la même chose
+finissent par se contredire.
+
+Ce qui en découle et qui est vérifié : la pancarte d'un jour donné montre la
+posologie de ce jour-là, une nouvelle dose ne s'applique pas rétroactivement,
+réenregistrer la même dose ne crée pas de version, une correction saisie le jour
+même remplace celle du jour, et le DOT se compte par épisode — compter les
+versions doublerait la durée de tout patient dont la dose a été adaptée une
+fois.
+
+`modifier_ligne` refuse désormais les champs de posologie. C'est le point de la
+fonction : écrire `{"dose": 500}` directement écraserait la dose initiale sans
+laisser de trace, et la pancarte des jours passés se mettrait à afficher une
+dose qui n'y a jamais été donnée. L'écran Prescrit a un panneau « Changer la
+dose d'un traitement en cours », qui montre l'historique des versions avec leur
+motif.
+
+Une base existante se migre à l'ouverture : chaque ligne reçoit sa première
+version, recopiée de la posologie d'introduction restée sur la ligne. Éprouvé
+sur la base du patient de démonstration — trente-six épisodes, trente-six
+versions, deux ouvertures sans rien dupliquer.
+
+**PAM calculée, case supprimée.** (PAS + 2 × PAD) / 3, écrite `105/58 (74)` dans
+le texte du plan hémodynamique. Trois cases dont une déductible des deux autres,
+c'était une incohérence qui attendait son tour. Le SOFA continue de lire une
+PAM : celle déjà enregistrée si elle existe — elle a pu être relevée sur un
+cathéter artériel, ce que l'estimation au brassard ne remplace pas — et sinon
+celle du calcul.
 
 **v3.7 — 8 septembre 2026 — deux internes sur le même jour, et les deux répétitions avant le premier patient**
 

@@ -174,6 +174,37 @@ def rapport_pao2_fio2(pao2: float | None, fio2: float | None) -> ValeurCalculee:
     )
 
 
+def pression_arterielle_moyenne(
+    *, pas: float | None, pad: float | None
+) -> ValeurCalculee:
+    """PAM estimée depuis la pression au brassard.
+
+    Ce n'est pas une mesure : c'est l'estimation classique, qui suppose que la
+    diastole occupe les deux tiers du cycle. Elle s'écarte du vrai quand la
+    fréquence s'emballe (la diastole raccourcit) — ce qui est le cas de la
+    moitié des patients d'un service de réanimation. Une PAM lue sur un
+    cathéter artériel doit primer sur celle-ci : c'est pourquoi la valeur est
+    calculée à l'affichage et jamais écrite en base, où elle finirait par se
+    confondre avec une mesure invasive.
+
+    Saisir la PAM à côté de la PAS et de la PAD était en outre une occasion
+    d'incohérence : trois cases, dont une déductible des deux autres, et rien
+    qui garantisse qu'elles s'accordent (demande du service, 8 septembre).
+    """
+    valeur = None
+    if pas is not None and pad is not None:
+        valeur = round((float(pas) + 2 * float(pad)) / 3)
+    return ValeurCalculee(
+        cle="pam",
+        libelle="PAM",
+        valeur=valeur,
+        unite="mmHg",
+        formule="(PAS + 2 × PAD) / 3",
+        reference="Estimation usuelle au brassard ; une PAM invasive lui est "
+                  "préférée quand elle existe",
+    )
+
+
 def trou_anionique(
     *, na: float | None, cl: float | None, hco3: float | None
 ) -> ValeurCalculee:

@@ -296,6 +296,11 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
     -- consommation antibiotique en DDD pour 1 000 jours-patients demanderait de
     -- recoder des milliers de lignes à la main (feuille de route §5).
     code_atc           TEXT,
+    -- Posologie À L'INTRODUCTION, écrite une fois et jamais remise à jour.
+    -- Ce qui s'applique un jour donné se lit dans `prescription_posologie`,
+    -- qui contient cette première version et celles qui l'ont suivie. Garder
+    -- ces colonnes permet de relire ce qui a été prescrit au départ sans
+    -- reconstituer l'historique, et à une base ancienne de rester lisible.
     dose               REAL,
     unite              TEXT,
     rythme             TEXT,
@@ -307,7 +312,11 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
     volume_dilution    REAL,            -- mL par prise d'un IV, pour le bilan des entrées
     volume_24h         REAL,            -- mL/24 h (nutrition)
     additifs           TEXT,            -- « + 3 KCl + 2 NaCl »
-    date_debut         TEXT NOT NULL,   -- détermine le compteur de jours
+    -- L'indication fait partie de l'identité de l'épisode : le même produit
+    -- redonné pour autre chose est un autre traitement, et sa durée se compte
+    -- à part.
+    indication         TEXT,
+    date_debut         TEXT NOT NULL,   -- début de l'épisode : porte le compteur J{n}
     duree_prevue_jours INTEGER,         -- nécessaire pour afficher « J7/7 »
     date_arret         TEXT,
     statut             TEXT NOT NULL DEFAULT 'active',  -- active / arretee
@@ -324,6 +333,50 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
 );
 CREATE INDEX IF NOT EXISTS idx_prescription_sejour ON prescription_ligne(sejour_id, supprime);
 CREATE INDEX IF NOT EXISTS idx_prescription_periode ON prescription_ligne(sejour_id, date_debut, date_arret);
+
+-- Les versions successives de posologie d'un même traitement (SPEC §5.1).
+--
+-- Deux niveaux, et il faut les deux. `prescription_ligne` est l'ÉPISODE de
+-- traitement : le produit, son indication, sa date de début. C'est lui qui
+-- porte le compteur J{n} et la durée d'antibiothérapie. Cette table porte les
+-- VERSIONS de posologie : dose, rythme, dilution, vitesse, à partir de quand.
+--
+-- Sans cette séparation, un Tienam 1 g × 3/j passé à 500 mg × 3/j à J4 laissait
+-- le choix entre deux erreurs : modifier la ligne et perdre la posologie
+-- initiale, ou en créer une seconde et faire repartir le compteur à J1 — alors
+-- que l'antibiothérapie court depuis la première dose. La durée de traitement
+-- était fausse dans les deux cas, et c'est elle qu'on rend au comité des
+-- infections (demande du service, 8 septembre).
+--
+-- Il n'y a pas de `date_fin` : une version vaut jusqu'à ce que la suivante
+-- commence. Une date de fin stockée à côté de la date de début de la suivante,
+-- c'est deux façons de dire la même chose, donc tôt ou tard deux réponses
+-- différentes à la même question.
+CREATE TABLE IF NOT EXISTS prescription_posologie (
+    id                 TEXT PRIMARY KEY,
+    ligne_id           TEXT NOT NULL REFERENCES prescription_ligne(id),
+    date_debut         TEXT NOT NULL,   -- premier jour où cette posologie s'applique
+    dose               REAL,
+    unite              TEXT,
+    rythme             TEXT,
+    horaires_override  TEXT,
+    condition_texte    TEXT,
+    dilution           TEXT,            -- PSE : « 0,5 mg/cc »
+    nb_ampoules        REAL,
+    vitesse            REAL,            -- cc/h au départ ; la suite est dans vitesse_reglage
+    volume_dilution    REAL,
+    volume_24h         REAL,
+    additifs           TEXT,
+    motif_changement   TEXT,            -- « adaptation à la fonction rénale »
+    cree_le            TEXT NOT NULL,
+    cree_par           TEXT REFERENCES utilisateur(id),
+    modifie_le         TEXT,
+    modifie_par        TEXT REFERENCES utilisateur(id),
+    supprime           INTEGER NOT NULL DEFAULT 0,
+    version            INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_posologie_ligne
+    ON prescription_posologie(ligne_id, date_debut);
 
 -- Les changements de vitesse d'une seringue ou d'une perfusion.
 --

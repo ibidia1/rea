@@ -340,7 +340,10 @@ def consommation_antibiotiques(base: Base, sejours: list[dict]) -> dict:
     jours_traitement = 0
     molecules: dict[str, int] = {}
     for s in sejours:
-        for ligne in prescriptions_service.toutes_les_lignes(base, s["id"]):
+        # Un épisode par traitement, pas une par changement de dose : compter
+        # les versions doublerait la durée d'antibiothérapie de tout patient
+        # dont la posologie a été adaptée une fois (SPEC §5.1).
+        for ligne in prescriptions_service.episodes(base, s["id"]):
             produit = (ligne.get("produit") or "").lower()
             trouve = next((f for f in fragments if f in produit), None)
             if not trouve:

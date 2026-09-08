@@ -97,6 +97,7 @@ def onglet_prescrit(sejour: dict) -> None:
             voies_remplies, pancarte, date_jour_str, gauche, droite, sedation, vitesses_jour,
         )
         _panneau_vitesses(sejour, pancarte, date_jour_str)
+        _panneau_posologie(sejour, pancarte, date_jour_str)
 
     # Le panneau d'ajout reste à l'écran en permanence à côté de la pancarte
     # (capture du service) plutôt que dans un tiroir qu'il faut rouvrir à
@@ -350,6 +351,80 @@ def _afficher_pancarte(
                         )
 
 
+def _panneau_posologie(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
+    """Changer la dose d'un traitement en cours, sans le rouvrir (SPEC §5.1).
+
+    C'est le geste que ce panneau existe pour rendre naturel. Sans lui, adapter
+    un Tienam à la fonction rénale se faisait en ajoutant une seconde ligne —
+    et le compteur repartait à J1, alors que l'antibiothérapie court depuis la
+    première dose. La durée rendue au comité des infections était fausse.
+
+    Le changement vaut à partir du jour affiché : la pancarte des jours passés
+    continue de montrer la dose qui y a été donnée.
+    """
+    modifiables = [
+        ligne for ligne in pancarte["lignes"]
+        if ligne["statut"] == "active" and ligne["voie"] not in ("SOINS", "KINE")
+    ]
+    if not modifiables:
+        return
+    with st.expander("Changer la dose d'un traitement en cours"):
+        st.caption(
+            "Le traitement garde sa date de début et son compteur de jours : "
+            "seule la posologie change, à partir du jour affiché."
+        )
+        libelles = {
+            ligne["id"]: f"{ligne['produit']} — {dom.dose_affichee(ligne) or 'sans dose'}"
+            for ligne in modifiables
+        }
+        choix = st.selectbox(
+            "Traitement", list(libelles), format_func=lambda i: libelles[i],
+            index=None, placeholder="Choisir un traitement",
+        )
+        if not choix:
+            return
+        versions = prescriptions_service.posologies(contexte.base(), choix)
+        if len(versions) > 1:
+            st.caption("Historique : " + " · ".join(
+                f"{format_date_fr(v['date_debut'])} : {dom.dose_affichee(v) or '—'}"
+                + (f" ({v['motif_changement']})" if v["motif_changement"] else "")
+                for v in versions
+            ))
+        courante = next(l for l in modifiables if l["id"] == choix)
+        c1, c2, c3 = st.columns(3)
+        dose = champs.nombre_saisi(c1.text_input(
+            "Nouvelle dose", value="", placeholder="ex. 500", key=f"pd_{choix}"))
+        unites = list(listes.UNITES)
+        unite = c2.selectbox(
+            "Unité", unites, key=f"pu_{choix}",
+            index=unites.index(courante["unite"]) if courante["unite"] in unites else 0,
+        )
+        rythmes = listes.codes(listes.RYTHMES)
+        rythme = c3.selectbox(
+            "Rythme", rythmes, key=f"pr_{choix}",
+            format_func=lambda c: listes.libelle(listes.RYTHMES, c),
+            index=rythmes.index(courante["rythme"]) if courante["rythme"] in rythmes else 0,
+        )
+        motif = st.text_input(
+            "Motif du changement", value="", key=f"pm_{choix}",
+            placeholder="ex. adaptation à la fonction rénale",
+        )
+        if st.button("Enregistrer la nouvelle posologie", key=f"pb_{choix}",
+                     type="primary"):
+            if dose is None:
+                st.error("Indiquer la nouvelle dose.")
+            else:
+                cree = prescriptions_service.changer_posologie(
+                    contexte.base(), choix, a_partir_du=date_jour_str,
+                    dose=dose, unite=unite, rythme=rythme,
+                    motif=motif or None, utilisateur_id=contexte.utilisateur_id(),
+                )
+                if cree is None:
+                    st.info("Posologie inchangée : rien n'a été enregistré.")
+                else:
+                    st.rerun()
+
+
 def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
     """« AJOUTER UNE LIGNE » — panneau permanent, pas un tiroir à rouvrir.
 
@@ -445,6 +520,14 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
             volume_24h = champs.nombre_saisi(
                 st.text_input("Volume /24 h (mL)", value="", placeholder="ex. 1500")
             )
+        indication = None
+        if voie not in ("SOINS", "KINE"):
+            # Troisième élément d'identité de l'épisode, avec le produit et la
+            # date de début (SPEC §5.1) : le même produit redonné pour autre
+            # chose est un autre traitement, et sa durée se compte à part.
+            indication = st.text_input(
+                "Indication", value="", placeholder="ex. pneumopathie nosocomiale"
+            )
         if voie in ("IV", "PSE"):
             duree_prevue = champs.nombre_saisi(
                 st.text_input(
@@ -480,6 +563,7 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                     volume_dilution=volume_dilution or None, volume_24h=volume_24h or None,
                     additifs=additifs or None, sous_type=sous_type,
                     duree_prevue_jours=int(duree_prevue) if duree_prevue else None,
+                    indication=indication or None,
                     utilisateur_id=contexte.utilisateur_id(),
                 )
                 st.rerun()
