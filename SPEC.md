@@ -926,6 +926,61 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.9 — 8 septembre 2026 — six retours du service sur le prescrit et la feuille**
+
+*Additifs.* Le champ était libre : « KCl 2 », « 2 amp KCl » et « +2K »
+désignaient la même ampoule sans jamais se relire d'une feuille à l'autre.
+Chaque additif se coche maintenant dans une liste
+(`referentiels/additifs_perfusion.json`) avec son nombre d'ampoules, et
+s'imprime « + (1 NaCl + 2 KCl) ». La quantité reste un nombre d'ampoules et
+jamais des millimoles : c'est l'unité dans laquelle l'infirmière prépare, et
+convertir ferait écrire une chose et préparer l'autre. Le texte se relit
+(`analyser_additifs`) pour repeupler le formulaire — sans ce chemin de retour,
+un additif oublié à la ressaisie disparaîtrait de la prescription sans que
+personne ne l'ait décidé ; les anciennes écritures libres restent lisibles.
+
+Au passage : les additifs n'étaient imprimés **nulle part** sur la feuille.
+L'infirmière préparait d'après la pancarte, et la pancarte ne les disait pas.
+Ils suivent maintenant leur produit sur la même ligne.
+
+*Produits d'entrée.* Kabiven, SmofKabiven, Fresubin, G5 %, sérum salé
+isotonique, Ringer Lactate… au catalogue (`referentiels/produits_entrees.json`),
+qui sait aussi si le produit est une perfusion ou une nutrition et pré-remplit
+la case. La liste reste ouverte : un produit absent s'écrit à la main.
+
+*Colonnes de biologie.* Chaque jour prenait quatre colonnes qu'il ait eu un
+bilan ou quatre : deux jours suffisaient à remplir la page, et un patient
+prélevé une fois par jour perdait six colonnes sur huit en cases vides. Les
+douze colonnes ne bougent pas — la page est imprimée — mais les huit qui ne
+sont pas au jour en cours vont désormais aux jours passés **à proportion de
+leurs prélèvements réels**, en remontant jusqu'à les remplir. Un jour sans
+prélèvement ne prend aucune colonne. La feuille montre une semaine de cinétique
+au lieu de deux jours, et une cinétique de créatinine sur une semaine, c'est ce
+qui fait voir une insuffisance rénale qui s'installe. Conséquence technique :
+les filets ne pouvaient plus être un dégradé de fond régulier — ce sont les
+cases qui les portent.
+
+*Créatinine.* Suivie de sa clairance de Cockcroft-Gault entre parenthèses —
+« 184 (41) ». Une créatinine à 184 ne veut pas dire la même chose chez un homme
+de 40 ans de 90 kg et chez une femme de 80 ans de 45. Calculée, jamais saisie,
+et rien affiché quand il manque le poids, l'âge ou le sexe. Elle reste une
+grandeur physiologique : aucune adaptation de dose n'en est déduite (§3.1).
+
+*Bilan infectieux.* Une ligne par type — CRP, PCT, ECBU, PDP, Hémocultures, PL
+— chacune montrant la suite datée de ses résultats
+(« 07/09 : 210 → 08/09 : 185 → 10/09 : 56 »). Le bloc listait les six derniers
+résultats tous types confondus : deux hémocultures et une CRP suffisaient à
+faire disparaître l'ECBU de la veille, et la cinétique d'une CRP ne se lisait
+nulle part alors que c'est elle, plus que sa valeur du jour, qui dit si
+l'antibiothérapie marche. Une ligne vide reste imprimée : « PL » sans rien en
+face se lit « pas de ponction lombaire », ce qui est une information ; une ligne
+absente ne se lit pas du tout. La colonne du prélèvement passe de 166 à 78 px,
+la place gagnée va à la cinétique. La PCT était demandable sans être
+saisissable — elle entre au catalogue d'analytes.
+
+*CRP.* Retirée du récapitulatif de chimie : l'écrire aux deux endroits donnait
+deux cinétiques à lire pour un seul paramètre.
+
 **v3.8 — 8 septembre 2026 — un changement de dose n'est pas un nouveau traitement**
 
 Lacune du §5.1, remontée par le service : la ligne de prescription portait à la

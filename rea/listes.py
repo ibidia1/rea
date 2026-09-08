@@ -97,6 +97,13 @@ ORDRE_VOIES = _charger("voies", "ordre")
 # Sous-types de la voie « Entrées » : une perfusion se prescrit en cc/h, une
 # nutrition en volume sur 24 h. Les deux comptent dans le bilan des entrées.
 SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
+
+# Ce qui passe dans une voie « Entrées », et ce qu'on ajoute dans le flacon.
+# Les deux étaient des champs libres : « SG5 », « G5% » et « sérum glucosé 5 »
+# désignaient le même soluté sans jamais se compter ensemble, et « KCl 2 »,
+# « 2 amp KCl » et « +2K » la même ampoule (demande du service, 8 septembre).
+PRODUITS_ENTREES = _charger("produits_entrees")
+ADDITIFS_PERFUSION = _charger("additifs_perfusion")
 RYTHMES = _charger("rythmes")
 UNITES = _charger("unites")
 STATUTS_LIGNE = _charger("statuts_ligne")
@@ -173,6 +180,22 @@ def libelle(liste, code: str | None, defaut: str = "") -> str:
         if entree[0] == code:
             return entree[1]
     return code
+
+
+def sous_type_du_produit(produit: str | None) -> str | None:
+    """Perfusion ou nutrition ? Le catalogue le sait déjà pour ses produits.
+
+    Comparé sur le libellé et non sur le code : c'est le libellé qui est
+    enregistré sur la ligne, et c'est lui qu'on relit en rouvrant une
+    prescription.
+    """
+    if not produit:
+        return None
+    nom = produit.strip().lower()
+    for entree in PRODUITS_ENTREES:
+        if entree[1].lower() == nom:
+            return entree[2] if len(entree) > 2 else None
+    return None
 
 
 def codes(liste) -> tuple[str, ...]:

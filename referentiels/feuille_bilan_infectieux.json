@@ -1,0 +1,15 @@
+{
+  "nom": "feuille_bilan_infectieux",
+  "libelle": "Lignes du bloc « Bilans infectieux » de la feuille imprimée",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Une ligne par type de prélèvement, dans cet ordre, et sur chaque ligne la suite datée de ses résultats — « 07/09 : 210 → 08/09 : 185 → 10/09 : 56 ». Avant, le bloc listait les six derniers résultats tous types confondus, du plus récent au plus ancien : deux hémocultures et une CRP suffisaient à faire disparaître l'ECBU de la veille, et la cinétique d'une CRP ne se lisait nulle part alors que c'est elle qui dit si l'antibiothérapie marche (demande du service, 8 septembre). Format : [code, libellé, source] ; source « analyte » renvoie au catalogue de biologie (rea/analytes.py), source « prelevement » à referentiels/prelevements.json. Le nombre de lignes vient de la maquette : en ajouter une sans changer la maquette déborderait du bloc.",
+  "valeurs": [
+    ["crp", "CRP", "analyte"],
+    ["pct", "PCT", "analyte"],
+    ["ecbu", "ECBU", "prelevement"],
+    ["pdp", "PDP", "prelevement"],
+    ["hemoculture", "Hémocultures", "prelevement"],
+    ["lcr", "PL", "prelevement"]
+  ]
+}

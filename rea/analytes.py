@@ -96,6 +96,12 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
     )),
     GroupeAnalytes("inflammation", "Inflammation", (
         Analyte("crp", "CRP", "mg/L", borne_haute=5, code_loinc="1988-5", unite_ucum="mg/L"),
+        # La PCT était demandable (referentiels/examens_a_demander.json) sans
+        # être saisissable : le résultat revenait du laboratoire et n'avait nulle
+        # part où s'écrire. Elle a sa ligne au bilan infectieux, avec la CRP
+        # (demande du service, 8 septembre).
+        Analyte("pct", "PCT", "µg/L", borne_haute=0.5, code_loinc="33959-8",
+                unite_ucum="ug/L"),
     )),
     GroupeAnalytes("hepatique", "Bilan hépatique", (
         Analyte("asat", "ASAT", "UI/L", borne_haute=40, code_loinc="1920-8", unite_ucum="U/L"),

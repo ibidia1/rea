@@ -464,7 +464,24 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
 
     champs_voie = listes.VOIES[voie]["champs"]
     with st.form(f"ajout_ligne_{voie}"):
-        produit = st.text_input("Produit / libellé")
+        if voie == "ENTREES":
+            # Les solutés se choisissent dans le catalogue : « SG5 », « G5% » et
+            # « sérum glucosé 5 » désignaient le même produit sans jamais se
+            # compter ensemble (demande du service, 8 septembre). La liste reste
+            # ouverte — un produit absent s'écrit toujours à la main.
+            catalogue = listes.PRODUITS_ENTREES
+            connu = st.selectbox(
+                "Produit", listes.codes(catalogue),
+                format_func=lambda c: listes.libelle(catalogue, c),
+                index=None, placeholder="Choisir un soluté ou une nutrition",
+            )
+            libre = st.text_input(
+                "Autre produit", value="",
+                placeholder="si absent de la liste ci-dessus",
+            )
+            produit = libre.strip() or (listes.libelle(catalogue, connu) if connu else "")
+        else:
+            produit = st.text_input("Produit / libellé")
         dose = unite = rythme = condition = None
         dilution = None
         nb_ampoules = vitesse = volume_dilution = volume_24h = None
@@ -513,9 +530,35 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                 st.text_input("Volume de dilution (mL/prise)", value="", placeholder="ex. 50")
             )
         if "additifs" in champs_voie:
-            additifs = st.text_input("Additifs (ex. + 3 KCl + 2 NaCl)")
+            # Chaque additif se coche avec son nombre d'ampoules, au lieu d'être
+            # retapé en toutes lettres : « KCl 2 », « 2 amp KCl » et « +2K »
+            # désignaient la même chose sans jamais se relire d'une feuille à
+            # l'autre (demande du service, 8 septembre).
+            choisis = st.multiselect(
+                "Additifs", listes.codes(listes.ADDITIFS_PERFUSION),
+                format_func=lambda c: listes.libelle(listes.ADDITIFS_PERFUSION, c),
+                placeholder="Aucun additif",
+            )
+            quantites = []
+            if choisis:
+                colonnes = st.columns(min(len(choisis), 3))
+                for i, code in enumerate(choisis):
+                    nom = listes.libelle(listes.ADDITIFS_PERFUSION, code)
+                    nombre = champs.nombre_saisi(colonnes[i % len(colonnes)].text_input(
+                        nom, value="1", key=f"add_{voie}_{code}",
+                    ))
+                    quantites.append((nom, nombre))
+            additifs = dom.texte_additifs(quantites)
         if "sous_type" in champs_voie:
-            sous_type = st.selectbox("Type", listes.codes(listes.SOUS_TYPES_ENTREES), format_func=lambda c: listes.libelle(listes.SOUS_TYPES_ENTREES, c))
+            # Le catalogue sait déjà si le produit est une perfusion ou une
+            # nutrition : la case s'ouvre dessus, sans empêcher d'en changer.
+            sous_types = listes.codes(listes.SOUS_TYPES_ENTREES)
+            attendu = listes.sous_type_du_produit(produit)
+            sous_type = st.selectbox(
+                "Type", sous_types,
+                format_func=lambda c: listes.libelle(listes.SOUS_TYPES_ENTREES, c),
+                index=sous_types.index(attendu) if attendu in sous_types else 0,
+            )
         if "volume_24h" in champs_voie:
             volume_24h = champs.nombre_saisi(
                 st.text_input("Volume /24 h (mL)", value="", placeholder="ex. 1500")

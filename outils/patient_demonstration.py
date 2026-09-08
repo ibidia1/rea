@@ -97,9 +97,12 @@ SERINGUES = [
 ]
 
 ENTREES = [
-    ("perfusion", "Ringer Lactate", 60, None, "+ 3 KCl"),
-    ("perfusion", "Sérum glucosé 5 %", 40, None, "+ 2 NaCl"),
-    ("nutrition_enterale", "Nutrition entérale", None, 1500, None),
+    # Les produits viennent du catalogue, les additifs de leur liste : c'est
+    # la forme « + (1 NaCl + 2 KCl) » qui s'imprime sur la feuille.
+    ("perfusion", "Ringer Lactate", 60, None, [("KCl", 3)]),
+    ("perfusion", "Sérum glucosé 5 %", 40, None, [("NaCl", 1), ("KCl", 2)]),
+    ("nutrition_parenterale", "SmofKabiven", None, 1500, [("Cernevit", 1)]),
+    ("nutrition_enterale", "Fresubin", None, 1000, None),
 ]
 
 
@@ -176,7 +179,8 @@ def charger(base: Base) -> str:
         prescriptions.ajouter_ligne(
             base, sejour_id=sid, voie="ENTREES", produit=produit, date_debut=J1,
             sous_type=sous_type, vitesse=vitesse, volume_24h=volume,
-            additifs=additifs, rythme="continu",
+            additifs=dom_prescription.texte_additifs(additifs or []),
+            rythme="continu",
         )
 
     # Dispositifs : abords, drains, sédation.

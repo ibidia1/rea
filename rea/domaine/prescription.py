@@ -183,6 +183,61 @@ def nb_prises_par_jour(rythme: str | None) -> float:
 
 
 # --------------------------------------------------------------------------
+# Additifs d'une perfusion (SPEC §5.2)
+# --------------------------------------------------------------------------
+
+def texte_additifs(choix) -> str | None:
+    """« + (1 NaCl + 2 KCl) » à partir des additifs cochés et de leur nombre.
+
+    `choix` : suite de (libellé, nombre). La quantité est un nombre d'ampoules
+    ou de flacons — jamais des millimoles : c'est l'unité dans laquelle
+    l'infirmière prépare, et convertir ici ferait écrire une chose et préparer
+    l'autre.
+
+    La forme est celle demandée par le service (8 septembre) : les additifs
+    entre parenthèses derrière un seul « + », pour qu'un flacon chargé se lise
+    d'un coup d'œil au lieu de s'étaler sur la largeur de la ligne.
+    """
+    morceaux = [
+        f"{_nombre(nombre)} {libelle}".strip()
+        for libelle, nombre in choix
+        if libelle and nombre
+    ]
+    if not morceaux:
+        return None
+    return "+ (" + " + ".join(morceaux) + ")"
+
+
+def analyser_additifs(texte: str | None) -> list[tuple[str, float]]:
+    """Relit « + (1 NaCl + 2 KCl) » pour repeupler le formulaire.
+
+    Sans ce chemin de retour, modifier une perfusion obligerait à retaper ses
+    additifs de mémoire — et un additif oublié à la ressaisie disparaît de la
+    prescription sans que personne ne l'ait décidé.
+
+    Ce qui ne se relit pas est rendu tel quel, avec une quantité de 1 : les
+    lignes écrites à la main avant que la liste n'existe restent lisibles
+    plutôt que d'être effacées par un analyseur trop strict.
+    """
+    if not texte or not texte.strip():
+        return []
+    contenu = texte.strip().lstrip("+").strip()
+    if contenu.startswith("(") and contenu.endswith(")"):
+        contenu = contenu[1:-1]
+    resultat = []
+    for morceau in contenu.split("+"):
+        morceau = morceau.strip()
+        if not morceau:
+            continue
+        tete, _, reste = morceau.partition(" ")
+        try:
+            resultat.append((reste.strip(), float(tete.replace(",", "."))))
+        except ValueError:
+            resultat.append((morceau, 1.0))
+    return resultat
+
+
+# --------------------------------------------------------------------------
 # Deux niveaux : l'épisode et ses versions de posologie (SPEC §5.1)
 # --------------------------------------------------------------------------
 
