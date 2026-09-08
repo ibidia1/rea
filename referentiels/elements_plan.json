@@ -1,9 +1,9 @@
 {
   "nom": "elements_plan",
   "libelle": "Éléments fixes des quatre plans de l'évolution",
-  "version": "2026-09-04.1",
-  "date": "2026-09-04",
-  "note": "Format : [clé, libellé, unité, type, plage affichée en gris].",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Format : [clé, libellé, unité, type, plage affichée en gris]. La PAM ne figure pas parmi les éléments saisis : elle se déduit de la PAS et de la PAD ((PAS + 2 × PAD) / 3) et s'écrit PAS/PAD(PAM) dans le texte du plan. Trois cases dont une déductible des deux autres, c'est une incohérence qui attend son tour.",
   "valeurs": {
     "neurologique": [
       [
@@ -86,13 +86,6 @@
         "mmHg",
         "nombre",
         "60 – 90"
-      ],
-      [
-        "pam",
-        "PAM",
-        "mmHg",
-        "nombre",
-        "≥ 65"
       ],
       [
         "diurese_24h",

@@ -1,0 +1,21 @@
+{
+  "nom": "additifs_perfusion",
+  "libelle": "Additifs ajoutés à une perfusion ou à une nutrition",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Ce qu'on ajoute dans un flacon, et qui s'écrit sur la pancarte après le produit : « + (1 NaCl + 2 KCl) ». Le champ était libre jusqu'ici (demande du service, 8 septembre) : chacun écrivait « KCl 2 », « 2 amp KCl » ou « +2K », et rien ne se relisait d'une feuille à l'autre. La quantité est un nombre d'ampoules ou de flacons — jamais des millimoles : c'est l'unité dans laquelle l'infirmière prépare, et convertir ici ferait écrire une chose et préparer l'autre. L'ordre du fichier est celui de la liste déroulante ; les plus fréquents d'abord.",
+  "valeurs": [
+    ["kcl", "KCl"],
+    ["nacl", "NaCl"],
+    ["mg", "Mg²⁺"],
+    ["gluconate_calcium", "Gluconate de calcium"],
+    ["phocytan", "Phocytan"],
+    ["cernevit", "Cernevit"],
+    ["nonan", "Nonan (oligo-éléments)"],
+    ["vitamine_b1", "Vitamine B1"],
+    ["vitamine_c", "Vitamine C"],
+    ["bicarbonate", "Bicarbonate"],
+    ["insuline", "Insuline"],
+    ["heparine", "Héparine"]
+  ]
+}

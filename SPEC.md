@@ -98,6 +98,74 @@ Deux options, à décider : soit copie en lecture seule pour consultation, soit
 rien du tout et consultation sur le poste du service. Une base modifiable en
 deux endroits produit deux vérités.
 
+## 2.4 Contraintes d'architecture
+
+Cette section voyage avec le code, pas seulement avec la SPEC. Sans elle, on
+proposera dans trois mois une architecture client-serveur déjà écartée — ou on
+oubliera que le multi-postes reste possible.
+
+**État actuel — ne pas dépasser.** Un seul poste Windows, celui du DMI. Un
+seul utilisateur à la fois. Écoute sur 127.0.0.1. SQLite local. Pas de réseau,
+pas d'internet sur cette machine.
+
+**Évolutions possibles, non décidées, à ne pas développer.** Postes du service
+via LAN de l'hôpital, portable de visite, tablettes, mini-PC serveur dédié,
+PIN par utilisateur.
+
+> **Règle** : ne rien coder pour ces cas, mais ne jamais les rendre coûteux.
+
+### Invariants — à respecter dans tout code produit
+
+1. **Aucune hypothèse « un seul utilisateur ».** Toute table modifiable porte
+   `version` (int, défaut 1), `cree_par`, `modifie_par`, `cree_le`,
+   `modifie_le`. `version` est incrémentée à chaque écriture. Personne ne la
+   lit encore.
+2. **Aucune hypothèse « un seul écran ouvert ».** Toute écriture se fait ligne
+   par ligne, au moment de la validation de la ligne. Jamais un formulaire
+   entier enregistré en bloc.
+3. **Un seul endroit contient du SQL.** Les vues et le rendu appellent des
+   fonctions métier, jamais une requête.
+4. **Les calculs sont des fonctions pures**, sans accès base : compteurs de
+   jours, volume des entrées, âge, polytraumatisé, P/F. Testables sans base.
+5. **Aucune valeur en dur hors `config.py`** — `HOTE`, `AUTH_REQUISE`,
+   `FORMAT_PAGE`, `PORT`.
+6. **Les référentiels** (protocoles, listes, seuils, médicaments) sont des
+   fichiers versionnés dans `referentiels/`, jamais du code.
+7. **Le rendu ne calcule jamais.** Il reçoit des valeurs déjà calculées.
+
+**Interdits** : couche d'abstraction générique de base, système de plugins,
+API REST, gestion de rôles, mode hors ligne, cache local. Ces éléments coûtent
+aujourd'hui pour un besoin hypothétique.
+
+### Où ces invariants vivent dans ce dépôt
+
+Trois écarts de nommage avec l'énoncé d'origine, assumés — renommer coûterait
+sans rien apporter :
+
+| Énoncé      | Ici                | Pourquoi                                     |
+|-------------|--------------------|----------------------------------------------|
+| `donnees.py`| `rea/db.py`        | même rôle, nom déjà en place partout          |
+| `metier/`   | `rea/domaine/`     | idem                                          |
+| YAML        | JSON               | pas de dépendance à installer sur un poste hors ligne ; même versionnement, même lisibilité |
+
+Un quatrième écart n'est pas assumé mais **connu** : le SQL est réparti dans
+les services plutôt que réuni dans un seul fichier (invariant 3). Ce qui est
+tenu aujourd'hui, et vérifié par `tests/test_architecture.py`, c'est qu'aucun
+écran ni aucun rendu n'en contient — c'est là que la règle protège vraiment.
+Réunir les quinze services en un fichier reste à faire, sans urgence.
+
+L'invariant 2 est tenu pour les prescriptions (une ligne, une écriture) mais
+pas pour l'évolution ni la saisie d'un bilan, enregistrés d'un bouton. Un
+bilan est un événement unique — un prélèvement, trente analytes — et son
+enregistrement en bloc correspond à la réalité. L'évolution, elle, est un
+vrai écart : deux internes sur le même patient le même jour s'écrasent.
+
+Les invariants vérifiables sont tenus par des tests plutôt que par la
+discipline (`tests/test_architecture.py`) : traçabilité de chaque table,
+incrémentation de `version`, `pin` présent, aucun `DELETE`, aucun SQL dans un
+écran, adresse d'écoute limitée à la boucle locale, et `AUTH_REQUISE` exigé
+dès que `HOTE` s'ouvre.
+
 ---
 
 # 3. RÈGLES DE CONCEPTION
@@ -336,27 +404,75 @@ Bouton « copier » pour collage dans le DMI.
 
 # 5. PRESCRIPTION — cœur du logiciel
 
-## 5.1 Structure d'une ligne
+## 5.1 Structure d'une ligne — deux niveaux
+
+Une ligne de prescription porte deux choses de nature différente : **quel
+traitement** (le produit, pourquoi il a été introduit, depuis quand) et **à
+quelle dose** (dose, rythme, dilution, vitesse). Les confondre coûte cher.
+
+Tienam 1 g × 3/j introduit à J1 passe à 500 mg × 3/j à J4 pour une
+insuffisance rénale. Avec un seul niveau, il faut choisir entre deux erreurs :
+
+- modifier la ligne — et la posologie initiale disparaît, la pancarte de J2 se
+  met à afficher une dose qui n'y a jamais été donnée ;
+- ouvrir une seconde ligne — et le compteur repart à J1, alors que
+  l'antibiothérapie court depuis la première dose.
+
+**La durée d'antibiothérapie est fausse dans les deux cas**, et c'est un
+chiffre qui sort du service, vers le comité des infections. D'où deux niveaux.
+
+### L'épisode de traitement
+
+Ce qu'on traite, et depuis quand. Porte le compteur J{n} et la durée.
 
 | Champ | Notes |
 |---|---|
 | categorie | Voir §5.2 |
 | produit | Nom du médicament |
+| **indication** | Le même produit redonné pour autre chose est un autre épisode |
+| date_debut | **Début de l'épisode : détermine le compteur de jours** |
+| duree_prevue_jours | **Nécessaire pour afficher « J7/7 »** |
+| date_arret | Si arrêtée |
+| statut | Active / Arrêtée |
+| prescripteur | Utilisateur ayant créé la ligne |
+| code_atc | Posé même vide — voir §5 (consommation en DDD) |
+
+### La version de posologie
+
+Combien on donne, et à partir de quand. Un épisode en a au moins une.
+
+| Champ | Notes |
+|---|---|
+| date_debut | Premier jour où cette posologie s'applique |
 | dose + unite | Ex. 1 g |
 | rythme | Ex. ×3/j, ×4/j, continu, conditionnel |
 | horaires | **Calculés** à partir du rythme — voir §5.3 |
 | condition | Ex. « si T ≥ 38,5 °C » |
 | dilution | PSE — ex. 0,5 mg/cc |
-| vitesse | PSE et perfusions — cc/h |
+| vitesse | PSE et perfusions — cc/h, vitesse de départ (§5.5) |
 | nb_ampoules | Affiché entre parenthèses pour les infirmiers |
 | additifs | Ex. « + 3 KCl + 2 NaCl » |
-| date_debut | Détermine le compteur de jours |
-| duree_prevue_jours | **Nécessaire pour afficher « J7/7 »** |
-| date_arret | Si arrêtée |
-| statut | Active / Arrêtée |
-| prescripteur | Utilisateur ayant créé la ligne |
+| motif_changement | Ex. « adaptation à la fonction rénale » |
 
-**Arrêt d'un traitement :** la ligne reste visible, **barrée**. Jamais supprimée.
+**Pas de date de fin.** Une version vaut jusqu'à ce que la suivante commence.
+Une date de fin stockée à côté de la date de début de la suivante, ce sont deux
+façons de dire la même chose — donc tôt ou tard deux réponses différentes à la
+même question.
+
+**Règles qui en découlent :**
+
+- Changer une dose crée une version, jamais un épisode. Le compteur affiche
+  J4, pas J1.
+- La pancarte d'un jour donné montre la posologie **de ce jour-là**. Relire
+  J2 doit montrer ce qui a été donné à J2.
+- Une posologie ne s'applique jamais rétroactivement.
+- Réenregistrer la même dose ne crée pas de version ; une correction saisie le
+  jour même remplace la version du jour au lieu de s'empiler à côté d'elle.
+- La durée d'antibiothérapie et le DOT se comptent **par épisode**. Compter les
+  versions doublerait la durée de tout patient dont la dose a été adaptée.
+
+**Arrêt d'un traitement :** l'épisode reste visible, **barré**. Jamais
+supprimé. L'arrêt porte sur l'épisode, pas sur une version.
 
 ## 5.2 Composition par voie d'administration
 
@@ -809,6 +925,191 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v3.9 — 8 septembre 2026 — six retours du service sur le prescrit et la feuille**
+
+*Additifs.* Le champ était libre : « KCl 2 », « 2 amp KCl » et « +2K »
+désignaient la même ampoule sans jamais se relire d'une feuille à l'autre.
+Chaque additif se coche maintenant dans une liste
+(`referentiels/additifs_perfusion.json`) avec son nombre d'ampoules, et
+s'imprime « + (1 NaCl + 2 KCl) ». La quantité reste un nombre d'ampoules et
+jamais des millimoles : c'est l'unité dans laquelle l'infirmière prépare, et
+convertir ferait écrire une chose et préparer l'autre. Le texte se relit
+(`analyser_additifs`) pour repeupler le formulaire — sans ce chemin de retour,
+un additif oublié à la ressaisie disparaîtrait de la prescription sans que
+personne ne l'ait décidé ; les anciennes écritures libres restent lisibles.
+
+Au passage : les additifs n'étaient imprimés **nulle part** sur la feuille.
+L'infirmière préparait d'après la pancarte, et la pancarte ne les disait pas.
+Ils suivent maintenant leur produit sur la même ligne.
+
+*Produits d'entrée.* Kabiven, SmofKabiven, Fresubin, G5 %, sérum salé
+isotonique, Ringer Lactate… au catalogue (`referentiels/produits_entrees.json`),
+qui sait aussi si le produit est une perfusion ou une nutrition et pré-remplit
+la case. La liste reste ouverte : un produit absent s'écrit à la main.
+
+*Colonnes de biologie.* Chaque jour prenait quatre colonnes qu'il ait eu un
+bilan ou quatre : deux jours suffisaient à remplir la page, et un patient
+prélevé une fois par jour perdait six colonnes sur huit en cases vides. Les
+douze colonnes ne bougent pas — la page est imprimée — mais les huit qui ne
+sont pas au jour en cours vont désormais aux jours passés **à proportion de
+leurs prélèvements réels**, en remontant jusqu'à les remplir. Un jour sans
+prélèvement ne prend aucune colonne. La feuille montre une semaine de cinétique
+au lieu de deux jours, et une cinétique de créatinine sur une semaine, c'est ce
+qui fait voir une insuffisance rénale qui s'installe. Conséquence technique :
+les filets ne pouvaient plus être un dégradé de fond régulier — ce sont les
+cases qui les portent.
+
+*Créatinine.* Suivie de sa clairance de Cockcroft-Gault entre parenthèses —
+« 184 (41) ». Une créatinine à 184 ne veut pas dire la même chose chez un homme
+de 40 ans de 90 kg et chez une femme de 80 ans de 45. Calculée, jamais saisie,
+et rien affiché quand il manque le poids, l'âge ou le sexe. Elle reste une
+grandeur physiologique : aucune adaptation de dose n'en est déduite (§3.1).
+
+*Bilan infectieux.* Une ligne par type — CRP, PCT, ECBU, PDP, Hémocultures, PL
+— chacune montrant la suite datée de ses résultats
+(« 07/09 : 210 → 08/09 : 185 → 10/09 : 56 »). Le bloc listait les six derniers
+résultats tous types confondus : deux hémocultures et une CRP suffisaient à
+faire disparaître l'ECBU de la veille, et la cinétique d'une CRP ne se lisait
+nulle part alors que c'est elle, plus que sa valeur du jour, qui dit si
+l'antibiothérapie marche. Une ligne vide reste imprimée : « PL » sans rien en
+face se lit « pas de ponction lombaire », ce qui est une information ; une ligne
+absente ne se lit pas du tout. La colonne du prélèvement passe de 166 à 78 px,
+la place gagnée va à la cinétique. La PCT était demandable sans être
+saisissable — elle entre au catalogue d'analytes.
+
+*CRP.* Retirée du récapitulatif de chimie : l'écrire aux deux endroits donnait
+deux cinétiques à lire pour un seul paramètre.
+
+**v3.8 — 8 septembre 2026 — un changement de dose n'est pas un nouveau traitement**
+
+Lacune du §5.1, remontée par le service : la ligne de prescription portait à la
+fois l'identité du traitement et sa posologie. Tienam 1 g × 3/j passé à
+500 mg × 3/j à J4 laissait le choix entre modifier la ligne — et perdre la
+posologie initiale — ou en ouvrir une seconde — et faire repartir le compteur à
+J1, alors que l'antibiothérapie court depuis la première dose. La durée de
+traitement rendue au comité des infections était fausse dans les deux cas.
+
+Deux niveaux, décrits au §5.1 réécrit. L'**épisode** (`prescription_ligne`) :
+produit, indication, date de début ; il porte le compteur J{n} et la durée.
+La **version de posologie** (`prescription_posologie`) : dose, rythme,
+dilution, vitesse, à partir de quel jour. Pas de date de fin — une version vaut
+jusqu'à ce que la suivante commence, sinon deux façons de dire la même chose
+finissent par se contredire.
+
+Ce qui en découle et qui est vérifié : la pancarte d'un jour donné montre la
+posologie de ce jour-là, une nouvelle dose ne s'applique pas rétroactivement,
+réenregistrer la même dose ne crée pas de version, une correction saisie le jour
+même remplace celle du jour, et le DOT se compte par épisode — compter les
+versions doublerait la durée de tout patient dont la dose a été adaptée une
+fois.
+
+`modifier_ligne` refuse désormais les champs de posologie. C'est le point de la
+fonction : écrire `{"dose": 500}` directement écraserait la dose initiale sans
+laisser de trace, et la pancarte des jours passés se mettrait à afficher une
+dose qui n'y a jamais été donnée. L'écran Prescrit a un panneau « Changer la
+dose d'un traitement en cours », qui montre l'historique des versions avec leur
+motif.
+
+Une base existante se migre à l'ouverture : chaque ligne reçoit sa première
+version, recopiée de la posologie d'introduction restée sur la ligne. Éprouvé
+sur la base du patient de démonstration — trente-six épisodes, trente-six
+versions, deux ouvertures sans rien dupliquer.
+
+**PAM calculée, case supprimée.** (PAS + 2 × PAD) / 3, écrite `105/58 (74)` dans
+le texte du plan hémodynamique. Trois cases dont une déductible des deux autres,
+c'était une incohérence qui attendait son tour. Le SOFA continue de lire une
+PAM : celle déjà enregistrée si elle existe — elle a pu être relevée sur un
+cathéter artériel, ce que l'estimation au brassard ne remplace pas — et sinon
+celle du calcul.
+
+**v3.7 — 8 septembre 2026 — deux internes sur le même jour, et les deux répétitions avant le premier patient**
+
+L'évolution quotidienne était le dernier écran enregistré en bloc : la visite
+passe, un interne remplit le lit 3, un autre ouvre le même lit pour ajouter une
+ligne, et le second enregistrement écrasait le premier sans que personne ne
+voie jamais que quelque chose avait été perdu. C'est la seule catégorie de bug
+qui détruit des données sans laisser de trace.
+
+La colonne `version` posée en v3.6 servait à ça. À l'enregistrement, si la
+version en base a changé depuis l'ouverture de l'écran, on refuse et on le dit.
+Pas de fusion, pas de résolution de conflit : refuser, expliquer, et laisser
+relire ce qui est en base. `db.ConflitDeVersion`, `Base.verifier_version()`,
+`services.evolution.enregistrer_journee()` — mesures et textes dans une seule
+transaction, derrière la vérification : refuser à moitié serait pire que tout.
+
+Deux répétitions ont été faites, parce qu'un logiciel de service se juge sur ce
+qu'il fait le jour où quelque chose tourne mal :
+
+*Restaurer une sauvegarde pour de vrai.* Une sauvegarde jamais restaurée n'est
+pas une sauvegarde. Sauvegarde écrite par le logiciel, fichier recopié dans un
+autre dossier, application lancée sur cette copie : elle démarre, elle n'écoute
+que sur 127.0.0.1, et le patient, ses trente-six lignes, ses drains et son bilan
+hydrique sont tous là. Le bouton « Restaurer » de l'écran Administration a été
+éprouvé de bout en bout : une saisie erronée commise après la sauvegarde
+disparaît, le filet de sécurité est écrit avant, et le journal garde la trace de
+la restauration.
+
+*Imprimer une pancarte chargée à fond.* `outils/patient_demonstration.py` charge
+un patient qui déborde volontairement — trente-six lignes pour trente
+emplacements, allergies, cinq seringues avec changements de vitesse dans la
+journée, antibiogramme, drains, bilans cochés pour demain. La feuille tient : le
+débordement est annoncé en pied de page voie par voie, les vitesses de PSE
+s'écrivent bien heure par heure (25 à 8 h, 18 à 12 h, 15 à 16 h, 8 à 22 h), et
+rien n'est affirmé qui n'ait été mesuré.
+
+Une surprise, trouvée là où ces répétitions servent à en trouver : les trois
+emplacements de drain de la feuille s'appelaient « Redon 1 / 2 / 3 » quel que
+soit le patient. Sur du papier rempli à la main toutes les heures, rien ne dit
+lequel est le drain thoracique et lequel est le redon de l'abdomen — et deux
+volumes intervertis, c'est une reprise chirurgicale décidée sur le chiffre de
+l'autre drain. Les lignes portent maintenant le nom du drain réellement en
+place ; les emplacements libres gardent un libellé générique, pour un drain posé
+après l'impression. Les valeurs, elles, restent manuscrites : le volume relevé
+dans l'évolution est celui des 24 h, pas celui de chaque heure.
+
+Reste hors de portée d'ici : l'impression physique sur l'imprimante du service.
+Le fichier est prêt ; le passage papier — A3, paysage, marges nulles, sans mise
+à l'échelle — doit être fait sur place.
+
+**v3.6 — 8 septembre 2026 — §2.4, contraintes d'architecture : audit et mise en conformité**
+
+Le §2.4 entre dans la SPEC (état actuel, évolutions écartées, sept invariants,
+interdits). Audit du code existant contre ses huit points, avant le premier
+patient — c'est le dernier moment où le schéma est bon marché.
+
+*Le plus grave, et le plus court à corriger.* Aucune adresse d'écoute n'était
+configurée : Streamlit écoutait sur toutes les interfaces. Le bandeau de
+démarrage annonçait lui-même « Network URL » et « External URL ». Sur le
+réseau de l'hôpital, le dossier de tous les patients était lisible depuis
+n'importe quelle machine, sans mot de passe. Le poste n'a pas de réseau
+aujourd'hui, et c'est la seule raison pour laquelle rien n'est arrivé.
+`config.HOTE = "127.0.0.1"`, repris par le lanceur et par la configuration
+Streamlit ; un test vérifie que les deux ne divergent pas, un autre exige que
+`AUTH_REQUISE` passe à True le jour où `HOTE` s'ouvrira.
+
+*Schéma (points 1 et 2 de l'audit).* `version` manquait sur les 29 tables. Elle
+est ajoutée aux 26 tables modifiables, part à 1 et s'incrémente à chaque
+écriture, en SQL — personne ne la lit encore. `pin` est ajouté à
+`utilisateur`, vide. Quinze tables gagnent au passage les `modifie_le` /
+`modifie_par` qui leur manquaient. Quatre tables restent hors du dispositif,
+chacune pour sa raison, écrite dans l'en-tête du schéma — dont
+`pancarte_snapshot`, dont la colonne `version` désignait déjà le numéro
+d'impression : l'incrémenter aurait renuméroté des feuilles déjà sorties de
+l'imprimante. Une base existante se met à jour toute seule à l'ouverture,
+sans perte : vérifié sur une base de quatre patients.
+
+*Points déjà tenus.* Aucune suppression physique (point 3), trois états
+explicites (point 4), calculs en fonctions pures et rendu qui ne calcule pas
+(points 4 et 7) — ces deux derniers étaient déjà tenus par des tests.
+
+*Point 6, partiellement.* Quatre requêtes SQL vivaient dans deux écrans ; elles
+rejoignent les services. Le SQL reste réparti entre les quinze services plutôt
+que réuni en un fichier : l'écart est décrit au §2.4 plutôt que corrigé dans
+l'urgence, ce qui protège vraiment étant qu'aucun écran n'en contienne.
+
+Ce qui est vérifiable est désormais tenu par des tests plutôt que par la
+discipline : 178 nouvelles vérifications d'architecture.
 
 **v3.5 — 8 septembre 2026 — le bilan hydrique se calcule tout seul**
 

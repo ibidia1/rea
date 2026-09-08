@@ -48,11 +48,30 @@ def test_cinetique_dun_element(base):
 
 
 def test_pression_arterielle_ecrite_en_une_seule_fois(base):
+    """« PA 105/58 (74) mmHg » : la PAM entre parenthèses est calculée, pas
+    saisie — la case a disparu de l'écran."""
     sid = _sejour(base)
     ev.enregistrer_elements(base, sid, "2026-09-03", {"pas": 105, "pad": 58})
     texte = ev.texte_genere(base, sid, "2026-09-03")
-    assert "PA 105/58 mmHg" in texte
+    assert "PA 105/58 (74) mmHg" in texte
     assert "PA systolique" not in texte
+
+
+def test_la_pam_ne_sort_pas_seule_sans_pression_diastolique(base):
+    """Une PAM sans la PAD dont elle se déduit serait une valeur inventée."""
+    sid = _sejour(base)
+    ev.enregistrer_elements(base, sid, "2026-09-03", {"pas": 105})
+    texte = ev.texte_genere(base, sid, "2026-09-03")
+    assert "(" not in texte.split("PA systolique")[1].split("·")[0]
+
+
+def test_la_case_pam_nexiste_plus(base):
+    """Trois cases dont une déductible des deux autres, c'est une incohérence
+    qui attend son tour : la PAM saisie n'est plus enregistrable."""
+    sid = _sejour(base)
+    ev.enregistrer_elements(base, sid, "2026-09-03", {"pas": 105, "pad": 58, "pam": 40})
+    assert "pam" not in ev.elements_du_jour(base, sid, "2026-09-03")
+    assert "(74)" in ev.texte_genere(base, sid, "2026-09-03")
 
 
 def test_temperature_en_virgule_francaise(base):

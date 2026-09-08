@@ -168,3 +168,27 @@ def test_poids_ideal_figure_dans_les_valeurs_derivees():
     )
     ideal = next(v for v in valeurs if v.cle == "poids_ideal")
     assert ideal.valeur == pytest.approx(70.6, abs=0.1)
+
+
+# -- pression artérielle moyenne ---------------------------------------------
+
+def test_pam_estimee_depuis_la_pression_au_brassard():
+    # 120/60 : la diastole compte double, donc 80 — pas 90.
+    assert calculs.pression_arterielle_moyenne(pas=120, pad=60).valeur == 80
+
+
+def test_pam_du_patient_en_choc():
+    assert calculs.pression_arterielle_moyenne(pas=90, pad=45).valeur == 60
+
+
+def test_pam_sans_diastolique_ne_sinvente_pas():
+    assert calculs.pression_arterielle_moyenne(pas=120, pad=None).valeur is None
+    assert calculs.pression_arterielle_moyenne(pas=None, pad=60).valeur is None
+
+
+def test_la_pam_porte_sa_formule_et_dit_quelle_est_une_estimation():
+    """Une PAM lue sur un cathéter artériel doit primer sur celle-ci : encore
+    faut-il que le relecteur sache que celle-ci est calculée."""
+    v = calculs.pression_arterielle_moyenne(pas=120, pad=60)
+    assert v.formule == "(PAS + 2 × PAD) / 3"
+    assert "invasive" in v.reference

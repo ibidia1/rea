@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .. import config, listes
 from ..db import Base
+from ..domaine import calculs
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from . import bilans as bilans_service
@@ -46,6 +47,40 @@ def enregistrer(
     entree = obtenir_ou_creer(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
     champs_valides = {k: v for k, v in valeurs.items() if k in PLANS + ("conduite",)}
     base.mettre_a_jour("evolution_jour", entree["id"], champs_valides, utilisateur_id=utilisateur_id)
+
+
+def enregistrer_journee(
+    base: Base,
+    sejour_id: str,
+    date_jour: str,
+    *,
+    elements: dict,
+    textes: dict,
+    version_attendue: int | None = None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """L'évolution d'un jour, mesures et textes ensemble, en une écriture.
+
+    Les deux vont ensemble : enregistrer les mesures puis échouer sur les
+    textes laisserait une observation à moitié écrite, et personne ne saurait
+    laquelle des deux moitiés est la bonne.
+
+    `version_attendue` est la version lue à l'ouverture de l'écran. Si elle a
+    bougé, quelqu'un d'autre a enregistré cette évolution entre-temps :
+    l'écriture est refusée (`ConflitDeVersion`) plutôt que d'écraser en
+    silence. Deux internes sur le même patient le même jour, c'est le cas
+    ordinaire d'un service, pas un cas limite.
+    """
+    with base.transaction():
+        entree = obtenir_ou_creer(base, sejour_id, date_jour, utilisateur_id=utilisateur_id)
+        base.verifier_version("evolution_jour", entree["id"], version_attendue)
+        enregistrer_elements(
+            base, sejour_id, date_jour, elements, utilisateur_id=utilisateur_id
+        )
+        champs_valides = {k: v for k, v in textes.items() if k in PLANS + ("conduite",)}
+        base.mettre_a_jour(
+            "evolution_jour", entree["id"], champs_valides, utilisateur_id=utilisateur_id
+        )
 
 
 def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
@@ -321,17 +356,24 @@ def _texte_elements(plan: str, elements: dict) -> str:
         else:
             etat = listes.libelle(listes.TROIS_ETATS_PRESENCE, valeur).lower()
             morceaux.append(f"{libelle} : {etat}")
-    # Une pression artérielle se lit « 105/58 », jamais en deux morceaux.
+    # Une pression artérielle se lit « 105/58 (74) », jamais en trois morceaux.
+    # La PAM entre parenthèses est calculée, pas saisie : la case a disparu de
+    # l'évolution (demande du service, 8 septembre).
     pas, pad = elements.get("pas"), elements.get("pad")
     if pas is not None and pad is not None:
+        position = next(
+            (i for i, m in enumerate(morceaux) if m.startswith("PA systolique")),
+            len(morceaux),
+        )
         morceaux = [
             m for m in morceaux
-            if not m.startswith(("PA systolique", "PA diastolique"))
+            if not m.startswith(("PA systolique", "PA diastolique", "PAM"))
         ]
-        position = next(
-            (i for i, m in enumerate(morceaux) if m.startswith("PAM")), len(morceaux)
-        )
-        morceaux.insert(position, f"PA {_nombre_fr(pas)}/{_nombre_fr(pad)} mmHg")
+        pam = calculs.pression_arterielle_moyenne(pas=pas, pad=pad).valeur
+        texte_pa = f"PA {_nombre_fr(pas)}/{_nombre_fr(pad)}"
+        if pam is not None:
+            texte_pa += f" ({_nombre_fr(pam)})"
+        morceaux.insert(min(position, len(morceaux)), f"{texte_pa} mmHg")
     return " · ".join(morceaux)
 
 

@@ -44,3 +44,24 @@ def etat_des_lits(base: Base) -> list[dict]:
 
 def lits_libres(base: Base) -> list[int]:
     return [l["lit"] for l in etat_des_lits(base) if not l["occupe"]]
+
+
+def mouvements_du_jour(base: Base, date_jour: str) -> dict[str, int]:
+    """Admissions et sorties d'une journée — les deux chiffres du bandeau.
+
+    Ici, et pas dans l'écran : une requête écrite dans une vue échappe aux
+    tests, se recopie au prochain écran qui en a besoin, et personne ne sait
+    plus où elle vit (§2.4, invariant 3).
+    """
+    return {
+        "admissions": base.une_ligne(
+            "SELECT COUNT(*) AS n FROM sejour "
+            "WHERE date_admission LIKE ? AND supprime = 0",
+            (f"{date_jour}%",),
+        )["n"],
+        "sorties": base.une_ligne(
+            "SELECT COUNT(*) AS n FROM sejour "
+            "WHERE date_sortie LIKE ? AND supprime = 0",
+            (f"{date_jour}%",),
+        )["n"],
+    }

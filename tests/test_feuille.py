@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from rea.domaine import prescription as dom_p
 from rea.rendu import feuille
 from rea.services import feuille_dossier
 from rea.rendu.gabarit import Brut, VariableInconnue, rendre, variables_attendues
@@ -206,21 +207,52 @@ def test_la_crp_rejoint_les_bilans_infectieux(base, dossier):
     assert "45" in ligne["resultat"]
 
 
-def test_crp_et_microbiologie_partagent_le_meme_tableau_tries_par_date(base, dossier):
-    """J1 (2026-09-04) est plus récent que J2 (2026-09-03) : il passe en
-    tête, comme la microbiologie seule le faisait déjà avant l'ajout de
-    la CRP."""
+def test_le_bilan_infectieux_a_une_ligne_par_type_dans_lordre_du_service(base, dossier):
+    """L'ordre vient du fichier, pas de la date du dernier résultat : on
+    cherche la CRP toujours au même endroit."""
     _pid, sid = dossier
     microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
                               type_prelevement="hemoculture", resultat="negatif")
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T06:00",
                                  valeurs={"crp": 60})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    prelevements = [l["prelevement"] for l in contexte["infRows"] if l["prelevement"]]
-    # La date suit le libellé entre parenthèses : la colonne « Date » a été
-    # retirée du bloc (demande du service, 8 septembre).
-    assert prelevements[0] == "Hémoculture (04/09)"
-    assert prelevements[1] == "CRP (03/09)"
+    assert [l["prelevement"] for l in contexte["infRows"]] == [
+        "CRP", "PCT", "ECBU", "PDP", "Hémocultures", "PL",
+    ]
+
+
+def test_chaque_ligne_infectieuse_montre_sa_cinetique(base, dossier):
+    """C'est la cinétique, plus que la valeur du jour, qui dit si
+    l'antibiothérapie marche."""
+    _pid, sid = dossier
+    for jour, valeur in ((J2, 210), (J1, 185), (AUJ, 56)):
+        bilans.enregistrer_resultats(base, sejour_id=sid,
+                                     date_heure=f"{jour}T06:00", valeurs={"crp": valeur})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    crp = next(l for l in contexte["infRows"] if l["prelevement"] == "CRP")
+    assert crp["resultat"] == "03/09 : 210 → 04/09 : 185 → 05/09 : 56"
+
+
+def test_une_ligne_infectieuse_sans_resultat_existe_quand_meme(base, dossier):
+    """« PL » sans rien en face se lit « pas de ponction lombaire », ce qui est
+    une information ; une ligne absente ne se lit pas du tout."""
+    _pid, sid = dossier
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    pl = next(l for l in contexte["infRows"] if l["prelevement"] == "PL")
+    assert pl["resultat"] == ""
+
+
+def test_la_crp_a_quitte_le_recapitulatif_de_chimie(base, dossier):
+    """Elle appartient au bilan d'infection, et l'écrire aux deux endroits
+    donnait deux cinétiques à lire pour un seul paramètre."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"crp": 60})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    for bloc in ("bioHemato", "bioIono", "bioRenal", "bioHepat", "bioAutres"):
+        assert "CRP" not in [l["libelle"] for l in contexte[bloc]]
+    assert "60" in next(
+        l["resultat"] for l in contexte["infRows"] if l["prelevement"] == "CRP")
 
 
 # -- ce que le logiciel laisse vide -----------------------------------------
@@ -255,7 +287,7 @@ def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
     libelles_sorties = [l["libelle"] for l in contexte["bilanRows"]]
     assert libelles_sorties == [
         "Diurèse (ml/h)", "Bandelette urinaire",
-        "Redon 1 (ml)", "Redon 2 (ml)", "Redon 3 (ml)",
+        "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)",
     ]
 
 
@@ -621,8 +653,7 @@ def test_calcium_magnesium_phosphore_regroupes(base, dossier):
                                  valeurs={"ca": 2.3, "mg": 0.8, "phosphore": 1.0})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     libelles = [l["libelle"] for l in contexte["bioAutres"]]
-    assert "Ca²⁺ / Mg²⁺ / Phosphore" in libelles
-    assert "CRP" in libelles  # pas retirée, seulement complétée
+    assert "Ca / Mg / P" in libelles
 
 
 def test_sao2_vt_ai_sont_reportes(base, dossier):
@@ -676,20 +707,22 @@ def test_un_jour_sur_deux_ne_porte_pas_de_multiplicateur(base, dossier):
     assert ligne["dose"] == "5 mg"
 
 
-def test_un_seul_bilan_un_jour_passe_ne_numerote_pas_les_creneaux(base, dossier):
-    """Le jour n'occupe plus qu'une colonne lisible : les trois cases
-    suivantes redeviennent du papier réglé pour la garde."""
+def test_un_seul_bilan_un_jour_passe_ne_prend_quune_colonne(base, dossier):
+    """Un jour prend autant de colonnes qu'il a de prélèvements. Un « 1 »
+    solitaire au-dessus d'une seule valeur n'apprend rien : pas de
+    numérotation non plus."""
     _pid, sid = dossier
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
                                  valeurs={"na": 140, "k": 4})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     veille = next(j for j in contexte["days"] if j["libelle"] == "04/09")
-    assert veille["slots"] == ["", "", "", ""]
+    assert veille["poids"] == "1"
+    assert veille["slots"] == [""]
 
 
-def test_plusieurs_bilans_le_meme_jour_gardent_leurs_creneaux(base, dossier):
-    """Deux prélèvements dans la journée : les créneaux numérotés disent
-    lequel est lequel."""
+def test_plusieurs_bilans_le_meme_jour_prennent_autant_de_colonnes(base, dossier):
+    """Deux prélèvements dans la journée : deux colonnes, numérotées pour dire
+    laquelle est laquelle."""
     _pid, sid = dossier
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
                                  valeurs={"na": 140})
@@ -697,18 +730,57 @@ def test_plusieurs_bilans_le_meme_jour_gardent_leurs_creneaux(base, dossier):
                                  valeurs={"na": 144})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     veille = next(j for j in contexte["days"] if j["libelle"] == "04/09")
-    assert veille["slots"] == ["1", "2", "3", "4"]
+    assert veille["poids"] == "2"
+    assert veille["slots"] == ["1", "2"]
 
 
 def test_un_gaz_du_sang_compte_comme_un_bilan_du_jour(base, dossier):
-    """Le gaz du sang partage l'en-tête des jours : deux gaz suffisent à
-    justifier les quatre créneaux."""
+    """Le gaz du sang partage l'en-tête des jours : deux gaz valent deux
+    colonnes."""
     _pid, sid = dossier
     bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T06:00", ph=7.4)
     bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T14:00", ph=7.35)
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     veille = next(j for j in contexte["days"] if j["libelle"] == "04/09")
-    assert veille["slots"] == ["1", "2", "3", "4"]
+    assert veille["poids"] == "2"
+
+
+def test_la_largeur_du_recapitulatif_ne_bouge_jamais(base, dossier):
+    """Douze colonnes, toujours : la page est imprimée, elle ne s'élargit
+    pas."""
+    _pid, sid = dossier
+    for jour, nombre in ((J1, 1), (J2, 3)):
+        for i in range(nombre):
+            bilans.enregistrer_resultats(base, sejour_id=sid,
+                                         date_heure=f"{jour}T{6 + i * 4:02d}:00",
+                                         valeurs={"na": 140 + i})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert sum(int(j["poids"]) for j in contexte["days"]) == feuille.NB_COLONNES_BIOLOGIE
+
+
+def test_un_jour_sans_prelevement_ne_prend_aucune_colonne(base, dossier):
+    """Sa place sert à montrer un jour plus ancien qui, lui, a des valeurs :
+    c'est ce qui fait tenir une semaine de cinétique sur la feuille."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T06:00",
+                                 valeurs={"na": 140})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert "04/09" not in [j["libelle"] for j in contexte["days"]]   # J1, rien
+    assert "03/09" in [j["libelle"] for j in contexte["days"]]       # J2, un bilan
+
+
+def test_le_jour_en_cours_garde_ses_quatre_colonnes_meme_charge(base, dossier):
+    """La garde y écrit ses bilans de la nuit : lui reprendre ses créneaux
+    reviendrait à lui demander d'écrire dans la marge."""
+    _pid, sid = dossier
+    for jour in (J1, J2):
+        for i in range(4):
+            bilans.enregistrer_resultats(base, sejour_id=sid,
+                                         date_heure=f"{jour}T{6 + i * 4:02d}:00",
+                                         valeurs={"na": 140 + i})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert contexte["days"][-1]["poids"] == "4"
+    assert contexte["days"][-1]["libelle"] == "05/09"
 
 
 def test_le_jour_en_cours_garde_ses_creneaux_numerotes(base, dossier):
@@ -718,20 +790,20 @@ def test_le_jour_en_cours_garde_ses_creneaux_numerotes(base, dossier):
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     assert contexte["days"][-1]["libelle"] == "05/09"
     assert contexte["days"][-1]["slots"] == ["1", "2", "3", "4"]
+    assert contexte["days"][-1]["poids"] == "4"
 
 
 def test_les_bilans_infectieux_nont_plus_de_colonne_date(base, dossier):
-    """La date suit le libellé : une colonne de 62 px pour cinq caractères
-    prenait la place du résultat."""
+    """La date accompagne chaque résultat sur sa ligne : une colonne de 62 px
+    pour cinq caractères prenait la place du résultat."""
     _pid, sid = dossier
     microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
                               type_prelevement="hemoculture", resultat="positif",
                               germe="E. coli")
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    ligne = next(l for l in contexte["infRows"] if l["prelevement"])
+    ligne = next(l for l in contexte["infRows"] if l["prelevement"] == "Hémocultures")
     assert "date" not in ligne
-    assert ligne["prelevement"] == "Hémoculture (04/09)"
-    assert ligne["resultat"] == "E. coli"
+    assert ligne["resultat"] == "04/09 : E. coli"
 
 
 # -- vitesses écrites heure par heure (demande du service, 8 septembre) ------
@@ -850,8 +922,110 @@ def test_un_bilan_antidate_se_range_a_sa_date(base, dossier):
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T23:00",
                                  valeurs={"hb": 8.4})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    # Un seul jour prélevé : il prend une colonne, précédée du papier réglé
+    # qui n'a pas trouvé de jour à montrer, et suivie du jour en cours.
+    assert [(j["libelle"], j["poids"]) for j in contexte["days"]] == [
+        ("", "7"), ("03/09", "1"), ("05/09", "4"),
+    ]
     ligne_hb = next(l for l in contexte["bioHemato"] if l["libelle"] == "Hb")
     cellules = re.findall(r">([^<>]*)</div>", ligne_hb["valeurs"].html)
-    # Trois jours de quatre créneaux : le premier jour est J2.
-    assert cellules[0] == "8,4"
-    assert all(c == "" for c in cellules[feuille.NB_CRENEAUX_PAR_JOUR:])
+    assert cellules[7] == "8,4"
+    assert all(c == "" for i, c in enumerate(cellules) if i != 7)
+
+
+# -- les drains portent leur nom sur le papier -------------------------------
+
+def test_les_lignes_de_drain_prennent_le_nom_des_drains_en_place(base, dossier):
+    """Trois emplacements identiques sur du papier rempli à la main, c'est
+    deux volumes intervertis tôt ou tard — et une reprise chirurgicale
+    décidée sur le chiffre de l'autre drain."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                      date_pose=J1, site="Droit")
+    dispositifs.poser(base, sejour_id=sid, type_="redon", date_pose=J1,
+                      site="Abdomen")
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert "Drain thoracique (droit) (ml)" in libelles
+    assert "Redon (abdomen) (ml)" in libelles
+    # L'emplacement inoccupé reste générique : un drain posé après
+    # l'impression doit pouvoir s'écrire quelque part.
+    assert "Drain 3 (ml)" in libelles
+
+
+def test_sans_drain_les_emplacements_restent_generiques(base, dossier):
+    _pid, sid = dossier
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert [l for l in libelles if l.startswith("Drain ")] == [
+        "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)"
+    ]
+
+
+def test_la_sonde_urinaire_noccupe_pas_un_emplacement_de_drain(base, dossier):
+    """Son volume, c'est la diurèse — comptée sur sa propre ligne. L'y
+    reporter la compterait deux fois."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sonde_urinaire", date_pose=J1)
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert "Drain 1 (ml)" in libelles
+
+
+def test_les_valeurs_des_drains_restent_manuscrites(base, dossier):
+    """Le volume relevé dans l'évolution est celui des 24 h ; la ligne
+    imprimée est horaire. L'y imprimer le ferait lire pour autre chose."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="redon", date_pose=J1, site="Abdomen")
+    for ligne in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]:
+        assert ligne["valeurs"].html == ""
+
+
+# -- la créatinine porte sa clairance ---------------------------------------
+
+def test_la_creatinine_est_suivie_de_sa_clairance(base, dossier):
+    """« 184 (32) » : une créatinine à 184 ne veut pas dire la même chose chez
+    un homme de 40 ans de 90 kg et chez une femme de 80 ans de 45."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"creat": 184})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["bioRenal"] if "réat" in l["libelle"])
+    assert "184 (" in ligne["valeurs"].html
+
+
+def test_sans_poids_la_clairance_nest_pas_inventee(base):
+    """Cockcroft-Gault demande le poids : sans lui, la créatinine s'écrit
+    seule plutôt qu'accompagnée d'un chiffre faux."""
+    pid = sejours.creer_patient(base, matricule="M-CL", nom_affichage="Test",
+                                date_naissance="1970-01-01", sexe="M")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
+                               lit_admission=4)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"creat": 184})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = next(l for l in contexte["bioRenal"] if "réat" in l["libelle"])
+    cellules = [c for c in re.findall(r">([^<>]*)</div>", ligne["valeurs"].html) if c]
+    assert cellules == ["184"]
+
+
+def test_les_colonnes_libres_ne_sont_pas_numerotees(base, dossier):
+    """Numéroter du papier réglé promettrait des créneaux d'un jour qui
+    n'existe pas."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"na": 140})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    libre = next(j for j in contexte["days"] if j["libelle"] == "")
+    assert set(libre["slots"]) == {""}
+
+
+def test_les_additifs_sont_imprimes_avec_leur_perfusion(base, dossier):
+    """L'infirmière prépare d'après la pancarte : une pancarte qui ne dit pas
+    les additifs fait préparer un flacon incomplet."""
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="ENTREES", produit="Ringer Lactate",
+        date_debut=J1, sous_type="perfusion", vitesse=60, rythme="continu",
+        additifs=dom_p.texte_additifs([("NaCl", 1), ("KCl", 2)]),
+    )
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne = contexte["entRows"][0]
+    assert ligne["produit"] == "Ringer Lactate (perfusion) + (1 NaCl + 2 KCl)"

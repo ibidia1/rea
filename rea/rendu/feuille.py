@@ -28,7 +28,7 @@ from pathlib import Path
 
 from .. import config, listes, referentiels
 from ..domaine import calculs, prescription as dom
-from ..domaine.dates import format_date_fr, jour_hospitalisation, parse_date
+from ..domaine.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
 from .gabarit import Brut, rendre
 
 MODELE = Path(__file__).resolve().parent.parent.parent / "modeles" / "feuille_reanimation_kairouan.html"
@@ -49,6 +49,16 @@ LIGNES_BILANS_A_FAIRE = 2
 LIGNES_MICROBIO = 6
 NB_JOURS_BIOLOGIE = 3       # deux jours remplis + le jour en cours, laissé libre
 NB_CRENEAUX_PAR_JOUR = 4
+# La largeur du récapitulatif de biologie, en colonnes. Elle ne bouge pas : la
+# maquette est imprimée, et une page ne s'élargit pas.
+NB_COLONNES_BIOLOGIE = NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
+# Ce que le jour en cours garde, quoi qu'il arrive : la garde y écrit ses
+# bilans à la main pendant la nuit, et lui reprendre ses créneaux reviendrait à
+# lui demander d'écrire dans la marge.
+COLONNES_JOUR_EN_COURS = NB_CRENEAUX_PAR_JOUR
+# Jusqu'où remonter pour remplir les colonnes restantes. Un séjour de trois
+# mois ne justifie pas de parcourir trois mois de dates à chaque impression.
+JOURS_REMONTEE_MAXIMALE = 60
 
 # La journée du service commence à 8 h, pas à minuit (config.HEURE_DEBUT_
 # JOURNEE) : la relève du matin ouvre la feuille, et la colonne « 0 » en tête
@@ -112,14 +122,41 @@ def _grille_vitesses(par_heure: dict[int, float]) -> Brut:
     )
 
 
-def _cellules_valeurs(valeurs: list[str], colonnes: int) -> Brut:
-    """Une valeur par créneau, posée sur le fond réglé de la maquette."""
+def _cellules_valeurs(
+    valeurs: list[str], colonnes: int, bornes: set[int] | None = None
+) -> Brut:
+    """Une valeur par créneau, chaque case portant son propre filet.
+
+    Les traits étaient dessinés par un dégradé de fond régulier, ce qui
+    supposait des colonnes toutes de la même largeur. Depuis que chaque jour
+    prend autant de colonnes qu'il a de bilans, les séparateurs de jour ne
+    tombent plus à intervalle fixe : ce sont les cases elles-mêmes qui les
+    portent, à `bornes` — un trait fin entre deux créneaux d'un même jour, un
+    trait épais quand le jour change.
+
+    Une valeur longue — « 184 (32) » pour une créatinine et sa clairance —
+    passe en plus petit plutôt que d'être coupée : une clairance tronquée se
+    lit comme un autre nombre.
+    """
+    bornes = bornes or set()
     cases = []
     for i in range(colonnes):
         texte = html.escape(valeurs[i]) if i < len(valeurs) and valeurs[i] else ""
+        # Une valeur longue passe en plus petit plutôt que d'être coupée :
+        # « 184 (41) » pour une créatinine et sa clairance, « 2,05/0,62/0,71 »
+        # pour trois ions lus ensemble. Un chiffre tronqué se lit comme un
+        # autre chiffre, ce qui est pire que de le lire en petit.
+        taille = 6 if len(texte) > 10 else 7 if len(texte) > 6 else 8
+        if i == 0:
+            filet = ""
+        elif i in bornes:
+            filet = "border-left:1.5px solid #16201f;"
+        else:
+            filet = "border-left:1px solid #c3cfce;"
         cases.append(
-            '<div style="display:flex;align-items:center;justify-content:center;'
-            'font-size:8px;line-height:1;overflow:hidden">'
+            f'<div style="{filet}display:flex;align-items:center;'
+            f'justify-content:center;font-size:{taille}px;line-height:1;'
+            'overflow:hidden">'
             f"{texte}</div>"
         )
     return Brut(
@@ -200,12 +237,23 @@ def _lignes_prescription(dossier) -> dict:
                 ligne.get("rythme"), ligne.get("horaires_override")
             )
             produit = ligne.get("produit") or ""
-            if voie == "ENTREES" and ligne.get("sous_type"):
+            if voie == "ENTREES":
                 # La colonne Voie a disparu (les blocs sont déjà organisés par
                 # voie) ; ce qu'elle portait d'utile pour les entrées —
                 # perfusion ou nutrition — reste lisible, accolé au produit.
-                sous_type = listes.libelle(listes.SOUS_TYPES_ENTREES, ligne["sous_type"])
-                produit = f"{produit} ({sous_type})"
+                # L'unité qui suit le libellé du sous-type est déjà dans la
+                # colonne Dose : la répéter mangeait la place des additifs.
+                if ligne.get("sous_type"):
+                    sous_type = listes.libelle(
+                        listes.SOUS_TYPES_ENTREES, ligne["sous_type"]
+                    ).split(" (")[0]
+                    produit = f"{produit} ({sous_type.lower()})"
+                # Ce qu'on a mis dans le flacon se lit sur la même ligne que le
+                # flacon. Écrit nulle part sur la feuille imprimée jusqu'ici :
+                # l'infirmière préparait d'après la pancarte, et la pancarte ne
+                # disait pas les additifs (demande du service, 8 septembre).
+                if ligne.get("additifs"):
+                    produit = f"{produit} {ligne['additifs']}"
             if arretee:
                 produit = Brut(
                     '<span class="arretee" style="text-decoration:line-through;'
@@ -304,14 +352,64 @@ def _bilans_a_faire(dossier) -> list[dict]:
     return lignes
 
 
-def _jours_biologie(date_jour: str) -> list[str]:
-    """Les colonnes de jours : les précédents d'abord, le jour en cours en
-    dernier — c'est celui-là que la garde remplira à la main."""
+def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
+    """Comment les douze colonnes du récapitulatif se partagent les jours.
+
+    Douze colonnes, toujours : la page est imprimée, elle ne s'élargit pas.
+    Quatre restent au jour en cours, vides — la garde y écrit ses bilans de la
+    nuit. Les huit autres vont aux jours passés, **chacun prenant autant de
+    colonnes qu'il a réellement de prélèvements** (demande du service,
+    8 septembre).
+
+    Avant, chaque jour prenait quatre colonnes qu'il ait eu un bilan ou
+    quatre : deux jours suffisaient à remplir la page, et un patient prélevé
+    une fois par jour perdait six colonnes sur huit en cases vides. En
+    remontant plus loin quand les jours récents sont maigres, la feuille montre
+    une semaine de cinétique au lieu de deux jours — et une cinétique de
+    créatinine sur une semaine, c'est ce qui fait voir une insuffisance rénale
+    qui s'installe.
+
+    Un jour sans aucun prélèvement ne prend aucune colonne : il n'aurait rien
+    à y écrire, et sa place sert à montrer un jour plus ancien qui, lui, a des
+    valeurs. Si le séjour est trop court pour remplir les huit, les colonnes
+    qui restent sont laissées libres devant les autres, en papier réglé.
+    """
     aujourdhui = parse_date(date_jour)
-    return [
-        (aujourdhui - timedelta(days=n)).isoformat()
-        for n in range(NB_JOURS_BIOLOGIE - 1, -1, -1)
-    ]
+    admission = parse_date((dossier.sejour or {}).get("date_admission")) or aujourdhui
+    restant = NB_COLONNES_BIOLOGIE - COLONNES_JOUR_EN_COURS
+
+    passes: list[dict] = []
+    for recul in range(1, JOURS_REMONTEE_MAXIMALE + 1):
+        if restant <= 0:
+            break
+        jour = aujourdhui - timedelta(days=recul)
+        if jour < admission:
+            break
+        nombre = _nb_prelevements_du_jour(dossier, jour.isoformat())
+        if nombre == 0:
+            continue
+        colonnes = min(nombre, restant)
+        passes.append({"jour": jour.isoformat(), "colonnes": colonnes,
+                       "en_cours": False})
+        restant -= colonnes
+
+    repartition = list(reversed(passes))          # du plus ancien au plus récent
+    if restant > 0:
+        # Séjour trop court, ou pas encore de bilan : le reste est du papier
+        # réglé, sans date, devant les jours qui en ont une.
+        repartition.insert(0, {"jour": None, "colonnes": restant, "en_cours": False})
+    repartition.append({"jour": date_jour, "colonnes": COLONNES_JOUR_EN_COURS,
+                        "en_cours": True})
+    return repartition
+
+
+def _bornes_de_jour(repartition: list[dict]) -> set[int]:
+    """Les colonnes qui ouvrent un jour : c'est là que le trait épais tombe."""
+    bornes, position = set(), 0
+    for groupe in repartition:
+        bornes.add(position)
+        position += groupe["colonnes"]
+    return bornes
 
 
 def _nb_prelevements_du_jour(dossier, jour: str) -> int:
@@ -327,30 +425,33 @@ def _nb_prelevements_du_jour(dossier, jour: str) -> int:
     return len(heures)
 
 
-def _entetes_jours(dossier, jours: list[str]) -> list[dict]:
-    """Les colonnes de jours, avec leurs créneaux numérotés — ou non.
+def _entetes_jours(repartition: list[dict]) -> list[dict]:
+    """Les colonnes de jours, larges de ce que leur jour a de prélèvements.
 
-    Un jour passé qui ne porte qu'un seul bilan n'a pas besoin de ses quatre
-    créneaux numérotés : la valeur tient dans le premier, et les trois cases
-    suivantes redeviennent du papier réglé où la garde écrit à la main
-    (demande du service, 8 septembre). Le jour en cours garde sa numérotation :
-    il est manuscrit d'un bout à l'autre, et les quatre créneaux disent
-    justement combien de bilans y tiennent.
+    Un jour n'a plus ses quatre créneaux numérotés quoi qu'il arrive : il en a
+    autant qu'il a de bilans, et ils ne sont numérotés que s'il y en a
+    plusieurs — un « 1 » solitaire au-dessus d'une seule valeur n'apprend rien.
+    Le jour en cours garde ses quatre créneaux numérotés : il est manuscrit
+    d'un bout à l'autre, et les quatre disent justement combien de bilans y
+    tiennent.
     """
     entetes = []
-    for index, jour in enumerate(jours):
-        en_cours = index == len(jours) - 1
-        numerote = en_cours or _nb_prelevements_du_jour(dossier, jour) > 1
+    for groupe in repartition:
+        colonnes = groupe["colonnes"]
+        # Le groupe sans date est du papier réglé : le numéroter promettrait
+        # des créneaux d'un jour qui n'existe pas.
+        numerote = groupe["en_cours"] or (colonnes > 1 and groupe["jour"])
         entetes.append({
-            "libelle": format_date_fr(jour)[:5],
-            "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)] if numerote
-                     else [""] * NB_CRENEAUX_PAR_JOUR,
+            "libelle": format_date_fr(groupe["jour"])[:5] if groupe["jour"] else "",
+            "poids": str(colonnes),
+            "slots": [str(i + 1) for i in range(colonnes)] if numerote
+                     else [""] * colonnes,
         })
     return entetes
 
 
 def _valeurs_biologie(
-    dossier, jours: list[str], lignes_spec: list[tuple], source: str,
+    dossier, repartition: list[dict], lignes_spec: list[tuple], source: str,
 ) -> list[dict]:
     """Une ligne par paramètre, ses valeurs rangées par jour et par créneau.
 
@@ -363,6 +464,7 @@ def _valeurs_biologie(
     service, 6 septembre : une ligne par paramètre isolé prenait trop de place
     pour des valeurs toujours lues ensemble).
     """
+    bornes = _bornes_de_jour(repartition)
     lignes = []
     for codes, libelle in lignes_spec:
         if isinstance(codes, str):
@@ -370,12 +472,13 @@ def _valeurs_biologie(
         cellules_par_code = []
         for code in codes:
             cellules: list[str] = []
-            for index_jour, jour in enumerate(jours):
-                dernier = index_jour == len(jours) - 1
-                creneaux = [""] * NB_CRENEAUX_PAR_JOUR
-                if not dernier:
-                    creneaux = _creneaux_du_jour(dossier, jour, code, source)
-                cellules.extend(creneaux)
+            for groupe in repartition:
+                if groupe["en_cours"] or groupe["jour"] is None:
+                    cellules.extend([""] * groupe["colonnes"])
+                else:
+                    cellules.extend(_creneaux_du_jour(
+                        dossier, groupe["jour"], code, source, groupe["colonnes"]
+                    ))
             cellules_par_code.append(cellules)
         cellules_combinees = [
             "/".join(v for v in valeurs_du_creneau if v)
@@ -384,20 +487,31 @@ def _valeurs_biologie(
         lignes.append({
             "libelle": libelle,
             "valeurs": _cellules_valeurs(
-                cellules_combinees, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR
+                cellules_combinees, NB_COLONNES_BIOLOGIE, bornes
             ),
         })
     return lignes
 
 
-def _creneaux_du_jour(dossier, jour: str, code: str, source: str) -> list[str]:
+def _creneaux_du_jour(
+    dossier, jour: str, code: str, source: str, colonnes: int
+) -> list[str]:
     """Les valeurs d'un paramètre un jour donné, dans l'ordre des heures."""
     if source == "bilan":
         lignes = [
             l for l in dossier.resultats
             if l["analyte"] == code and (l["date_heure"] or "").startswith(jour)
         ]
-        valeurs = [_nombre(l["valeur_num"]) for l in lignes]
+        if code == "creat":
+            # La clairance suit la créatinine entre parenthèses (demande du
+            # service, 8 septembre) : c'est elle qui dit si le rein décroche,
+            # et une créatinine à 120 ne veut pas dire la même chose chez un
+            # homme de 40 ans de 90 kg et chez une femme de 80 ans de 45.
+            # Calculée, jamais saisie — et rien affiché quand il manque le
+            # poids, l'âge ou le sexe.
+            valeurs = [_creatinine_avec_clairance(dossier, l) for l in lignes]
+        else:
+            valeurs = [_nombre(l["valeur_num"]) for l in lignes]
     else:
         lignes = [
             g for g in dossier.gaz_du_sang
@@ -405,10 +519,33 @@ def _creneaux_du_jour(dossier, jour: str, code: str, source: str) -> list[str]:
         ]
         valeurs = [_nombre(g.get(code)) for g in lignes]
     valeurs = [v for v in valeurs if v]
-    return (valeurs + [""] * NB_CRENEAUX_PAR_JOUR)[:NB_CRENEAUX_PAR_JOUR]
+    return (valeurs + [""] * colonnes)[:colonnes]
 
 
-def _rapport_pf(dossier, jours: list[str]) -> Brut:
+def _creatinine_avec_clairance(dossier, ligne: dict) -> str:
+    """« 184 (32) » — la créatinine, puis sa clairance de Cockcroft-Gault.
+
+    La clairance reste une grandeur physiologique : le logiciel ne déduit
+    jamais de posologie de ce chiffre (SPEC §3.1). Il l'écrit parce que le
+    recalculer de tête à chaque bilan est exactement l'arithmétique qu'on finit
+    par ne plus faire.
+    """
+    texte = _nombre(ligne["valeur_num"])
+    if not texte:
+        return ""
+    sejour = dossier.sejour or {}
+    clairance = calculs.clairance_cockcroft_gault(
+        creatinine_umol_l=ligne["valeur_num"],
+        poids_kg=sejour.get("poids_kg"),
+        age_ans=age_ans(sejour.get("date_naissance"), dossier.date_jour),
+        sexe=sejour.get("sexe"),
+    )
+    if not clairance.disponible:
+        return texte
+    return f"{texte} ({_nombre(round(clairance.valeur))})"
+
+
+def _rapport_pf(dossier, repartition: list[dict]) -> Brut:
     """Le rapport PaO₂/FiO₂, recalculé pour chaque gaz du sang.
 
     C'est le seul chiffre de la feuille qui n'est ni saisi ni recopié : il se
@@ -419,19 +556,22 @@ def _rapport_pf(dossier, jours: list[str]) -> Brut:
     « pas de gaz du sang », jamais « rapport normal ».
     """
     cellules: list[str] = []
-    for index_jour, jour in enumerate(jours):
-        creneaux = [""] * NB_CRENEAUX_PAR_JOUR
-        if index_jour < len(jours) - 1:          # le jour en cours reste à la garde
-            valeurs = []
-            for gaz in dossier.gaz_du_sang:
-                if not (gaz["date_heure"] or "").startswith(jour):
-                    continue
-                rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
-                if rapport.disponible:
-                    valeurs.append(_nombre(rapport.valeur))
-            creneaux = (valeurs + [""] * NB_CRENEAUX_PAR_JOUR)[:NB_CRENEAUX_PAR_JOUR]
-        cellules.extend(creneaux)
-    return _cellules_valeurs(cellules, NB_JOURS_BIOLOGIE * NB_CRENEAUX_PAR_JOUR)
+    for groupe in repartition:
+        colonnes = groupe["colonnes"]
+        if groupe["en_cours"] or groupe["jour"] is None:
+            cellules.extend([""] * colonnes)     # le jour en cours reste à la garde
+            continue
+        valeurs = []
+        for gaz in dossier.gaz_du_sang:
+            if not (gaz["date_heure"] or "").startswith(groupe["jour"]):
+                continue
+            rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
+            if rapport.disponible:
+                valeurs.append(_nombre(rapport.valeur))
+        cellules.extend((valeurs + [""] * colonnes)[:colonnes])
+    return _cellules_valeurs(
+        cellules, NB_COLONNES_BIOLOGIE, _bornes_de_jour(repartition)
+    )
 
 
 def _texte_abrege_dispositif(etat) -> str:
@@ -604,45 +744,62 @@ def _examens_demain(dossier) -> list[dict]:
 
 
 def _microbiologie(dossier) -> list[dict]:
-    """« Bilans infectieux » : les prélèvements microbiologiques, et la CRP
-    avec eux — remarque du service, 6 septembre : elle appartient au même
-    bilan d'infection que les cultures, pas au récapitulatif de chimie
-    générale.
+    """« Bilans infectieux » : une ligne par type de prélèvement, avec sa
+    cinétique — « 07/09 : 210 → 08/09 : 185 → 10/09 : 56 ».
 
-    La date n'a plus sa colonne (demande du service, 8 septembre) : elle suit
-    le nom du prélèvement entre parenthèses. Une colonne de 62 px pour cinq
-    caractères prenait la place du résultat, qui est le seul texte de ce bloc
-    dont la longueur soit imprévisible.
+    Le bloc listait les six derniers résultats tous types confondus, du plus
+    récent au plus ancien. Deux hémocultures et une CRP suffisaient à faire
+    disparaître l'ECBU de la veille, et la cinétique d'une CRP ne se lisait
+    nulle part — alors que c'est elle, plus que sa valeur du jour, qui dit si
+    l'antibiothérapie marche (demande du service, 8 septembre).
+
+    Chaque ligne existe même vide : une ligne « PL » sans rien en face se lit
+    « pas de ponction lombaire », ce qui est une information ; une ligne
+    absente ne se lit pas du tout.
     """
-    brutes = []
-    for ligne in dossier.microbiologie:
+    lignes = []
+    for code, libelle, source in referentiels.charger("feuille_bilan_infectieux"):
+        if source == "analyte":
+            points = _cinetique_analyte(dossier, code)
+        else:
+            points = _cinetique_prelevement(dossier, code)
+        lignes.append({
+            "prelevement": libelle,
+            "resultat": " → ".join(points[-LIMITE_CINETIQUE:]),
+        })
+    return lignes
+
+
+#: Combien de résultats une ligne du bilan infectieux montre au plus. Au-delà,
+#: ce sont les plus récents qui restent : une CRP d'il y a douze jours
+#: n'éclaire plus l'antibiothérapie d'aujourd'hui, et la ligne déborderait.
+LIMITE_CINETIQUE = 6
+
+
+def _cinetique_analyte(dossier, code: str) -> list[str]:
+    lignes = sorted(
+        (l for l in dossier.resultats
+         if l["analyte"] == code and l.get("valeur_num") is not None),
+        key=lambda l: l["date_heure"] or "",
+    )
+    return [
+        f"{format_date_fr(l['date_heure'])[:5]} : {_nombre(l['valeur_num'])}"
+        for l in lignes
+    ]
+
+
+def _cinetique_prelevement(dossier, code: str) -> list[str]:
+    lignes = sorted(
+        (m for m in dossier.microbiologie if m["type_prelevement"] == code),
+        key=lambda m: m["date_prelevement"] or "",
+    )
+    points = []
+    for ligne in lignes:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, ligne["resultat"])
         if ligne["resultat"] == "positif" and ligne.get("germe"):
             resultat = ligne["germe"]
-        brutes.append((
-            ligne["date_prelevement"],
-            {
-                "prelevement": _avec_date(
-                    listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
-                    ligne["date_prelevement"],
-                ),
-                "resultat": resultat,
-            },
-        ))
-    for r in dossier.resultats:
-        if r["analyte"] == "crp" and r.get("valeur_num") is not None:
-            brutes.append((
-                r["date_heure"],
-                {
-                    "prelevement": _avec_date("CRP", r["date_heure"]),
-                    "resultat": f"{_nombre(r['valeur_num'])} mg/L",
-                },
-            ))
-    brutes.sort(key=lambda t: t[0], reverse=True)
-    lignes = [ligne for _date, ligne in brutes[:LIGNES_MICROBIO]]
-    while len(lignes) < LIGNES_MICROBIO:
-        lignes.append({"prelevement": "", "resultat": ""})
-    return lignes
+        points.append(f"{format_date_fr(ligne['date_prelevement'])[:5]} : {resultat}")
+    return points
 
 
 def _avec_date(libelle: str, date_heure: str) -> str:
@@ -663,7 +820,7 @@ def contexte(dossier) -> dict:
     date_jour = dossier.date_jour
 
     prescrit = _lignes_prescription(dossier)
-    jours = _jours_biologie(date_jour)
+    repartition = _repartition_biologie(dossier, date_jour)
     lignes_ref = referentiels.charger("feuille_lignes")
 
     ideal = calculs.poids_ideal_devine(
@@ -696,17 +853,17 @@ def contexte(dossier) -> dict:
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
         "survRowsC": _lignes_manuscrites(lignes_ref["surveillance_c"]),
-        "bilanRows": _lignes_manuscrites(lignes_ref["sorties_drains"]),
+        "bilanRows": _lignes_sorties(dossier, lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
-        "days": _entetes_jours(dossier, jours),
-        "bioHemato": _valeurs_biologie(dossier, jours, list(lignes_ref["hemato"]), "bilan"),
-        "bioIono": _valeurs_biologie(dossier, jours, list(lignes_ref["iono"]), "bilan"),
-        "bioRenal": _valeurs_biologie(dossier, jours, list(lignes_ref["renal"]), "bilan"),
-        "bioHepat": _valeurs_biologie(dossier, jours, list(lignes_ref["hepat"]), "bilan"),
-        "bioAutres": _valeurs_biologie(dossier, jours, list(lignes_ref["autres"]), "bilan"),
-        "gdsGaz": _valeurs_biologie(dossier, jours, list(lignes_ref["gaz"]), "gaz"),
-        "pfRow": _rapport_pf(dossier, jours),
-        "gdsVent": _valeurs_biologie(dossier, jours, list(lignes_ref["ventilation"]), "gaz"),
+        "days": _entetes_jours(repartition),
+        "bioHemato": _valeurs_biologie(dossier, repartition, list(lignes_ref["hemato"]), "bilan"),
+        "bioIono": _valeurs_biologie(dossier, repartition, list(lignes_ref["iono"]), "bilan"),
+        "bioRenal": _valeurs_biologie(dossier, repartition, list(lignes_ref["renal"]), "bilan"),
+        "bioHepat": _valeurs_biologie(dossier, repartition, list(lignes_ref["hepat"]), "bilan"),
+        "bioAutres": _valeurs_biologie(dossier, repartition, list(lignes_ref["autres"]), "bilan"),
+        "gdsGaz": _valeurs_biologie(dossier, repartition, list(lignes_ref["gaz"]), "gaz"),
+        "pfRow": _rapport_pf(dossier, repartition),
+        "gdsVent": _valeurs_biologie(dossier, repartition, list(lignes_ref["ventilation"]), "gaz"),
         "infRows": _microbiologie(dossier),
         "examensDemain": _examens_demain(dossier),
         "pied": _pied(prescrit["debordements"]),
@@ -740,6 +897,40 @@ def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
     return Brut("".join(regles))
 
 
+def _lignes_sorties(dossier, codes) -> list[dict]:
+    """Les lignes de sorties, dont les emplacements de drains sont nommés.
+
+    Un drain porte son nom sur la feuille : « Drain thoracique (droit) », pas
+    « Drain 2 ». Sur du papier rempli à la main toutes les heures, l'infirmière
+    n'a rien pour savoir lequel des trois emplacements est le thoracique et
+    lequel est le redon de l'abdomen — et deux volumes intervertis, c'est une
+    reprise chirurgicale décidée sur un chiffre qui n'est pas le bon.
+
+    Les emplacements que les drains en place n'occupent pas gardent leur
+    libellé générique : un drain posé après l'impression doit pouvoir
+    s'écrire quelque part.
+
+    Les valeurs, elles, restent manuscrites comme le reste de la surveillance
+    horaire — le volume relevé dans l'évolution est celui des 24 h, pas celui
+    de chaque heure, et l'imprimer ici le ferait lire pour autre chose.
+    """
+    drains = [
+        etat for etat in dossier.etats_dispositifs
+        if etat.en_place and listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine")
+    ]
+    lignes = []
+    restants = list(drains)
+    for code, libelle in codes:
+        if code.startswith("drain_") and restants:
+            etat = restants.pop(0)
+            nom = listes.libelle_dispositif(etat.type)
+            if etat.site:
+                nom += f" ({etat.site.lower()})"
+            libelle = f"{nom} (ml)"
+        lignes.append({"libelle": libelle, "valeurs": Brut("")})
+    return lignes
+
+
 def _lignes_manuscrites(codes) -> list[dict]:
     """Des lignes que le logiciel étiquette mais ne remplit pas : les
     constantes horaires sont relevées au lit du malade, sur le papier."""
@@ -747,8 +938,6 @@ def _lignes_manuscrites(codes) -> list[dict]:
 
 
 def _age(sejour: dict, date_jour: str) -> str:
-    from ..domaine.dates import age_ans
-
     age = age_ans(sejour.get("date_naissance"), date_jour)
     return f"{age} ans" if age is not None else ""
 

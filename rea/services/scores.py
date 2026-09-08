@@ -19,6 +19,7 @@ from datetime import date
 
 from .. import aides as fichiers
 from ..db import Base
+from ..domaine import calculs
 from ..domaine import scores as dom
 from ..domaine.dates import parse_date
 from . import aides as faits_service
@@ -47,7 +48,15 @@ def _faits_du_jour(base: Base, sejour_id: str, jour: str) -> dict:
     f["bicarbonates"] = gaz.get("hco3")
 
     elements = evolution_service.elements_du_jour(base, sejour_id, jour)
+    # La PAM n'est plus saisie : elle se déduit de la PAS et de la PAD. Les
+    # évolutions écrites avant ce changement en portent encore une — c'est
+    # elle qui prime, parce qu'elle a pu être relevée sur un cathéter
+    # artériel, ce que le calcul au brassard ne remplace pas.
     f["pam"] = elements.get("pam")
+    if f["pam"] is None:
+        f["pam"] = calculs.pression_arterielle_moyenne(
+            pas=elements.get("pas"), pad=elements.get("pad")
+        ).valeur
     f["diurese_24h"] = elements.get("diurese_24h")
     # Une seule valeur par jour est enregistrée : elle tient lieu de valeur la
     # plus défavorable, faute de pancarte horaire.

@@ -1,0 +1,28 @@
+{
+  "nom": "produits_entrees",
+  "libelle": "Solutés, nutritions et produits d'entrée",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Ce qui passe dans une voie « Entrées », détaillé au lieu d'être retapé à chaque ligne (demande du service, 8 septembre) : « SG5 », « G5% », « sérum glucosé 5 » désignaient le même soluté et ne se comptaient pas ensemble. Format : [code, libellé, sous-type]. Le sous-type pré-remplit la case correspondante du formulaire — une nutrition entérale se prescrit en mL/24 h, une perfusion en cc/h. La liste reste ouverte : un produit absent s'écrit toujours à la main.",
+  "valeurs": [
+    ["ringer_lactate", "Ringer Lactate", "perfusion"],
+    ["ssi", "Sérum salé isotonique 0,9 %", "perfusion"],
+    ["g5", "Sérum glucosé 5 %", "perfusion"],
+    ["g10", "Sérum glucosé 10 %", "perfusion"],
+    ["g30", "Sérum glucosé 30 %", "perfusion"],
+    ["bicarbonate_14", "Bicarbonate 1,4 %", "perfusion"],
+    ["ssh_3", "Sérum salé hypertonique 3 %", "perfusion"],
+    ["mannitol", "Mannitol 20 %", "perfusion"],
+    ["albumine_20", "Albumine 20 %", "perfusion"],
+    ["gelatine", "Gélatine fluide modifiée", "perfusion"],
+    ["kabiven", "Kabiven", "nutrition_parenterale"],
+    ["smofkabiven", "SmofKabiven", "nutrition_parenterale"],
+    ["olimel", "Olimel", "nutrition_parenterale"],
+    ["smoflipid", "SMOFlipid", "nutrition_parenterale"],
+    ["fresubin", "Fresubin", "nutrition_enterale"],
+    ["fresubin_energy", "Fresubin Energy", "nutrition_enterale"],
+    ["isosource", "Isosource", "nutrition_enterale"],
+    ["sondalis", "Sondalis", "nutrition_enterale"],
+    ["eau_sng", "Eau (bolus par SNG)", "nutrition_enterale"]
+  ]
+}

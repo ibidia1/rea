@@ -167,8 +167,11 @@ def test_sofa_calcule_depuis_le_dossier(base):
         base, sejour_id=sid, date_heure="2026-09-01T06:00",
         valeurs={"plq": 45, "creat": 350, "bili": 40},
     )
+    # La PAM n'est plus saisie : le SOFA la déduit de la PAS et de la PAD.
+    # 90/45 → (90 + 2 × 45) / 3 = 60, soit le point de PAM < 70.
     evolution_service.enregistrer_elements(
-        base, sid, "2026-09-01", {"glasgow": 8, "pam": 60, "diurese_24h": 800}
+        base, sid, "2026-09-01",
+        {"glasgow": 8, "pas": 90, "pad": 45, "diurese_24h": 800},
     )
     dispositifs_service.poser(
         base, sejour_id=sid, type_="intubation", date_pose="2026-09-01"
@@ -179,3 +182,22 @@ def test_sofa_calcule_depuis_le_dossier(base):
     assert "Respiration (PaO₂/FiO₂)" in score.manquantes
     assert not score.complet
     assert score.total == 12
+
+
+def test_le_sofa_prefere_une_pam_deja_enregistree_au_calcul(base):
+    """Les évolutions écrites avant la suppression de la case en portent une :
+    elle a pu être relevée sur un cathéter artériel, ce que l'estimation au
+    brassard ne remplace pas."""
+    pid = sejours.creer_patient(base, matricule="M-PAM", nom_affichage="Test",
+                                date_naissance=None)
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-01",
+                               lit_admission=2)
+    # Écrite comme l'ancien écran le faisait, sans passer par le référentiel.
+    base.inserer("evolution_element", {
+        "sejour_id": sid, "date_jour": "2026-09-01", "plan": "hemodynamique",
+        "cle": "pam", "valeur_num": 45, "valeur_texte": None,
+    })
+    evolution_service.enregistrer_elements(
+        base, sid, "2026-09-01", {"pas": 130, "pad": 80})   # calcul → 97
+    faits = scores_service._faits_du_jour(base, sid, "2026-09-01")
+    assert faits["pam"] == 45

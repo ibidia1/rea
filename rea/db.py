@@ -25,6 +25,34 @@ from . import config
 # Mots qui commencent une contrainte de table, pas une colonne.
 _MOTS_CLES_SQL = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
 
+class ConflitDeVersion(Exception):
+    """La ligne a changé entre le moment où l'écran l'a lue et l'enregistrement.
+
+    Deux internes sur le même patient, le même jour : sans cette exception, le
+    second écrase le premier et personne ne voit jamais que quelque chose a été
+    perdu. C'est la seule catégorie de bug qui détruit des données sans laisser
+    de trace — un écran qui refuse est toujours préférable.
+
+    Aucune fusion, aucune résolution de conflit : refuser, dire pourquoi, et
+    laisser l'utilisateur relire ce qui est en base.
+    """
+
+    def __init__(self, table: str, id_ligne: str, attendue: int, actuelle: int):
+        self.table = table
+        self.id_ligne = id_ligne
+        self.attendue = attendue
+        self.actuelle = actuelle
+        super().__init__(
+            f"{table} {id_ligne} : version attendue {attendue}, trouvée {actuelle}"
+        )
+
+
+# `pancarte_snapshot.version` existe depuis l'origine et désigne le numéro
+# d'impression d'une feuille (v1, v2 du même jour) : l'incrémenter à chaque
+# écriture renuméroterait les feuilles déjà sorties de l'imprimante. Cette
+# table est de toute façon immuable — on ne modifie jamais un instantané.
+TABLES_SANS_COMPTEUR_DE_VERSION = {"pancarte_snapshot"}
+
 
 def nouvel_id() -> str:
     return str(uuid.uuid4())
@@ -86,6 +114,45 @@ class Base:
                 self.connexion.execute(
                     "INSERT INTO meta(cle, valeur) VALUES ('version_schema', ?)",
                     (config.__dict__.get("VERSION_SCHEMA", "1"),),
+                )
+        self._rattraper_posologies_initiales()
+
+    def _rattraper_posologies_initiales(self) -> None:
+        """Donne sa première version de posologie à chaque ligne écrite avant
+        qu'elles n'existent (SPEC §5.1, v3.8).
+
+        Une base ouverte par la version précédente contient des lignes de
+        prescription sans aucune version : elles s'afficheraient sans dose. La
+        posologie d'introduction est restée sur la ligne — c'est elle qu'on
+        recopie, datée du début du traitement.
+
+        Idempotent : ne touche qu'aux lignes qui n'ont encore aucune version.
+        Une ligne dont toutes les versions ont été retirées logiquement en
+        garde la trace et n'est donc pas rattrapée non plus.
+        """
+        with self._verrou:
+            lignes = self.connexion.execute(
+                "SELECT l.* FROM prescription_ligne l "
+                "WHERE NOT EXISTS (SELECT 1 FROM prescription_posologie p "
+                "                  WHERE p.ligne_id = l.id)"
+            ).fetchall()
+            for ligne in lignes:
+                self.connexion.execute(
+                    "INSERT INTO prescription_posologie("
+                    "  id, ligne_id, date_debut, dose, unite, rythme,"
+                    "  horaires_override, condition_texte, dilution, nb_ampoules,"
+                    "  vitesse, volume_dilution, volume_24h, additifs,"
+                    "  motif_changement, cree_le, cree_par"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        nouvel_id(), ligne["id"], ligne["date_debut"],
+                        ligne["dose"], ligne["unite"], ligne["rythme"],
+                        ligne["horaires_override"], ligne["condition_texte"],
+                        ligne["dilution"], ligne["nb_ampoules"], ligne["vitesse"],
+                        ligne["volume_dilution"], ligne["volume_24h"],
+                        ligne["additifs"], None,
+                        ligne["cree_le"], ligne["cree_par"],
+                    ),
                 )
 
     def _completer_colonnes_manquantes(self, sql: str) -> None:
@@ -223,12 +290,37 @@ class Base:
         if "modifie_par" in colonnes:
             valeurs["modifie_par"] = utilisateur_id
         affectation = ", ".join(f"{cle} = ?" for cle in valeurs)
+        # §2.4, invariant 1 : `version` s'incrémente à chaque écriture. Personne
+        # ne la lit encore — elle est là pour que détecter un conflit entre deux
+        # postes, le jour venu, ne demande pas de migrer des données cliniques
+        # déjà écrites. Incrémentée en SQL et non en Python : c'est la base qui
+        # doit compter, pas la lecture qui a précédé.
+        if "version" in colonnes and table not in TABLES_SANS_COMPTEUR_DE_VERSION:
+            affectation += ", version = version + 1"
         with self.transaction():
             self.connexion.execute(
                 f"UPDATE {table} SET {affectation} WHERE id = ?",
                 (*valeurs.values(), id_ligne),
             )
             self._journaliser(table, id_ligne, action, utilisateur_id, valeurs)
+
+    def verifier_version(self, table: str, id_ligne: str, version_attendue: int | None) -> None:
+        """Refuse d'écrire si la ligne a bougé depuis sa lecture.
+
+        À appeler dans la même transaction que l'écriture qu'elle protège :
+        vérifier puis écrire en deux temps laisserait passer exactement ce
+        qu'on cherche à empêcher.
+
+        `version_attendue` à None ne vérifie rien — c'est le cas de tous les
+        écrans qui n'ont pas encore besoin de la garde.
+        """
+        if version_attendue is None:
+            return
+        ligne = self.une_ligne(f"SELECT version FROM {table} WHERE id = ?", (id_ligne,))
+        if ligne is None:
+            return
+        if ligne["version"] != version_attendue:
+            raise ConflitDeVersion(table, id_ligne, version_attendue, ligne["version"])
 
     def supprimer_logiquement(
         self, table: str, id_ligne: str, *, utilisateur_id: str | None = None
@@ -452,6 +544,17 @@ class Base:
             parametres = (table,)
         sql += "ORDER BY j.date_heure DESC, j.rowid DESC LIMIT ?"
         return self.requete(sql, (*parametres, limite))
+
+    def tables_journalisees(self) -> list[str]:
+        """Les tables sur lesquelles le journal porte au moins une trace —
+        de quoi peupler le filtre de l'écran d'administration sans que celui-ci
+        ait à écrire du SQL (§2.4, invariant 3)."""
+        return [
+            ligne["table_cible"]
+            for ligne in self.requete(
+                "SELECT DISTINCT table_cible FROM journal ORDER BY table_cible"
+            )
+        ]
 
     def fermer(self) -> None:
         self.arreter_sauvegardes_periodiques()

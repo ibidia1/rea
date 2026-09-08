@@ -127,12 +127,7 @@ _ACTIONS = {
 
 
 def _journal(base: Base) -> None:
-    tables = [
-        ligne["table_cible"]
-        for ligne in base.requete(
-            "SELECT DISTINCT table_cible FROM journal ORDER BY table_cible"
-        )
-    ]
+    tables = base.tables_journalisees()
     gauche, droite = st.columns([1, 3])
     with gauche:
         table = st.selectbox("Table", ["(toutes)"] + tables)
