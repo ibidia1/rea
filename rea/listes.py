@@ -102,6 +102,8 @@ SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
 # Les deux étaient des champs libres : « SG5 », « G5% » et « sérum glucosé 5 »
 # désignaient le même soluté sans jamais se compter ensemble, et « KCl 2 »,
 # « 2 amp KCl » et « +2K » la même ampoule (demande du service, 8 septembre).
+SPECIALITES_AVIS = _charger("specialites_avis")
+GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
 ADDITIFS_PERFUSION = _charger("additifs_perfusion")
 RYTHMES = _charger("rythmes")
@@ -180,6 +182,27 @@ def libelle(liste, code: str | None, defaut: str = "") -> str:
         if entree[0] == code:
             return entree[1]
     return code
+
+
+def champs_exploration(type_: str) -> tuple[dict, ...]:
+    """Les champs d'une exploration, sous une forme que le code peut lire sans
+    connaître par cœur la longueur des tuples du fichier.
+
+    Le format d'origine était `[clé, libellé, unité, type]`, dépaqueté à quatre
+    en trois endroits. Un champ à choix (« syndrome radiologique ») demande une
+    cinquième valeur, ses options — et l'ajouter cassait les trois. Ici, ce qui
+    manque est absent, jamais une erreur : un référentiel qui gagne une colonne
+    ne doit pas arrêter le logiciel au milieu d'une garde.
+    """
+    champs = []
+    for entree in TYPES_EXPLORATION.get(type_, {}).get("valeurs", ()):
+        entree = list(entree) + [None] * (5 - len(entree))
+        cle, libelle, unite, type_champ, options = entree[:5]
+        champs.append({
+            "cle": cle, "libelle": libelle, "unite": unite or "",
+            "type": type_champ, "options": tuple(options or ()),
+        })
+    return tuple(champs)
 
 
 def sous_type_du_produit(produit: str | None) -> str | None:

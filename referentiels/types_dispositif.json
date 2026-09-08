@@ -3,7 +3,7 @@
   "libelle": "Dispositifs et actes invasifs",
   "version": "2026-09-08.2",
   "date": "2026-09-08",
-  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords. Trois clés facultatives : `libelle_repete` et `en_cours_repete` nomment les épisodes suivants du même type chez un même patient (deuxième intubation = réintubation) ; `motifs_retrait` propose une liste de motifs au retrait (une extubation programmée et une extubation accidentelle ne se lisent pas pareil). `draine` marque les dispositifs dont on relève le volume recueilli chaque jour : il entre dans les sorties du bilan hydrique. La sonde urinaire ne le porte pas — son volume est la diurèse, comptée à part.",
+  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords. Trois clés facultatives : `libelle_repete` et `en_cours_repete` nomment les épisodes suivants du même type chez un même patient (deuxième intubation = réintubation) ; `motifs_retrait` propose une liste de motifs au retrait (une extubation programmée et une extubation accidentelle ne se lisent pas pareil). `draine` marque les dispositifs dont on relève le volume recueilli chaque jour : il entre dans les sorties du bilan hydrique. La sonde urinaire ne le porte pas — son volume est la diurèse, comptée à part. Un type marqué `pse` est reporté dans le bloc P.S.E. de la feuille en plus des abords : ce qui coule en continu est une consigne infirmière, et doit être là où les seringues se règlent. Un bloc en une fois n'est pas un dispositif — il se note comme acte, avec sa dose (demande du service, 8 septembre).",
   "valeurs": {
     "ordre": [
       "intubation",
@@ -21,7 +21,9 @@
       "drain_thoracique",
       "drain_abdominal",
       "dve",
-      "eer"
+      "eer",
+      "peridurale",
+      "catheter_alr"
     ],
     "types": {
       "intubation": {
@@ -56,7 +58,9 @@
         ],
         "en_cours": "Sédaté",
         "apres": "Arrêt sédation",
-        "verbe_retrait": "Arrêt de la sédation"
+        "verbe_retrait": "Arrêt de la sédation",
+        "pse": true,
+        "suffixe_pse": "sédation"
       },
       "tracheotomie": {
         "libelle": "Trachéotomie (canule)",
@@ -228,6 +232,43 @@
         "en_cours": "Redon",
         "apres": "Redon retiré",
         "verbe_retrait": "Ablation"
+      },
+      "peridurale": {
+        "libelle": "Péridurale",
+        "sites": [
+          "Thoracique haute (T4-T6)",
+          "Thoracique basse (T7-T10)",
+          "Lombaire"
+        ],
+        "champs": [
+          "molecules",
+          "vitesse"
+        ],
+        "en_cours": "Péridurale",
+        "apres": "Péridurale retirée",
+        "verbe_retrait": "Retirer le cathéter",
+        "pse": true,
+        "suffixe_pse": "péridurale"
+      },
+      "catheter_alr": {
+        "libelle": "Cathéter périnerveux",
+        "sites": [
+          "Bloc serratus",
+          "Bloc paravertébral",
+          "Bloc érecteur du rachis (ESP)",
+          "Bloc TAP",
+          "Bloc fémoral",
+          "Bloc du plexus brachial"
+        ],
+        "champs": [
+          "molecules",
+          "vitesse"
+        ],
+        "en_cours": "Cathéter d'ALR",
+        "apres": "Cathéter d'ALR retiré",
+        "verbe_retrait": "Retirer le cathéter",
+        "pse": true,
+        "suffixe_pse": "ALR"
       }
     },
     "champs": {

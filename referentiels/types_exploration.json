@@ -1,9 +1,9 @@
 {
   "nom": "types_exploration",
   "libelle": "Types d'exploration et valeurs chiffrées",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
-  "note": "Format d'une valeur : [clé, libellé, unité, type]. Types : nombre / texte / trois_etats.",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Format d'une valeur : [clé, libellé, unité, type]. Types : nombre / texte / trois_etats. Format d'un champ : [clé, libellé, unité, type] et, pour un champ à choix, une cinquième valeur qui porte ses options. Le type « liste » ferme la saisie : « alvéolaire », « alvéolaires » et « sd alvéolaire » ne se comptaient pas ensemble. La catégorie « acte » distingue ce qu'on fait au patient de ce qu'on observe chez lui — les deux se saisissent au même endroit, mais une transfusion n'est pas un examen (demande du service, 8 septembre).",
   "valeurs": {
     "dtc": {
       "libelle": "DTC (Doppler transcrânien)",
@@ -214,6 +214,32 @@
       "libelle": "Radiographie thoracique",
       "valeurs": [
         [
+          "syndrome",
+          "Syndrome",
+          "",
+          "liste",
+          [
+            "Syndrome alvéolaire",
+            "Syndrome interstitiel",
+            "Opacité",
+            "Clarté (pneumothorax)",
+            "Épanchement pleural",
+            "Normale"
+          ]
+        ],
+        [
+          "localisation",
+          "Localisation",
+          "",
+          "liste",
+          [
+            "Droit",
+            "Gauche",
+            "Bilatéral",
+            "Diffus"
+          ]
+        ],
+        [
           "foyer",
           "Foyer",
           "",
@@ -221,7 +247,7 @@
         ],
         [
           "siege_foyer",
-          "Siège du foyer",
+          "Précision",
           "",
           "texte"
         ]
@@ -245,6 +271,119 @@
           "Prélèvement associé",
           "",
           "texte"
+        ]
+      ]
+    },
+    "transfusion": {
+      "libelle": "Transfusion",
+      "categorie": "acte",
+      "valeurs": [
+        [
+          "produit",
+          "Produit",
+          "",
+          "liste",
+          [
+            "CGR (culot globulaire)",
+            "PFC (plasma frais congelé)",
+            "CUP (concentré plaquettaire)",
+            "Fibrinogène",
+            "Albumine",
+            "Sang total"
+          ]
+        ],
+        [
+          "nb_poches",
+          "Nombre de poches",
+          "",
+          "nombre"
+        ],
+        [
+          "complication",
+          "Complication",
+          "",
+          "trois_etats"
+        ],
+        [
+          "complication_detail",
+          "Laquelle",
+          "",
+          "texte"
+        ]
+      ]
+    },
+    "alr": {
+      "libelle": "Anesthésie locorégionale",
+      "categorie": "acte",
+      "valeurs": [
+        [
+          "technique",
+          "Technique",
+          "",
+          "liste",
+          [
+            "Péridurale thoracique",
+            "Péridurale lombaire",
+            "Bloc serratus",
+            "Bloc paravertébral",
+            "Bloc TAP",
+            "Bloc érecteur du rachis (ESP)",
+            "Bloc fémoral",
+            "Bloc du plexus brachial",
+            "Rachianesthésie",
+            "Infiltration cicatricielle"
+          ]
+        ],
+        [
+          "cote",
+          "Côté",
+          "",
+          "liste",
+          [
+            "Droit",
+            "Gauche",
+            "Bilatéral",
+            "Médian"
+          ]
+        ],
+        [
+          "anesthesique",
+          "Anesthésique local",
+          "",
+          "liste",
+          [
+            "Bupivacaïne 0,125 %",
+            "Bupivacaïne 0,25 %",
+            "Ropivacaïne 0,2 %",
+            "Ropivacaïne 0,375 %",
+            "Ropivacaïne 0,75 %",
+            "Lidocaïne 1 %",
+            "Lidocaïne 2 %"
+          ]
+        ],
+        [
+          "dose",
+          "Dose injectée",
+          "mg",
+          "nombre"
+        ],
+        [
+          "volume",
+          "Volume injecté",
+          "mL",
+          "nombre"
+        ],
+        [
+          "catheter",
+          "Cathéter laissé en place",
+          "",
+          "trois_etats"
+        ],
+        [
+          "vitesse",
+          "Débit d'entretien",
+          "mL/h",
+          "nombre"
         ]
       ]
     }

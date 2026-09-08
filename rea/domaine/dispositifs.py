@@ -21,6 +21,21 @@ from .. import listes
 from .dates import parse_date
 
 
+def site_en_incise(site: str) -> str:
+    """« Droit » devient « droit », « Thoracique haute (T4-T6) » ne bouge pas.
+
+    Passer tout le site en minuscules abîmait les abréviations : « T4-T6 »
+    s'écrivait « t4-t6 », et un repère anatomique en minuscules ne se lit plus
+    comme un repère. Seule la majuscule initiale tombe, et seulement quand le
+    reste du mot n'en porte aucune.
+    """
+    if not site:
+        return ""
+    if any(c.isupper() for c in site[1:]):
+        return site
+    return site[0].lower() + site[1:]
+
+
 def jour_en_cours(date_debut: str | date, a_la_date: str | date | None = None) -> int:
     """J1 le jour de la pose, J2 le lendemain…"""
     debut = parse_date(date_debut)
@@ -91,7 +106,7 @@ def _precisions(ligne: dict, details: dict) -> str:
     """Site et champs propres au type, ex. « radiale gauche », « 55 cm »."""
     morceaux = []
     if ligne.get("site"):
-        morceaux.append(str(ligne["site"]).lower())
+        morceaux.append(site_en_incise(str(ligne["site"])))
     for cle, valeur in details.items():
         if valeur in (None, "", 0):
             continue

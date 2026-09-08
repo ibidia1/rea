@@ -922,15 +922,15 @@ def test_un_bilan_antidate_se_range_a_sa_date(base, dossier):
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T23:00",
                                  valeurs={"hb": 8.4})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    # Un seul jour prélevé : il prend une colonne, précédée du papier réglé
-    # qui n'a pas trouvé de jour à montrer, et suivie du jour en cours.
+    # Un seul jour prélevé : il ouvre le tableau, à gauche. Le papier réglé
+    # qui n'a pas trouvé de jour à montrer vient après, jamais avant.
     assert [(j["libelle"], j["poids"]) for j in contexte["days"]] == [
-        ("", "7"), ("03/09", "1"), ("05/09", "4"),
+        ("03/09", "1"), ("", "7"), ("05/09", "4"),
     ]
     ligne_hb = next(l for l in contexte["bioHemato"] if l["libelle"] == "Hb")
     cellules = re.findall(r">([^<>]*)</div>", ligne_hb["valeurs"].html)
-    assert cellules[7] == "8,4"
-    assert all(c == "" for i, c in enumerate(cellules) if i != 7)
+    assert cellules[0] == "8,4"
+    assert all(c == "" for c in cellules[1:])
 
 
 # -- les drains portent leur nom sur le papier -------------------------------
@@ -1029,3 +1029,36 @@ def test_les_additifs_sont_imprimes_avec_leur_perfusion(base, dossier):
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     ligne = contexte["entRows"][0]
     assert ligne["produit"] == "Ringer Lactate (perfusion) + (1 NaCl + 2 KCl)"
+
+
+def test_le_tableau_de_biologie_se_remplit_depuis_le_bord_gauche(base, dossier):
+    """Une zone vide en tête donnerait à croire qu'un jour manque : les jours
+    datés ouvrent le tableau, le papier réglé vient après."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"na": 140})
+    colonnes = feuille.contexte(_dossier(base, sid, AUJ))["days"]
+    assert colonnes[0]["libelle"] == "04/09"       # le jour prélevé, à gauche
+    assert colonnes[1]["libelle"] == ""            # puis le papier réglé
+    assert colonnes[-1]["libelle"] == "05/09"      # et le jour en cours au bout
+
+
+# -- Glasgow d'arrivée -------------------------------------------------------
+
+def test_le_glasgow_initial_est_imprime_sous_le_transport(base):
+    """À J3 sous midazolam, personne ne sait plus s'il est arrivé à 15 ou à 6,
+    et c'est un facteur pronostique majeur."""
+    pid = sejours.creer_patient(base, matricule="M-GCS", nom_affichage="Test",
+                                date_naissance="1980-01-01", sexe="M")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
+                               lit_admission=5, glasgow_initial=7)
+    texte = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Glasgow initial" in texte
+    assert texte.index("Transport") < texte.index("Glasgow initial")
+    assert "7" in texte.split("Glasgow initial")[1][:40]
+
+
+def test_sans_glasgow_initial_la_ligne_nest_pas_imprimee(base, dossier):
+    """Une ligne « Glasgow initial : » vide se lit comme un 3."""
+    _pid, sid = dossier
+    assert "Glasgow initial" not in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html

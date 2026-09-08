@@ -238,3 +238,12 @@ def test_le_motif_ne_saffiche_pas_tant_que_le_dispositif_est_en_place(base):
     dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
     etat = dispositifs.etats(base, sid, "2026-08-31")[0]
     assert "accidentelle" not in etat.texte
+
+
+def test_le_repere_anatomique_garde_ses_majuscules_dans_le_texte(base):
+    """« T4-T6 » écrit « t4-t6 » ne se lit plus comme un repère."""
+    from rea.domaine import dispositifs as dom_disp
+    assert dom_disp.site_en_incise("Thoracique haute (T4-T6)") == "Thoracique haute (T4-T6)"
+    assert dom_disp.site_en_incise("Droit") == "droit"
+    assert dom_disp.site_en_incise("Jugulaire interne droite") == "jugulaire interne droite"
+    assert dom_disp.site_en_incise("") == ""

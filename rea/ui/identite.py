@@ -423,6 +423,10 @@ def _modifier_admission(sejour: dict) -> None:
             "Créatinine antérieure (µmol/L)",
             value=_valeur_texte(sejour.get("creatinine_base")), key=f"{prefixe}_creatinine",
         ))
+        glasgow_initial = champs.nombre_saisi(st.text_input(
+            "Glasgow à l'arrivée (3-15)",
+            value=_valeur_texte(sejour.get("glasgow_initial")), key=f"{prefixe}_glasgow",
+        ))
     with col2:
         date_admission = st.date_input(
             "Date d'admission",
@@ -536,6 +540,7 @@ def _modifier_admission(sejour: dict) -> None:
             provenance_type=provenance_type, provenance_detail=provenance_detail or None,
             poids_kg=poids_kg, taille_cm=taille_cm, creatinine_base=creatinine_base,
             type_admission=type_admission, maladie_chronique_igs2=maladie_chronique_igs2,
+            glasgow_initial=int(glasgow_initial) if glasgow_initial else None,
             traumatique=traumatique,
             regions_traumatiques_choisies=regions_choisies,
             regions_traumatiques_precisions=precisions_regions_choisies,

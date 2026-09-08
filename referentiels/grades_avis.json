@@ -1,0 +1,11 @@
+{
+  "nom": "grades_avis",
+  "libelle": "Grade de celui qui a donné l'avis",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Un avis de senior et un avis de résident n'engagent pas la même chose, et la feuille doit le dire : c'est sur cette ligne qu'on décide de rappeler ou non le service. L'abréviation est celle qui s'imprime.",
+  "valeurs": [
+    ["senior", "Dr", "Senior"],
+    ["resident", "Rsdt", "Résident"]
+  ]
+}

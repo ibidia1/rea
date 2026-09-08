@@ -926,6 +926,59 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.10 — 8 septembre 2026 — actes de réanimation, avis spécialisés, Glasgow d'arrivée**
+
+*Correction de la v3.9.* Le tableau de biologie se remplit de gauche à droite.
+Les colonnes libres — quand le séjour est trop court pour remplir les huit — se
+placent **après** les jours datés, jamais avant : une zone vide en tête donnait
+à croire qu'un jour manquait.
+
+*Glasgow initial.* Case fixe sur la feuille, sous le transport, parce que c'est
+le même moment : ce que valait le patient en arrivant. C'est la seule valeur
+neurologique qu'on ne peut plus reconstituer — à J3 sous midazolam, personne ne
+sait plus s'il est arrivé à 15 ou à 6 — et c'est un facteur pronostique majeur
+du traumatisme crânien. Rien n'est imprimé quand elle n'a pas été saisie : une
+ligne « Glasgow initial : » vide se lirait comme un 3.
+
+*Antidater un acte.* La date et l'heure d'une exploration se choisissent, comme
+pour un bilan ou un traitement. C'était une chaîne de caractères pré-remplie à
+« maintenant » : modifiable en théorie, mais il fallait réécrire un horodatage
+ISO à la main, et personne ne le faisait. Un acte fait à 3 h et saisi à la
+relève appartient à la nuit, pas au jour de la frappe.
+
+*Transfusion, radiographie, ALR.* Trois actes qui n'existaient pas. La
+transfusion note son produit (liste fermée : un produit sanguin écrit à la main
+ne se retrouve pas dans une revue de morbidité), son nombre de poches, son heure
+et sa complication éventuelle. La radiographie thoracique note son syndrome —
+alvéolaire, interstitiel, opacité, clarté — et sa localisation. L'anesthésie
+locorégionale se sépare en deux : un bloc en une fois est un **acte** avec sa
+dose ; une péridurale ou un cathéter périnerveux sont des **dispositifs** qui
+coulent, et l'anesthésique local apparaît désormais dans le bloc P.S.E. de la
+feuille avec son débit.
+
+Ce dernier point a demandé de généraliser : la sédation était le seul dispositif
+reporté au bloc P.S.E., par une fonction qui ne connaissait qu'elle. C'est le
+fichier des types qui le déclare maintenant (`pse`), et une péridurale y arrive
+sans qu'on rouvre le rendu. Le site n'y est pas répété — il est déjà sur le
+bandeau des abords, et l'écrire deux fois cassait la grille des seringues.
+
+*Avis spécialisés.* Nouvelle table, saisie sous le plan infectieux, report à
+gauche de la feuille : « Avis CCVT (09/09) : Rsdt X : Pas d'indication
+chirurgicale ». Un avis de neurochirurgie ne se résume pas — « refaire la TDM à
+48 h » est une consigne datée et signée, et c'est sur elle qu'on décide trois
+jours plus tard. Écrits dans le texte libre du plan infectieux, ces avis
+disparaissaient à sa première réécriture. Un avis n'annule jamais le précédent,
+même de la même spécialité : c'est la suite des avis qui raconte l'évolution
+d'une décision chirurgicale, et le second ne se comprend souvent qu'à la lumière
+du premier. Le grade est imprimé parce qu'un avis de senior et un avis de
+résident n'engagent pas la même chose.
+
+*Garde-fou R2 renforcé.* Le test qui protège `listes.py` comptait ses lignes :
+il refusait autant une liste recopiée dans le code qu'une fonction d'accès
+légitime, et quiconque en ajoutait une était tenté de relever le seuil — c'est
+comme ça qu'un garde-fou perd ses dents. Il vérifie maintenant la règle
+elle-même, par l'AST : aucune donnée écrite en dur au niveau du module.
+
 **v3.9 — 8 septembre 2026 — six retours du service sur le prescrit et la feuille**
 
 *Additifs.* Le champ était libre : « KCl 2 », « 2 amp KCl » et « +2K »

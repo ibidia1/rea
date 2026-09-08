@@ -123,6 +123,12 @@ CREATE TABLE IF NOT EXISTS sejour (
     -- celles des conditions chroniques ANZICS saisies par ailleurs.
     type_admission         TEXT,
     maladie_chronique_igs2 TEXT,
+    -- Glasgow à l'arrivée. Facteur pronostique majeur du traumatisé crânien,
+    -- et la seule valeur neurologique qu'on ne peut plus reconstituer une fois
+    -- le patient sédaté : à J3 sous midazolam, personne ne sait plus s'il est
+    -- arrivé à 15 ou à 6. Elle a sa case sur la feuille imprimée, sous le
+    -- transport (demande du service, 8 septembre).
+    glasgow_initial        INTEGER,
     -- Diagnostic principal codé CIM-10 (bloc 12). Sur le séjour et non sur le
     -- motif : un séjour traumatique n'a pas de ligne de motif, et il doit
     -- pouvoir être codé comme les autres.
@@ -480,6 +486,34 @@ CREATE INDEX IF NOT EXISTS idx_protocole_sejour ON protocole_applique(sejour_id)
 -- -------------------------------------------------------------------------
 -- EXPLORATIONS (SPEC §6) — valeurs chiffrées, format long (règle 4)
 -- -------------------------------------------------------------------------
+-- Les avis demandés aux autres spécialités (SPEC §7).
+--
+-- Un avis de neurochirurgie ne se résume pas : « refaire la TDM à 48 h » est
+-- une consigne datée et signée, et c'est sur elle qu'on décide trois jours
+-- plus tard. Écrit dans le texte libre du plan infectieux, il disparaissait à
+-- la première réécriture de ce plan — et personne ne savait plus qui avait dit
+-- quoi, ni quand (demande du service, 8 septembre).
+--
+-- Un avis n'annule jamais le précédent, même de la même spécialité : c'est la
+-- suite des avis qui raconte l'évolution d'une décision chirurgicale, et le
+-- second ne se comprend souvent qu'à la lumière du premier.
+CREATE TABLE IF NOT EXISTS avis_specialise (
+    id           TEXT PRIMARY KEY,
+    sejour_id    TEXT NOT NULL REFERENCES sejour(id),
+    date_avis    TEXT NOT NULL,
+    specialite   TEXT NOT NULL,     -- referentiels/specialites_avis.json
+    nom          TEXT,              -- « Dr X »
+    grade        TEXT,              -- senior / resident
+    texte        TEXT NOT NULL,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_avis_sejour ON avis_specialise(sejour_id, date_avis);
+
 CREATE TABLE IF NOT EXISTS exploration (
     id          TEXT PRIMARY KEY,
     sejour_id   TEXT NOT NULL REFERENCES sejour(id),

@@ -201,6 +201,16 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
                 key="admission_creatinine",
             )
         )
+        # C'est la seule valeur neurologique qu'on ne peut plus reconstituer :
+        # à J3 sous midazolam, personne ne sait plus s'il est arrivé à 15 ou
+        # à 6 (demande du service, 8 septembre).
+        glasgow_initial = champs.nombre_saisi(
+            st.text_input(
+                "Glasgow à l'arrivée (3-15)", value="",
+                placeholder="facteur pronostique — avant toute sédation",
+                key="admission_glasgow",
+            )
+        )
     with col2:
         date_admission = st.date_input(
             "Date d'admission", value=date.today(), key="admission_date_admission"
@@ -324,6 +334,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             poids_kg=poids_kg,
             taille_cm=taille_cm,
             creatinine_base=creatinine_base,
+            glasgow_initial=int(glasgow_initial) if glasgow_initial else None,
             type_admission=type_admission,
             maladie_chronique_igs2=maladie_chronique_igs2,
             utilisateur_id=contexte.utilisateur_id(),

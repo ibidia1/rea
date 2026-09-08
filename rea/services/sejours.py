@@ -97,6 +97,7 @@ def modifier_admission(
     type_admission: str | None,
     maladie_chronique_igs2: str | None,
     traumatique: bool,
+    glasgow_initial: int | None = None,
     regions_traumatiques_choisies: list[str] | None = None,
     regions_traumatiques_precisions: dict[str, str] | None = None,
     mecanisme: str | None = None,
@@ -135,6 +136,7 @@ def modifier_admission(
                 "creatinine_base": creatinine_base,
                 "type_admission": type_admission,
                 "maladie_chronique_igs2": maladie_chronique_igs2,
+                "glasgow_initial": glasgow_initial,
                 "traumatique": int(traumatique),
                 "mecanisme": mecanisme if traumatique else None,
                 "mecanisme_detail": mecanisme_detail if traumatique else None,
@@ -232,6 +234,7 @@ def creer_sejour(
     taille_cm: float | None = None,
     type_admission: str | None = None,
     maladie_chronique_igs2: str | None = None,
+    glasgow_initial: int | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     with base.transaction():
@@ -263,6 +266,9 @@ def creer_sejour(
                 "taille_cm": taille_cm,
                 # Créatinine antérieure : sans elle KDIGO est incalculable (§5).
                 "creatinine_base": creatinine_base,
+                # Glasgow d'arrivée : à J3 sous midazolam, personne ne sait
+                # plus s'il est arrivé à 15 ou à 6.
+                "glasgow_initial": glasgow_initial,
                 "complication_statut": "non_renseigne",
             },
             utilisateur_id=utilisateur_id,

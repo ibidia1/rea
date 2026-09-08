@@ -27,6 +27,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import config, listes, referentiels
+from ..domaine import avis as dom_avis
 from ..domaine import calculs, prescription as dom
 from ..domaine.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
 from .gabarit import Brut, rendre
@@ -183,33 +184,50 @@ def _nombre(valeur) -> str:
 # Les blocs
 # --------------------------------------------------------------------------
 
-def _ligne_sedation_pse(dossier) -> list[dict]:
-    """La sédation en cours, reportée dans le bloc P.S.E. en plus des abords.
+def _lignes_dispositifs_pse(dossier) -> list[dict]:
+    """Les dispositifs qui coulent, reportés dans le bloc P.S.E.
 
-    Elle est déjà cochée dans les abords, avec son compteur de jours : c'est
-    la lecture neurologique. Mais la vitesse qui la fait couler est aussi une
-    consigne infirmière, au même titre qu'une noradrénaline ou un midazolam
-    prescrit en ligne — elle doit donc être là où les seringues électriques
-    se règlent, pas seulement dans la case des dispositifs.
+    Ils sont déjà cochés dans les abords, avec leur compteur de jours : c'est
+    la lecture clinique. Mais la vitesse qui les fait couler est aussi une
+    consigne infirmière, au même titre qu'une noradrénaline prescrite en
+    ligne — elle doit donc être là où les seringues électriques se règlent,
+    pas seulement dans la case des dispositifs.
+
+    La sédation était le seul cas, et cette fonction ne connaissait qu'elle.
+    Une péridurale thoracique coule exactement pareil et l'anesthésique local
+    n'apparaissait nulle part sur la pancarte (demande du service,
+    8 septembre) : c'est le fichier des types qui déclare maintenant lesquels
+    y vont, avec `pse`.
     """
-    sedation = next((e for e in dossier.etats_dispositifs if e.type == "sedation" and e.en_place), None)
-    if sedation is None:
-        return []
-    details = sedation.details or {}
-    produit = details.get("molecules") or "Sédation"
-    dose = f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else ""
-    # La sédation est justement celle qu'on allège dans la journée : sa vitesse
-    # s'écrit heure par heure comme celle d'une seringue prescrite.
-    par_heure = dossier.vitesses.get(sedation.id) or {}
-    return [{
-        "numero": "1",
-        "produit": Brut(
-            f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
-            "— sédation</span>"
-        ),
-        "dose": dose,
-        "grille": _grille_vitesses(par_heure) if par_heure else Brut(""),
-    }]
+    lignes = []
+    for etat in dossier.etats_dispositifs:
+        if not etat.en_place:
+            continue
+        config = listes.TYPES_DISPOSITIF.get(etat.type, {})
+        if not config.get("pse"):
+            continue
+        details = etat.details or {}
+        # Le site n'est pas répété ici : il est déjà sur le bandeau des abords,
+        # en haut de la même page, pour le même dispositif. L'écrire deux fois
+        # faisait passer la ligne sur deux hauteurs et cassait la grille des
+        # seringues — la ligne P.S.E. répond à « qu'est-ce qui coule, à quel
+        # débit », le bandeau répond à « où ».
+        produit = details.get("molecules") or config.get("libelle", etat.type)
+        suffixe = config.get("suffixe_pse") or config.get("libelle", "").lower()
+        # Ce qui coule en continu s'écrit heure par heure, comme une seringue
+        # prescrite : une sédation qu'on allège et une péridurale qu'on
+        # descend se relisent de la même façon.
+        par_heure = dossier.vitesses.get(etat.id) or {}
+        lignes.append({
+            "numero": str(len(lignes) + 1),
+            "produit": Brut(
+                f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
+                f"— {html.escape(suffixe)}</span>"
+            ),
+            "dose": f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else "",
+            "grille": _grille_vitesses(par_heure) if par_heure else Brut(""),
+        })
+    return lignes
 
 
 def _lignes_prescription(dossier) -> dict:
@@ -221,7 +239,7 @@ def _lignes_prescription(dossier) -> dict:
 
     # La sédation posée comme dispositif occupe une ligne du bloc P.S.E. avant
     # les lignes prescrites — elle vient du dossier, pas d'une prescription.
-    lignes_synthetiques = {"PSE": _ligne_sedation_pse(dossier)}
+    lignes_synthetiques = {"PSE": _lignes_dispositifs_pse(dossier)}
 
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
         synthetiques = lignes_synthetiques.get(voie, [])
@@ -395,9 +413,12 @@ def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
 
     repartition = list(reversed(passes))          # du plus ancien au plus récent
     if restant > 0:
-        # Séjour trop court, ou pas encore de bilan : le reste est du papier
-        # réglé, sans date, devant les jours qui en ont une.
-        repartition.insert(0, {"jour": None, "colonnes": restant, "en_cours": False})
+        # Séjour trop court, ou pas encore de bilan : ce qui reste est du
+        # papier réglé, et il se place APRÈS les jours datés, juste avant le
+        # jour en cours. Le tableau se remplit de gauche à droite : on lit la
+        # cinétique en partant du bord gauche, sans commencer par une zone
+        # vide qui donne à croire qu'un jour manque.
+        repartition.append({"jour": None, "colonnes": restant, "en_cours": False})
     repartition.append({"jour": date_jour, "colonnes": COLONNES_JOUR_EN_COURS,
                         "en_cours": True})
     return repartition
@@ -700,11 +721,46 @@ def _motif_transport_atcd(dossier) -> Brut:
     if circonstances:
         corps += ligne("Circonstances", circonstances)
     corps += ligne("Transport", _transport_texte(dossier))
+    # Sous le transport, parce que c'est le même moment : ce que valait le
+    # patient en arrivant. À J3 sous midazolam, personne ne sait plus s'il est
+    # arrivé à 15 ou à 6, et c'est un facteur pronostique majeur du
+    # traumatisme crânien (demande du service, 8 septembre).
+    if sejour.get("glasgow_initial") is not None:
+        corps += ligne("Glasgow initial", str(int(sejour["glasgow_initial"])))
     corps += bloc("Motif", _lignes_motif(dossier))
     ttt = sejour.get("traitement_habituel")
     if ttt:
         corps += ligne("Ttt habituel", ttt)
     return Brut(f'<div style="font-size:9.5px;line-height:1.35;overflow:hidden">{corps}</div>')
+
+
+#: Combien d'avis la feuille imprime au plus. Le bloc partage sa hauteur avec
+#: la conduite à tenir, qui reste manuscrite : au-delà, ce sont les plus
+#: récents qui comptent pour la visite du jour.
+LIGNES_AVIS = 6
+
+
+def _avis_specialises(dossier) -> Brut:
+    """« Avis CCVT (09/09) : Rsdt X : Pas d'indication chirurgicale ».
+
+    Un avis n'annule jamais le précédent, même de la même spécialité : c'est la
+    suite des avis qui raconte l'évolution d'une décision chirurgicale, et le
+    second ne se comprend souvent qu'à la lumière du premier. Ils s'impriment
+    donc tous, dans l'ordre où ils ont été donnés.
+
+    Le bloc garde des lignes vides sous les avis : la conduite à tenir s'écrit
+    à la main au même endroit, à la visite.
+    """
+    lignes = [dom_avis.ligne_avis(a) for a in dossier.avis][-LIGNES_AVIS:]
+    if not lignes:
+        return Brut("")
+    corps = "".join(
+        '<div style="font-size:8.5px;line-height:1.5;padding:0 4px;'
+        'border-bottom:1px solid #d3dcdb;white-space:nowrap;overflow:hidden">'
+        f"{html.escape(l)}</div>"
+        for l in lignes
+    )
+    return Brut(corps)
 
 
 def _abords(dossier) -> list[dict]:
@@ -844,6 +900,7 @@ def contexte(dossier) -> dict:
                       if allergies else "ALLERGIE : non renseignée"),
         "scores": dossier.scores,
         "motifTransportAtcd": _motif_transport_atcd(dossier),
+        "avisRows": _avis_specialises(dossier),
         "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
