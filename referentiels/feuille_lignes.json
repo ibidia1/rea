@@ -1,9 +1,9 @@
 {
   "nom": "feuille_lignes",
   "libelle": "Lignes fixes de la feuille de réanimation imprimée",
-  "version": "2026-09-06.2",
-  "date": "2026-09-06",
-  "note": "Quels paramètres occupent les lignes pré-imprimées de la feuille, et combien de lignes chaque bloc comporte. Le nombre de lignes vient de la maquette du service (modeles/feuille_reanimation_kairouan.html) : le changer ici sans changer la maquette déborderait de la page. Les codes renvoient au catalogue d'analytes (rea/analytes.py) ; un code inconnu affiche son libellé tel quel. Les codes de la section « gaz » et « ventilation » sont ceux des colonnes de la table gaz_du_sang ; ceux des autres sections sont des identifiants d'analyte. Une case de « à demander pour demain » peut couvrir plusieurs examens (Urée/Créat, CRP/PCT, ECBU/PDP) : elle est cochée dès que l'un d'eux est demandé.",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Quels paramètres occupent les lignes pré-imprimées de la feuille, et combien de lignes chaque bloc comporte. Le nombre de lignes vient de la maquette du service (modeles/feuille_reanimation_kairouan.html) : le changer ici sans changer la maquette déborderait de la page. Les codes renvoient au catalogue d'analytes (rea/analytes.py) ; un code inconnu affiche son libellé tel quel. Les codes de la section « gaz » et « ventilation » sont ceux des colonnes de la table gaz_du_sang ; ceux des autres sections sont des identifiants d'analyte. Une case de « à demander pour demain » peut couvrir plusieurs examens (Urée/Créat, CRP/PCT, ECBU/PDP) : elle est cochée dès que l'un d'eux est demandé. Les lignes « drain » prennent le nom du drain réellement en place ce jour-là — type et site, tels qu'ils sont enregistrés dans Explorations et actes ; les emplacements restants gardent leur libellé générique, pour un drain posé après l'impression.",
   "valeurs": {
     "hemato": [
       [
@@ -167,16 +167,16 @@
         "Bandelette urinaire"
       ],
       [
-        "redon_1",
-        "Redon 1 (ml)"
+        "drain_1",
+        "Drain 1 (ml)"
       ],
       [
-        "redon_2",
-        "Redon 2 (ml)"
+        "drain_2",
+        "Drain 2 (ml)"
       ],
       [
-        "redon_3",
-        "Redon 3 (ml)"
+        "drain_3",
+        "Drain 3 (ml)"
       ]
     ],
     "examens_demain": [

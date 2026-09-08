@@ -878,6 +878,55 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.7 — 8 septembre 2026 — deux internes sur le même jour, et les deux répétitions avant le premier patient**
+
+L'évolution quotidienne était le dernier écran enregistré en bloc : la visite
+passe, un interne remplit le lit 3, un autre ouvre le même lit pour ajouter une
+ligne, et le second enregistrement écrasait le premier sans que personne ne
+voie jamais que quelque chose avait été perdu. C'est la seule catégorie de bug
+qui détruit des données sans laisser de trace.
+
+La colonne `version` posée en v3.6 servait à ça. À l'enregistrement, si la
+version en base a changé depuis l'ouverture de l'écran, on refuse et on le dit.
+Pas de fusion, pas de résolution de conflit : refuser, expliquer, et laisser
+relire ce qui est en base. `db.ConflitDeVersion`, `Base.verifier_version()`,
+`services.evolution.enregistrer_journee()` — mesures et textes dans une seule
+transaction, derrière la vérification : refuser à moitié serait pire que tout.
+
+Deux répétitions ont été faites, parce qu'un logiciel de service se juge sur ce
+qu'il fait le jour où quelque chose tourne mal :
+
+*Restaurer une sauvegarde pour de vrai.* Une sauvegarde jamais restaurée n'est
+pas une sauvegarde. Sauvegarde écrite par le logiciel, fichier recopié dans un
+autre dossier, application lancée sur cette copie : elle démarre, elle n'écoute
+que sur 127.0.0.1, et le patient, ses trente-six lignes, ses drains et son bilan
+hydrique sont tous là. Le bouton « Restaurer » de l'écran Administration a été
+éprouvé de bout en bout : une saisie erronée commise après la sauvegarde
+disparaît, le filet de sécurité est écrit avant, et le journal garde la trace de
+la restauration.
+
+*Imprimer une pancarte chargée à fond.* `outils/patient_demonstration.py` charge
+un patient qui déborde volontairement — trente-six lignes pour trente
+emplacements, allergies, cinq seringues avec changements de vitesse dans la
+journée, antibiogramme, drains, bilans cochés pour demain. La feuille tient : le
+débordement est annoncé en pied de page voie par voie, les vitesses de PSE
+s'écrivent bien heure par heure (25 à 8 h, 18 à 12 h, 15 à 16 h, 8 à 22 h), et
+rien n'est affirmé qui n'ait été mesuré.
+
+Une surprise, trouvée là où ces répétitions servent à en trouver : les trois
+emplacements de drain de la feuille s'appelaient « Redon 1 / 2 / 3 » quel que
+soit le patient. Sur du papier rempli à la main toutes les heures, rien ne dit
+lequel est le drain thoracique et lequel est le redon de l'abdomen — et deux
+volumes intervertis, c'est une reprise chirurgicale décidée sur le chiffre de
+l'autre drain. Les lignes portent maintenant le nom du drain réellement en
+place ; les emplacements libres gardent un libellé générique, pour un drain posé
+après l'impression. Les valeurs, elles, restent manuscrites : le volume relevé
+dans l'évolution est celui des 24 h, pas celui de chaque heure.
+
+Reste hors de portée d'ici : l'impression physique sur l'imprimante du service.
+Le fichier est prêt ; le passage papier — A3, paysage, marges nulles, sans mise
+à l'échelle — doit être fait sur place.
+
 **v3.6 — 8 septembre 2026 — §2.4, contraintes d'architecture : audit et mise en conformité**
 
 Le §2.4 entre dans la SPEC (état actuel, évolutions écartées, sept invariants,

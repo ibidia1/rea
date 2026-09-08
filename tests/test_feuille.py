@@ -255,7 +255,7 @@ def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
     libelles_sorties = [l["libelle"] for l in contexte["bilanRows"]]
     assert libelles_sorties == [
         "Diurèse (ml/h)", "Bandelette urinaire",
-        "Redon 1 (ml)", "Redon 2 (ml)", "Redon 3 (ml)",
+        "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)",
     ]
 
 
@@ -855,3 +855,48 @@ def test_un_bilan_antidate_se_range_a_sa_date(base, dossier):
     # Trois jours de quatre créneaux : le premier jour est J2.
     assert cellules[0] == "8,4"
     assert all(c == "" for c in cellules[feuille.NB_CRENEAUX_PAR_JOUR:])
+
+
+# -- les drains portent leur nom sur le papier -------------------------------
+
+def test_les_lignes_de_drain_prennent_le_nom_des_drains_en_place(base, dossier):
+    """Trois emplacements identiques sur du papier rempli à la main, c'est
+    deux volumes intervertis tôt ou tard — et une reprise chirurgicale
+    décidée sur le chiffre de l'autre drain."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                      date_pose=J1, site="Droit")
+    dispositifs.poser(base, sejour_id=sid, type_="redon", date_pose=J1,
+                      site="Abdomen")
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert "Drain thoracique (droit) (ml)" in libelles
+    assert "Redon (abdomen) (ml)" in libelles
+    # L'emplacement inoccupé reste générique : un drain posé après
+    # l'impression doit pouvoir s'écrire quelque part.
+    assert "Drain 3 (ml)" in libelles
+
+
+def test_sans_drain_les_emplacements_restent_generiques(base, dossier):
+    _pid, sid = dossier
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert [l for l in libelles if l.startswith("Drain ")] == [
+        "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)"
+    ]
+
+
+def test_la_sonde_urinaire_noccupe_pas_un_emplacement_de_drain(base, dossier):
+    """Son volume, c'est la diurèse — comptée sur sa propre ligne. L'y
+    reporter la compterait deux fois."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="sonde_urinaire", date_pose=J1)
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]]
+    assert "Drain 1 (ml)" in libelles
+
+
+def test_les_valeurs_des_drains_restent_manuscrites(base, dossier):
+    """Le volume relevé dans l'évolution est celui des 24 h ; la ligne
+    imprimée est horaire. L'y imprimer le ferait lire pour autre chose."""
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="redon", date_pose=J1, site="Abdomen")
+    for ligne in feuille.contexte(_dossier(base, sid, AUJ))["bilanRows"]:
+        assert ligne["valeurs"].html == ""

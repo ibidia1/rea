@@ -8,6 +8,7 @@ from datetime import date
 import streamlit as st
 
 from .. import listes
+from ..db import ConflitDeVersion
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr
 from ..services import aides as aides_service
@@ -445,19 +446,30 @@ def onglet_evolution(sejour: dict) -> None:
 
         if st.button("Enregistrer l'évolution", type="primary", use_container_width=True):
             mesures = {k: v for k, v in elements.items() if not k.startswith("__libre__")}
-            evolution_service.enregistrer_elements(
-                contexte.base(), sejour["id"], date_jour_str, mesures, utilisateur_id=contexte.utilisateur_id()
-            )
-            evolution_service.enregistrer(
-                contexte.base(), sejour["id"], date_jour_str,
-                {
-                    **{p: elements.get(f"__libre__{p}", "") for p in plans},
-                    "conduite": conduite,
-                },
-                utilisateur_id=contexte.utilisateur_id(),
-            )
-            st.success("Évolution enregistrée.")
-            st.rerun()
+            try:
+                evolution_service.enregistrer_journee(
+                    contexte.base(), sejour["id"], date_jour_str,
+                    elements=mesures,
+                    textes={
+                        **{p: elements.get(f"__libre__{p}", "") for p in plans},
+                        "conduite": conduite,
+                    },
+                    # La version lue à l'ouverture de l'écran : si elle a bougé,
+                    # quelqu'un d'autre a enregistré entre-temps.
+                    version_attendue=entree["version"],
+                    utilisateur_id=contexte.utilisateur_id(),
+                )
+            except ConflitDeVersion:
+                # Refuser, dire pourquoi, ne rien écraser. Pas de fusion : ce
+                # qui est à l'écran reste à l'écran, le temps de relire.
+                st.error(
+                    "Quelqu'un d'autre a enregistré cette évolution pendant que "
+                    "vous la remplissiez. Rien n'a été écrasé. Rouvrez le jour "
+                    "pour lire ce qui est enregistré, puis reportez vos ajouts."
+                )
+            else:
+                st.success("Évolution enregistrée.")
+                st.rerun()
 
     with rendu:
         texte = evolution_service.texte_genere(contexte.base(), sejour["id"], date_jour_str)

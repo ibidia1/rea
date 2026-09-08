@@ -25,6 +25,28 @@ from . import config
 # Mots qui commencent une contrainte de table, pas une colonne.
 _MOTS_CLES_SQL = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
 
+class ConflitDeVersion(Exception):
+    """La ligne a changé entre le moment où l'écran l'a lue et l'enregistrement.
+
+    Deux internes sur le même patient, le même jour : sans cette exception, le
+    second écrase le premier et personne ne voit jamais que quelque chose a été
+    perdu. C'est la seule catégorie de bug qui détruit des données sans laisser
+    de trace — un écran qui refuse est toujours préférable.
+
+    Aucune fusion, aucune résolution de conflit : refuser, dire pourquoi, et
+    laisser l'utilisateur relire ce qui est en base.
+    """
+
+    def __init__(self, table: str, id_ligne: str, attendue: int, actuelle: int):
+        self.table = table
+        self.id_ligne = id_ligne
+        self.attendue = attendue
+        self.actuelle = actuelle
+        super().__init__(
+            f"{table} {id_ligne} : version attendue {attendue}, trouvée {actuelle}"
+        )
+
+
 # `pancarte_snapshot.version` existe depuis l'origine et désigne le numéro
 # d'impression d'une feuille (v1, v2 du même jour) : l'incrémenter à chaque
 # écriture renuméroterait les feuilles déjà sorties de l'imprimante. Cette
@@ -242,6 +264,24 @@ class Base:
                 (*valeurs.values(), id_ligne),
             )
             self._journaliser(table, id_ligne, action, utilisateur_id, valeurs)
+
+    def verifier_version(self, table: str, id_ligne: str, version_attendue: int | None) -> None:
+        """Refuse d'écrire si la ligne a bougé depuis sa lecture.
+
+        À appeler dans la même transaction que l'écriture qu'elle protège :
+        vérifier puis écrire en deux temps laisserait passer exactement ce
+        qu'on cherche à empêcher.
+
+        `version_attendue` à None ne vérifie rien — c'est le cas de tous les
+        écrans qui n'ont pas encore besoin de la garde.
+        """
+        if version_attendue is None:
+            return
+        ligne = self.une_ligne(f"SELECT version FROM {table} WHERE id = ?", (id_ligne,))
+        if ligne is None:
+            return
+        if ligne["version"] != version_attendue:
+            raise ConflitDeVersion(table, id_ligne, version_attendue, ligne["version"])
 
     def supprimer_logiquement(
         self, table: str, id_ligne: str, *, utilisateur_id: str | None = None

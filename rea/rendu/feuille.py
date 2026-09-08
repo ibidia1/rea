@@ -696,7 +696,7 @@ def contexte(dossier) -> dict:
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
         "survRowsC": _lignes_manuscrites(lignes_ref["surveillance_c"]),
-        "bilanRows": _lignes_manuscrites(lignes_ref["sorties_drains"]),
+        "bilanRows": _lignes_sorties(dossier, lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
         "days": _entetes_jours(dossier, jours),
         "bioHemato": _valeurs_biologie(dossier, jours, list(lignes_ref["hemato"]), "bilan"),
@@ -738,6 +738,40 @@ def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
         if taille != _TAILLE_DEFAUT:
             regles.append(f".txt-produit-{slug},.txt-dose-{slug}{{font-size:{taille}px}}")
     return Brut("".join(regles))
+
+
+def _lignes_sorties(dossier, codes) -> list[dict]:
+    """Les lignes de sorties, dont les emplacements de drains sont nommés.
+
+    Un drain porte son nom sur la feuille : « Drain thoracique (droit) », pas
+    « Drain 2 ». Sur du papier rempli à la main toutes les heures, l'infirmière
+    n'a rien pour savoir lequel des trois emplacements est le thoracique et
+    lequel est le redon de l'abdomen — et deux volumes intervertis, c'est une
+    reprise chirurgicale décidée sur un chiffre qui n'est pas le bon.
+
+    Les emplacements que les drains en place n'occupent pas gardent leur
+    libellé générique : un drain posé après l'impression doit pouvoir
+    s'écrire quelque part.
+
+    Les valeurs, elles, restent manuscrites comme le reste de la surveillance
+    horaire — le volume relevé dans l'évolution est celui des 24 h, pas celui
+    de chaque heure, et l'imprimer ici le ferait lire pour autre chose.
+    """
+    drains = [
+        etat for etat in dossier.etats_dispositifs
+        if etat.en_place and listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine")
+    ]
+    lignes = []
+    restants = list(drains)
+    for code, libelle in codes:
+        if code.startswith("drain_") and restants:
+            etat = restants.pop(0)
+            nom = listes.libelle_dispositif(etat.type)
+            if etat.site:
+                nom += f" ({etat.site.lower()})"
+            libelle = f"{nom} (ml)"
+        lignes.append({"libelle": libelle, "valeurs": Brut("")})
+    return lignes
 
 
 def _lignes_manuscrites(codes) -> list[dict]:
