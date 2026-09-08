@@ -50,10 +50,10 @@ LIGNES_MICROBIO = 6
 NB_JOURS_BIOLOGIE = 3       # deux jours remplis + le jour en cours, laissé libre
 NB_CRENEAUX_PAR_JOUR = 4
 
-# La journée du service commence à 8 h, pas à minuit : la relève du matin
-# ouvre la feuille, et la colonne « 0 » en tête n'a jamais rien voulu dire
-# pour personne. La grille imprimée suit cet ordre plutôt que 0-23.
-ORDRE_HEURES = tuple(range(8, 24)) + tuple(range(0, 8))
+# La journée du service commence à 8 h, pas à minuit (config.HEURE_DEBUT_
+# JOURNEE) : la relève du matin ouvre la feuille, et la colonne « 0 » en tête
+# n'a jamais rien voulu dire pour personne.
+ORDRE_HEURES = dom.heures_de_la_journee()
 
 
 # --------------------------------------------------------------------------
@@ -75,6 +75,32 @@ def _grille_heures(heures: set[int], *, symbole: str = "○") -> Brut:
             f'<span style="font-size:15px;font-weight:700;line-height:1;'
             f'color:#14595c">{symbole}</span>'
             if heure in heures else ""
+        )
+        cases.append(
+            '<div style="display:flex;align-items:center;justify-content:center">'
+            f"{contenu}</div>"
+        )
+    return Brut(
+        '<div style="position:absolute;inset:0;display:grid;'
+        'grid-template-columns:repeat(24,1fr)">' + "".join(cases) + "</div>"
+    )
+
+
+def _grille_vitesses(par_heure: dict[int, float]) -> Brut:
+    """Vingt-quatre cases, la vitesse écrite aux heures où elle est réglée.
+
+    Un rond dit « donner à cette heure-ci » ; un nombre dit « la pompe est à
+    tant ». La vitesse d'ouverture s'écrit à 8 h, et chaque changement de la
+    journée à son heure : « 25 » à 8 h, « 15 » à 16 h se relit d'un coup d'œil,
+    là où la colonne dose ne pouvait montrer qu'un seul chiffre.
+    """
+    cases = []
+    for heure in ORDRE_HEURES:
+        vitesse = par_heure.get(heure % 24)
+        contenu = (
+            '<span style="font-size:9px;font-weight:700;line-height:1;'
+            f'color:#14595c">{html.escape(_nombre(vitesse))}</span>'
+            if vitesse is not None else ""
         )
         cases.append(
             '<div style="display:flex;align-items:center;justify-content:center">'
@@ -135,6 +161,9 @@ def _ligne_sedation_pse(dossier) -> list[dict]:
     details = sedation.details or {}
     produit = details.get("molecules") or "Sédation"
     dose = f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else ""
+    # La sédation est justement celle qu'on allège dans la journée : sa vitesse
+    # s'écrit heure par heure comme celle d'une seringue prescrite.
+    par_heure = dossier.vitesses.get(sedation.id) or {}
     return [{
         "numero": "1",
         "produit": Brut(
@@ -142,7 +171,7 @@ def _ligne_sedation_pse(dossier) -> list[dict]:
             "— sédation</span>"
         ),
         "dose": dose,
-        "grille": Brut(""),
+        "grille": _grille_vitesses(par_heure) if par_heure else Brut(""),
     }]
 
 
@@ -184,11 +213,16 @@ def _lignes_prescription(dossier) -> dict:
                     '<span style="font-size:8px;color:#a33b2a;margin-left:5px">'
                     "ARRÊTÉ</span>"
                 )
+            # Ce qui coule porte sa vitesse dans les cases, ce qui se donne à
+            # heure fixe porte un rond : deux consignes différentes, deux
+            # écritures différentes.
+            par_heure = {} if arretee else (dossier.vitesses.get(ligne["id"]) or {})
             rendues.append({
                 "numero": str(len(rendues) + 1),
                 "produit": produit,
                 "dose": _dose(ligne),
-                "grille": _grille_heures(set(heures)),
+                "grille": _grille_vitesses(par_heure) if par_heure
+                          else _grille_heures(set(heures)),
             })
         total_demande = len(synthetiques) + len(lignes)
         if total_demande > nb_lignes:

@@ -810,6 +810,45 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.4 — 8 septembre 2026 — antidater la garde, et la vitesse heure par heure**
+
+*Antidater ce qui a été fait pendant la garde.* C'était déjà possible en base
+— le compteur de jours se calcule depuis `date_debut`, jamais depuis la date
+de frappe — mais la saisie ne s'y prêtait pas. Le bilan se datait sur une
+ligne à l'anglaise (« 2026-09-08T06:30 ») à corriger caractère par caractère :
+elle laisse place à un jour et une heure séparés, et un bilan daté d'hier
+l'annonce. La date de début d'un traitement sort du formulaire, où elle ne
+pouvait rien dire, et affiche tout de suite le compteur qu'elle produira :
+« Introduit le 07/09 — la pancarte du 08/09 l'affichera J2 ». Trois tests
+tiennent le calcul, un quatrième vérifie qu'un bilan antidaté tombe bien dans
+la colonne de sa nuit.
+
+*La vitesse d'une seringue, heure par heure.* Une vitesse n'est pas une donnée
+figée : on part à 25 cc/h et on descend à 15 à 16 h. La feuille n'imprimait
+que la vitesse de départ, dans la colonne dose — la suite se réécrivait à la
+main tous les jours, alors même que la maquette du service annonce déjà
+« débit ml/h dans les cases ». Une table `vitesse_reglage` porte les réglages
+horodatés, et la grille horaire les écrit : la vitesse en vigueur à
+l'ouverture de la journée, puis chaque changement à son heure.
+
+La journée du service va de 8 h à 8 h (`config.HEURE_DEBUT_JOURNEE`), comme la
+grille imprimée : un réglage noté à 2 h appartient à la nuit de cette
+feuille-là, pas à la suivante. Deux choses coulent et se règlent pareil — une
+ligne prescrite (noradrénaline) et un dispositif (la sédation, posée dans
+l'écran des actes) ; `cible` dit seulement d'où vient ce qui coule.
+
+Deux défauts trouvés en chemin, et corrigés : la vitesse courante d'un
+dispositif (celle de sa carte et de la pastille du bandeau) servait aussi de
+vitesse d'origine — descendre une sédation aujourd'hui aurait réécrit les
+feuilles des jours passés à la nouvelle valeur ; la pose ouvre donc désormais
+l'historique des vitesses, et c'est la dernière vitesse *dans le temps* qui
+devient la courante, pas la dernière saisie. Et ces vitesses s'affichaient
+« 4.0 cc/h » : un zéro décimal de plus sur une pompe n'apprend rien à personne.
+
+Reste en l'état, faute d'avoir été demandé : le bilan des entrées sur 24 h
+compte toujours `vitesse × 24` (SPEC §5.6), c'est-à-dire la vitesse de départ,
+sans tenir compte des changements de la journée.
+
 **v3.3 — 8 septembre 2026 — quatorze retours du service, écran par écran**
 
 *Identité.* « Modifier l'admission » descend sous « Transférer vers un autre

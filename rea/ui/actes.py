@@ -39,12 +39,19 @@ def _reglage_vitesse(ligne: dict, etat_disp) -> None:
         "Régler", key=f"regler_vitesse_{ligne['id']}", use_container_width=True,
         help="Monter ou descendre la vitesse — la feuille imprimée suit.",
     ):
-        details["vitesse"] = saisie
-        dispositifs_service.modifier(
-            contexte.base(), ligne["id"], {"details": details},
-            utilisateur_id=contexte.utilisateur_id(),
-        )
-        st.rerun()
+        if saisie is None:
+            st.error("Indiquer la vitesse en cc/h.")
+        else:
+            # Le réglage est horodaté : c'est lui qui s'imprimera dans la case
+            # de son heure, et c'est lui qui met à jour la vitesse courante du
+            # dispositif. Sans cette trace, redescendre une sédation effacerait
+            # la vitesse d'avant et réécrirait les feuilles des jours passés.
+            dispositifs_service.regler_vitesse(
+                contexte.base(), ligne["id"],
+                date_heure=datetime.now().isoformat(timespec="minutes"),
+                vitesse=saisie, utilisateur_id=contexte.utilisateur_id(),
+            )
+            st.rerun()
 
 
 def onglet_actes(sejour: dict) -> None:

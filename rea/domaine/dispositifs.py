@@ -43,6 +43,9 @@ class EtatDispositif:
     en_place: bool
     jour: int
     texte: str            # « Intubé J3 », « Extubé J2 », « KTA radial G J5 »
+    # L'identifiant de la ligne dont cet état est tiré : c'est par lui que se
+    # retrouvent les réglages de vitesse d'une sédation.
+    id: str | None = None
     site: str | None = None
     details: dict | None = None
     date_pose: str | None = None
@@ -61,7 +64,12 @@ class EtatDispositif:
         return listes.libelle_dispositif(self.type)
 
 
-def _details(ligne: dict) -> dict:
+def lire_details(ligne: dict) -> dict:
+    """Les détails d'un dispositif, stockés en JSON dans une colonne texte.
+
+    Tolérante à dessein : une colonne vide ou abîmée rend un dictionnaire
+    vide plutôt que de faire tomber l'écran d'un patient.
+    """
     brut = ligne.get("details")
     if not brut:
         return {}
@@ -69,6 +77,14 @@ def _details(ligne: dict) -> dict:
         return json.loads(brut)
     except (TypeError, ValueError):
         return {}
+
+
+def _texte_valeur(valeur) -> str:
+    """« 4 » plutôt que « 4.0 » : ces valeurs viennent de colonnes REAL, et un
+    zéro décimal de plus sur une vitesse de pompe n'apprend rien à personne."""
+    if isinstance(valeur, float) and valeur.is_integer():
+        return str(int(valeur))
+    return str(valeur)
 
 
 def _precisions(ligne: dict, details: dict) -> str:
@@ -80,7 +96,7 @@ def _precisions(ligne: dict, details: dict) -> str:
         if valeur in (None, "", 0):
             continue
         _libelle, prefixe, unite = listes.CHAMPS_DISPOSITIF.get(cle, (cle, "", ""))
-        morceaux.append(" ".join(m for m in (prefixe, str(valeur), unite) if m))
+        morceaux.append(" ".join(m for m in (prefixe, _texte_valeur(valeur), unite) if m))
     return ", ".join(morceaux)
 
 
@@ -107,7 +123,7 @@ def etat(ligne: dict, a_la_date: str | date | None = None, rang: int = 1) -> Eta
     une réintubation, et ça ne se lit pas pareil au pied du lit.
     """
     config = listes.TYPES_DISPOSITIF.get(ligne["type"], {})
-    details = _details(ligne)
+    details = lire_details(ligne)
     precisions = _precisions(ligne, details)
 
     if ligne.get("date_retrait"):
@@ -135,6 +151,7 @@ def etat(ligne: dict, a_la_date: str | date | None = None, rang: int = 1) -> Eta
         en_place=en_place,
         jour=jour,
         texte=texte,
+        id=ligne.get("id"),
         site=ligne.get("site"),
         details=details,
         date_pose=ligne.get("date_pose"),

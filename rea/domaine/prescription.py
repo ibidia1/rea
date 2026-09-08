@@ -83,6 +83,84 @@ def analyser_horaires(texte: str | None) -> str | None:
 
 
 # --------------------------------------------------------------------------
+# Vitesses réglées dans la journée (P.S.E. et perfusions)
+# --------------------------------------------------------------------------
+
+def heures_de_la_journee() -> tuple[int, ...]:
+    """Les 24 heures dans l'ordre de la feuille : 8 h d'abord, 7 h en dernier.
+
+    La colonne « 0 » en tête n'a jamais rien voulu dire pour personne : la
+    relève du matin ouvre la feuille, et la grille imprimée suit cet ordre.
+    """
+    debut = config.HEURE_DEBUT_JOURNEE
+    return tuple(range(debut, 24)) + tuple(range(0, debut))
+
+
+def horodatage_dans_journee(date_jour: str | date, heure: int) -> str:
+    """L'horodatage d'une heure de la journée du service (8 h → 8 h).
+
+    Une heure d'avant l'ouverture appartient au petit matin du lendemain :
+    c'est la nuit de *cette* feuille-là, pas celle de la précédente.
+    """
+    from .dates import lendemain
+
+    jour = parse_date(date_jour)
+    if heure < config.HEURE_DEBUT_JOURNEE:
+        jour = lendemain(jour)
+    return f"{jour.isoformat()}T{heure % 24:02d}:00"
+
+
+def fenetre_journee(date_jour: str | date) -> tuple[str, str]:
+    """La journée du service : de 8 h à 8 h le lendemain.
+
+    C'est la fenêtre que couvre la grille horaire imprimée (8 h → 7 h). Un
+    réglage noté à 2 h du matin appartient donc à la journée ouverte la veille,
+    pas à celle qui commencera six heures plus tard — c'est ce que dit la
+    feuille, et c'est ainsi que la garde la remplit.
+    """
+    jour = parse_date(date_jour)
+    heure = config.HEURE_DEBUT_JOURNEE
+    from .dates import lendemain
+
+    return (f"{jour.isoformat()}T{heure:02d}:00",
+            f"{lendemain(jour).isoformat()}T{heure:02d}:00")
+
+
+def vitesses_par_heure(
+    vitesse_initiale: float | None, reglages: list[dict], date_jour: str | date
+) -> dict[int, float]:
+    """La vitesse à écrire dans chaque case horaire d'une journée.
+
+    Une seringue ne se règle pas une fois pour toutes : elle part à 25 cc/h et
+    on la descend à 15 à 16 h. Jusqu'ici la feuille n'imprimait que la vitesse
+    de départ, dans la colonne dose — la suite se réécrivait à la main tous les
+    jours (demande du service, 8 septembre).
+
+    Ce qui est rendu : la vitesse en vigueur à l'ouverture de la journée, puis
+    chaque changement à son heure. Un réglage antérieur à la journée ne
+    s'imprime pas, il fixe seulement la vitesse d'ouverture.
+    """
+    ouverture = config.HEURE_DEBUT_JOURNEE
+    debut, fin = fenetre_journee(date_jour)
+    en_vigueur = vitesse_initiale
+    par_heure: dict[int, float] = {}
+    for reglage in sorted(reglages, key=lambda r: r.get("date_heure") or ""):
+        horodatage = reglage.get("date_heure") or ""
+        if horodatage < debut:
+            en_vigueur = reglage["vitesse"]
+        elif horodatage < fin:
+            try:
+                par_heure[int(horodatage[11:13]) % 24] = reglage["vitesse"]
+            except ValueError:
+                continue
+    # La vitesse d'ouverture ne s'écrit que si rien ne la remplace déjà à cette
+    # heure-là : un réglage noté à 8 h pile prime sur elle.
+    if en_vigueur is not None and ouverture not in par_heure:
+        par_heure[ouverture] = en_vigueur
+    return par_heure
+
+
+# --------------------------------------------------------------------------
 # Nombre de prises par jour — utile au bilan hydrique (SPEC §5.6)
 # --------------------------------------------------------------------------
 

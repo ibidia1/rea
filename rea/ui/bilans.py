@@ -290,11 +290,19 @@ def _saisie_groupe(groupe, valeurs: dict, unite_lipides: str) -> None:
 
 def saisie_bilan(sejour: dict) -> None:
     st.markdown("##### Saisir un bilan")
-    date_heure = st.text_input(
-        "Date / heure du prélèvement",
-        value=datetime.now().isoformat(timespec="minutes"),
-        key="bilan_date_heure",
-    )
+    # Un jour et une heure séparés, plutôt qu'une ligne à l'anglaise
+    # (« 2026-09-08T06:30 ») à corriger caractère par caractère : le bilan de
+    # la garde se saisit le lendemain matin, et il doit porter l'heure du
+    # prélèvement, pas celle de la frappe (demande du service, 8 septembre).
+    c_jour, c_heure = st.columns([1, 1])
+    jour = c_jour.date_input("Jour du prélèvement", value=date.today(), key="bilan_jour")
+    heure = c_heure.time_input("Heure", value=datetime.now().time(), key="bilan_heure")
+    date_heure = f"{jour}T{heure:%H:%M}"
+    if jour < date.today():
+        st.caption(
+            f"Bilan antidaté au {format_date_fr(str(jour))} — il se rangera à sa "
+            "date, dans la colonne de ce jour-là."
+        )
 
     # Gaz du sang, puis chimie, puis hémato, puis ce qui ne se demande pas
     # tous les jours : l'ordre de la visite, pas celui du catalogue.
@@ -373,8 +381,12 @@ def saisie_bilan(sejour: dict) -> None:
                 mode_ventilatoire=None if mode_vent == "—" else mode_vent,
                 debit_o2=debit_o2, utilisateur_id=contexte.utilisateur_id(), **gaz,
             )
+        # Le jour et l'heure du prélèvement survivent à l'enregistrement : un
+        # même prélèvement donne souvent deux panneaux saisis l'un après
+        # l'autre, et les retaper à chaque fois est le meilleur moyen de les
+        # voir diverger.
         for cle in list(st.session_state):
-            if cle.startswith(("bilan_", "gds_")) and cle != "bilan_date_heure":
+            if cle.startswith(("bilan_", "gds_")) and cle not in ("bilan_jour", "bilan_heure"):
                 del st.session_state[cle]
         st.success("Bilan enregistré.")
         st.rerun()

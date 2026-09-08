@@ -24,18 +24,34 @@ def poser(
     commentaire: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
-    return base.inserer(
-        "dispositif",
-        {
-            "sejour_id": sejour_id,
-            "type": type_,
-            "date_pose": date_pose,
-            "site": site,
-            "details": json.dumps(details or {}, ensure_ascii=False),
-            "commentaire": commentaire,
-        },
-        utilisateur_id=utilisateur_id,
-    )
+    with base.transaction():
+        id_ = base.inserer(
+            "dispositif",
+            {
+                "sejour_id": sejour_id,
+                "type": type_,
+                "date_pose": date_pose,
+                "site": site,
+                "details": json.dumps(details or {}, ensure_ascii=False),
+                "commentaire": commentaire,
+            },
+            utilisateur_id=utilisateur_id,
+        )
+        # Un dispositif qui coule ouvre son histoire de vitesses à la pose.
+        # Sans ce premier point, la vitesse courante (`details["vitesse"]`,
+        # remise à jour à chaque réglage) tiendrait aussi lieu de vitesse
+        # d'origine — et redescendre une sédation réécrirait la feuille des
+        # jours passés à la nouvelle valeur.
+        vitesse = (details or {}).get("vitesse")
+        if vitesse is not None:
+            from . import vitesses as vitesses_service
+
+            vitesses_service.regler(
+                base, cible=vitesses_service.DISPOSITIF, cible_id=id_,
+                date_heure=f"{date_pose}T00:00", vitesse=vitesse,
+                utilisateur_id=utilisateur_id,
+            )
+    return id_
 
 
 def retirer(
@@ -55,6 +71,42 @@ def retirer(
         utilisateur_id=utilisateur_id,
         action="retrait",
     )
+
+
+def regler_vitesse(
+    base: Base,
+    dispositif_id: str,
+    *,
+    date_heure: str,
+    vitesse: float,
+    utilisateur_id: str | None = None,
+) -> str:
+    """Règle la vitesse d'un dispositif qui coule — la sédation, aujourd'hui.
+
+    Deux écritures qui n'en font qu'une : le réglage horodaté, qui s'imprimera
+    dans la case de son heure, et la vitesse courante du dispositif, celle qui
+    s'affiche sur sa carte et dans la pastille du bandeau. Les séparer, c'est
+    laisser deux chiffres différents s'afficher pour la même pompe.
+
+    C'est la dernière vitesse *dans le temps* qui devient la courante, pas la
+    dernière saisie : un réglage antidaté ne doit pas défaire celui du jour.
+    """
+    from . import vitesses as vitesses_service
+
+    with base.transaction():
+        id_ = vitesses_service.regler(
+            base, cible=vitesses_service.DISPOSITIF, cible_id=dispositif_id,
+            date_heure=date_heure, vitesse=vitesse, utilisateur_id=utilisateur_id,
+        )
+        notes = vitesses_service.reglages(base, vitesses_service.DISPOSITIF, dispositif_id)
+        ligne = base.une_ligne(
+            "SELECT * FROM dispositif WHERE id = ? AND supprime = 0", (dispositif_id,)
+        )
+        if notes and ligne is not None:
+            details = dict(dom.lire_details(ligne))
+            details["vitesse"] = notes[-1]["vitesse"]
+            modifier(base, dispositif_id, {"details": details}, utilisateur_id=utilisateur_id)
+    return id_
 
 
 def modifier(

@@ -732,3 +732,126 @@ def test_les_bilans_infectieux_nont_plus_de_colonne_date(base, dossier):
     assert "date" not in ligne
     assert ligne["prelevement"] == "Hémoculture (04/09)"
     assert ligne["resultat"] == "E. coli"
+
+
+# -- vitesses écrites heure par heure (demande du service, 8 septembre) ------
+
+def _cases_grille(grille) -> list[str]:
+    """Le contenu des 24 cases d'une grille horaire, dans l'ordre imprimé."""
+    cases = re.findall(
+        r'<div style="display:flex;align-items:center;justify-content:center">(.*?)</div>',
+        grille.html,
+    )
+    return [re.sub(r"<[^>]+>", "", c) for c in cases]
+
+
+def test_la_vitesse_dune_seringue_souvre_la_journee_a_huit_heures(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="PSE",
+                                produit="Noradrénaline", vitesse=25,
+                                rythme="continu", date_debut=J1)
+    ligne = feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]
+    cases = _cases_grille(ligne["grille"])
+    assert cases[_colonne(8)] == "25"
+    assert [c for c in cases if c] == ["25"]
+
+
+def test_un_changement_de_vitesse_sinscrit_a_son_heure(base, dossier):
+    """L'exemple du service : à 16 h la vitesse passe de 25 à 15."""
+    from rea.services import vitesses
+
+    _pid, sid = dossier
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Noradrénaline", vitesse=25,
+        rythme="continu", date_debut=J1,
+    )
+    vitesses.regler(base, cible=vitesses.LIGNE, cible_id=ligne_id,
+                    date_heure=f"{AUJ}T16:00", vitesse=15)
+    cases = _cases_grille(feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]["grille"])
+    assert cases[_colonne(8)] == "25"
+    assert cases[_colonne(16)] == "15"
+
+
+def test_la_vitesse_dhier_ouvre_la_journee_daujourdhui(base, dossier):
+    """Descendue à 15 hier soir, la seringue ouvre aujourd'hui à 15 : la
+    feuille ne réaffiche pas la vitesse prescrite au départ."""
+    from rea.services import vitesses
+
+    _pid, sid = dossier
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Noradrénaline", vitesse=25,
+        rythme="continu", date_debut=J2,
+    )
+    vitesses.regler(base, cible=vitesses.LIGNE, cible_id=ligne_id,
+                    date_heure=f"{J1}T22:00", vitesse=15)
+    cases = _cases_grille(feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]["grille"])
+    assert cases[_colonne(8)] == "15"
+    assert [c for c in cases if c] == ["15"]
+
+
+def test_la_sedation_porte_aussi_sa_vitesse_dans_les_cases(base, dossier):
+    """C'est justement celle qu'on allège tous les jours."""
+    from rea.services import vitesses
+
+    _pid, sid = dossier
+    did = dispositifs.poser(base, sejour_id=sid, type_="sedation", date_pose=J1,
+                            details={"molecules": "Midazolam", "vitesse": 6})
+    vitesses.regler(base, cible=vitesses.DISPOSITIF, cible_id=did,
+                    date_heure=f"{AUJ}T14:00", vitesse=4)
+    ligne = feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]
+    cases = _cases_grille(ligne["grille"])
+    assert cases[_colonne(8)] == "6"
+    assert cases[_colonne(14)] == "4"
+
+
+def test_une_ligne_a_heures_fixes_garde_ses_ronds(base, dossier):
+    """Un rond dit « donner à cette heure-ci », un nombre dit « la pompe est à
+    tant » : une ligne qui ne coule pas garde ses ronds."""
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Tienam",
+                                dose=1, unite="g", rythme="x3/j", date_debut=J1)
+    grille = feuille.contexte(_dossier(base, sid, AUJ))["ivRows"][0]["grille"].html
+    assert "○" in grille
+
+
+def test_une_ligne_arretee_nimprime_plus_de_vitesse(base, dossier):
+    """Une seringue arrêtée ne coule plus : ses cases restent vides, et la
+    ligne barrée dit pourquoi."""
+    _pid, sid = dossier
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Noradrénaline", vitesse=25,
+        rythme="continu", date_debut=J2,
+    )
+    prescriptions.arreter_ligne(base, ligne_id, date_arret=AUJ)
+    cases = _cases_grille(feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]["grille"])
+    assert [c for c in cases if c] == []
+
+
+# -- antidater ce qui a été fait pendant la garde ---------------------------
+
+def test_un_traitement_introduit_hier_compte_son_deuxieme_jour(base, dossier):
+    """Saisi ce matin mais commencé hier soir : la pancarte du jour doit lire
+    « J2 », pas « Introduction de »."""
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Tienam",
+                                dose=1, unite="g", rythme="x3/j", date_debut=J1)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert contexte["ivRows"][0]["produit"] == "Tienam"
+    lignes = feuille_dossier.rassembler(base, sid, AUJ).pancarte["lignes"]
+    from rea.domaine import prescription as dom_p
+    assert dom_p.etiquette_jour(lignes[0], AUJ).texte == "J2"
+    assert dom_p.etiquette_jour(lignes[0], J1).texte == "Introduction de"
+
+
+def test_un_bilan_antidate_se_range_a_sa_date(base, dossier):
+    """Le bilan de la garde, saisi le lendemain matin, doit tomber dans la
+    colonne de la nuit — pas dans celle du jour de la frappe."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T23:00",
+                                 valeurs={"hb": 8.4})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne_hb = next(l for l in contexte["bioHemato"] if l["libelle"] == "Hb")
+    cellules = re.findall(r">([^<>]*)</div>", ligne_hb["valeurs"].html)
+    # Trois jours de quatre créneaux : le premier jour est J2.
+    assert cellules[0] == "8,4"
+    assert all(c == "" for c in cellules[feuille.NB_CRENEAUX_PAR_JOUR:])
