@@ -51,14 +51,9 @@ def ecran_lits() -> None:
     )
 
     aujourdhui = contexte.aujourdhui()
-    admissions_jour = contexte.base().une_ligne(
-        "SELECT COUNT(*) AS n FROM sejour WHERE date_admission LIKE ? AND supprime = 0",
-        (f"{aujourdhui}%",),
-    )["n"]
-    sorties_jour = contexte.base().une_ligne(
-        "SELECT COUNT(*) AS n FROM sejour WHERE date_sortie LIKE ? AND supprime = 0",
-        (f"{aujourdhui}%",),
-    )["n"]
+    mouvements = lits_service.mouvements_du_jour(contexte.base(), aujourdhui)
+    admissions_jour = mouvements["admissions"]
+    sorties_jour = mouvements["sorties"]
 
     st.markdown("### Tableau des lits")
     c1, c2, c3, c4, c5, c6, c7, _vide = st.columns([1, 1, 1, 1, 1, 1, 1, 1.6])
@@ -133,12 +128,7 @@ def _tableau_de_bord(occupes: list[dict], resumes: dict) -> None:
             ):
                 dispositifs_anciens.append(f"<b>Lit {lit['lit']} · {nom}</b> — {e.texte}")
 
-        journee = contexte.base().une_ligne(
-            "SELECT preparee_le FROM journee WHERE sejour_id = ? AND date_jour = ? "
-            "AND supprime = 0",
-            (sejour_id, demain),
-        )
-        prete = bool(journee and journee["preparee_le"])
+        prete = prescriptions_service.pancarte_preparee(contexte.base(), sejour_id, demain)
         if not prete:
             a_preparer.append(f"Lit {lit['lit']} · {nom}")
 

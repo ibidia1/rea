@@ -98,6 +98,74 @@ Deux options, à décider : soit copie en lecture seule pour consultation, soit
 rien du tout et consultation sur le poste du service. Une base modifiable en
 deux endroits produit deux vérités.
 
+## 2.4 Contraintes d'architecture
+
+Cette section voyage avec le code, pas seulement avec la SPEC. Sans elle, on
+proposera dans trois mois une architecture client-serveur déjà écartée — ou on
+oubliera que le multi-postes reste possible.
+
+**État actuel — ne pas dépasser.** Un seul poste Windows, celui du DMI. Un
+seul utilisateur à la fois. Écoute sur 127.0.0.1. SQLite local. Pas de réseau,
+pas d'internet sur cette machine.
+
+**Évolutions possibles, non décidées, à ne pas développer.** Postes du service
+via LAN de l'hôpital, portable de visite, tablettes, mini-PC serveur dédié,
+PIN par utilisateur.
+
+> **Règle** : ne rien coder pour ces cas, mais ne jamais les rendre coûteux.
+
+### Invariants — à respecter dans tout code produit
+
+1. **Aucune hypothèse « un seul utilisateur ».** Toute table modifiable porte
+   `version` (int, défaut 1), `cree_par`, `modifie_par`, `cree_le`,
+   `modifie_le`. `version` est incrémentée à chaque écriture. Personne ne la
+   lit encore.
+2. **Aucune hypothèse « un seul écran ouvert ».** Toute écriture se fait ligne
+   par ligne, au moment de la validation de la ligne. Jamais un formulaire
+   entier enregistré en bloc.
+3. **Un seul endroit contient du SQL.** Les vues et le rendu appellent des
+   fonctions métier, jamais une requête.
+4. **Les calculs sont des fonctions pures**, sans accès base : compteurs de
+   jours, volume des entrées, âge, polytraumatisé, P/F. Testables sans base.
+5. **Aucune valeur en dur hors `config.py`** — `HOTE`, `AUTH_REQUISE`,
+   `FORMAT_PAGE`, `PORT`.
+6. **Les référentiels** (protocoles, listes, seuils, médicaments) sont des
+   fichiers versionnés dans `referentiels/`, jamais du code.
+7. **Le rendu ne calcule jamais.** Il reçoit des valeurs déjà calculées.
+
+**Interdits** : couche d'abstraction générique de base, système de plugins,
+API REST, gestion de rôles, mode hors ligne, cache local. Ces éléments coûtent
+aujourd'hui pour un besoin hypothétique.
+
+### Où ces invariants vivent dans ce dépôt
+
+Trois écarts de nommage avec l'énoncé d'origine, assumés — renommer coûterait
+sans rien apporter :
+
+| Énoncé      | Ici                | Pourquoi                                     |
+|-------------|--------------------|----------------------------------------------|
+| `donnees.py`| `rea/db.py`        | même rôle, nom déjà en place partout          |
+| `metier/`   | `rea/domaine/`     | idem                                          |
+| YAML        | JSON               | pas de dépendance à installer sur un poste hors ligne ; même versionnement, même lisibilité |
+
+Un quatrième écart n'est pas assumé mais **connu** : le SQL est réparti dans
+les services plutôt que réuni dans un seul fichier (invariant 3). Ce qui est
+tenu aujourd'hui, et vérifié par `tests/test_architecture.py`, c'est qu'aucun
+écran ni aucun rendu n'en contient — c'est là que la règle protège vraiment.
+Réunir les quinze services en un fichier reste à faire, sans urgence.
+
+L'invariant 2 est tenu pour les prescriptions (une ligne, une écriture) mais
+pas pour l'évolution ni la saisie d'un bilan, enregistrés d'un bouton. Un
+bilan est un événement unique — un prélèvement, trente analytes — et son
+enregistrement en bloc correspond à la réalité. L'évolution, elle, est un
+vrai écart : deux internes sur le même patient le même jour s'écrasent.
+
+Les invariants vérifiables sont tenus par des tests plutôt que par la
+discipline (`tests/test_architecture.py`) : traçabilité de chaque table,
+incrémentation de `version`, `pin` présent, aucun `DELETE`, aucun SQL dans un
+écran, adresse d'écoute limitée à la boucle locale, et `AUTH_REQUISE` exigé
+dès que `HOTE` s'ouvre.
+
 ---
 
 # 3. RÈGLES DE CONCEPTION
@@ -809,6 +877,45 @@ En fin de session :
 ---
 
 # JOURNAL DES VERSIONS
+
+**v3.6 — 8 septembre 2026 — §2.4, contraintes d'architecture : audit et mise en conformité**
+
+Le §2.4 entre dans la SPEC (état actuel, évolutions écartées, sept invariants,
+interdits). Audit du code existant contre ses huit points, avant le premier
+patient — c'est le dernier moment où le schéma est bon marché.
+
+*Le plus grave, et le plus court à corriger.* Aucune adresse d'écoute n'était
+configurée : Streamlit écoutait sur toutes les interfaces. Le bandeau de
+démarrage annonçait lui-même « Network URL » et « External URL ». Sur le
+réseau de l'hôpital, le dossier de tous les patients était lisible depuis
+n'importe quelle machine, sans mot de passe. Le poste n'a pas de réseau
+aujourd'hui, et c'est la seule raison pour laquelle rien n'est arrivé.
+`config.HOTE = "127.0.0.1"`, repris par le lanceur et par la configuration
+Streamlit ; un test vérifie que les deux ne divergent pas, un autre exige que
+`AUTH_REQUISE` passe à True le jour où `HOTE` s'ouvrira.
+
+*Schéma (points 1 et 2 de l'audit).* `version` manquait sur les 29 tables. Elle
+est ajoutée aux 26 tables modifiables, part à 1 et s'incrémente à chaque
+écriture, en SQL — personne ne la lit encore. `pin` est ajouté à
+`utilisateur`, vide. Quinze tables gagnent au passage les `modifie_le` /
+`modifie_par` qui leur manquaient. Quatre tables restent hors du dispositif,
+chacune pour sa raison, écrite dans l'en-tête du schéma — dont
+`pancarte_snapshot`, dont la colonne `version` désignait déjà le numéro
+d'impression : l'incrémenter aurait renuméroté des feuilles déjà sorties de
+l'imprimante. Une base existante se met à jour toute seule à l'ouverture,
+sans perte : vérifié sur une base de quatre patients.
+
+*Points déjà tenus.* Aucune suppression physique (point 3), trois états
+explicites (point 4), calculs en fonctions pures et rendu qui ne calcule pas
+(points 4 et 7) — ces deux derniers étaient déjà tenus par des tests.
+
+*Point 6, partiellement.* Quatre requêtes SQL vivaient dans deux écrans ; elles
+rejoignent les services. Le SQL reste réparti entre les quinze services plutôt
+que réuni en un fichier : l'écart est décrit au §2.4 plutôt que corrigé dans
+l'urgence, ce qui protège vraiment étant qu'aucun écran n'en contienne.
+
+Ce qui est vérifiable est désormais tenu par des tests plutôt que par la
+discipline : 178 nouvelles vérifications d'architecture.
 
 **v3.5 — 8 septembre 2026 — le bilan hydrique se calcule tout seul**
 

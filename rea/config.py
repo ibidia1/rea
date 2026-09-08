@@ -34,6 +34,22 @@ FICHIER_BASE = DOSSIER_DONNEES / "rea.db"
 DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 
 # --------------------------------------------------------------------------
+# Réseau et authentification (§2.4 — contraintes d'architecture)
+# --------------------------------------------------------------------------
+# ÉTAT ACTUEL : un seul poste Windows, celui du DMI, sans réseau ni internet.
+# Le logiciel n'écoute donc que sur la boucle locale : rien de ce dossier ne
+# doit être joignable depuis une autre machine. Sans cette ligne, Streamlit
+# écoute sur toutes les interfaces — le jour où le poste touche le réseau de
+# l'hôpital, la base entière devient lisible sans mot de passe.
+#
+# ÉVOLUTION POSSIBLE, NON DÉCIDÉE : postes du service via LAN. Ce jour-là,
+# HOTE passe à "0.0.0.0" et AUTH_REQUISE à True — les deux ensemble, jamais
+# l'un sans l'autre.
+HOTE = "127.0.0.1"
+PORT = 8501
+AUTH_REQUISE = False
+
+# --------------------------------------------------------------------------
 # Sauvegardes (SPEC §2.2)
 # --------------------------------------------------------------------------
 INTERVALLE_SAUVEGARDE_MINUTES = 15

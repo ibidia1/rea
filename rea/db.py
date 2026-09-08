@@ -25,6 +25,12 @@ from . import config
 # Mots qui commencent une contrainte de table, pas une colonne.
 _MOTS_CLES_SQL = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
 
+# `pancarte_snapshot.version` existe depuis l'origine et désigne le numéro
+# d'impression d'une feuille (v1, v2 du même jour) : l'incrémenter à chaque
+# écriture renuméroterait les feuilles déjà sorties de l'imprimante. Cette
+# table est de toute façon immuable — on ne modifie jamais un instantané.
+TABLES_SANS_COMPTEUR_DE_VERSION = {"pancarte_snapshot"}
+
 
 def nouvel_id() -> str:
     return str(uuid.uuid4())
@@ -223,6 +229,13 @@ class Base:
         if "modifie_par" in colonnes:
             valeurs["modifie_par"] = utilisateur_id
         affectation = ", ".join(f"{cle} = ?" for cle in valeurs)
+        # §2.4, invariant 1 : `version` s'incrémente à chaque écriture. Personne
+        # ne la lit encore — elle est là pour que détecter un conflit entre deux
+        # postes, le jour venu, ne demande pas de migrer des données cliniques
+        # déjà écrites. Incrémentée en SQL et non en Python : c'est la base qui
+        # doit compter, pas la lecture qui a précédé.
+        if "version" in colonnes and table not in TABLES_SANS_COMPTEUR_DE_VERSION:
+            affectation += ", version = version + 1"
         with self.transaction():
             self.connexion.execute(
                 f"UPDATE {table} SET {affectation} WHERE id = ?",
@@ -452,6 +465,17 @@ class Base:
             parametres = (table,)
         sql += "ORDER BY j.date_heure DESC, j.rowid DESC LIMIT ?"
         return self.requete(sql, (*parametres, limite))
+
+    def tables_journalisees(self) -> list[str]:
+        """Les tables sur lesquelles le journal porte au moins une trace —
+        de quoi peupler le filtre de l'écran d'administration sans que celui-ci
+        ait à écrire du SQL (§2.4, invariant 3)."""
+        return [
+            ligne["table_cible"]
+            for ligne in self.requete(
+                "SELECT DISTINCT table_cible FROM journal ORDER BY table_cible"
+            )
+        ]
 
     def fermer(self) -> None:
         self.arreter_sauvegardes_periodiques()

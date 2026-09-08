@@ -12,6 +12,26 @@
 --
 -- Dates et heures : texte ISO 8601 ('2026-09-01' ou '2026-09-01T08:30:00').
 -- Booléens : INTEGER 0 / 1.
+--
+-- -------------------------------------------------------------------------
+-- Traçabilité (§2.4, invariant 1) — aucune hypothèse « un seul utilisateur »
+-- -------------------------------------------------------------------------
+-- Toute table modifiable porte les six mêmes colonnes :
+--
+--     version  cree_le  cree_par  modifie_le  modifie_par  supprime
+--
+-- `version` part à 1 et s'incrémente à chaque écriture (rea/db.py). Personne
+-- ne la lit encore : elle est là pour que le jour où deux postes écrivent en
+-- même temps, détecter le conflit ne demande pas une migration sur des
+-- données cliniques réelles. C'est le moment où elle est bon marché.
+--
+-- Quatre tables en sont exemptées, chacune pour sa raison :
+--   meta               configuration clé/valeur, pas une donnée clinique
+--   pancarte_snapshot  instantané figé, jamais modifié — et sa colonne
+--                      `version` désigne déjà le numéro d'impression
+--                      (v1, v2 d'une même feuille), un tout autre sens
+--   journal            journal d'audit : ni modifié, ni supprimé, jamais
+--   sauvegarde         registre des sauvegardes, tenu par le programme
 -- =========================================================================
 
 PRAGMA foreign_keys = ON;
@@ -28,12 +48,21 @@ CREATE TABLE IF NOT EXISTS meta (
 -- Utilisateurs (SPEC §1.2) — pas de droits différenciés en v1
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS utilisateur (
-    id       TEXT PRIMARY KEY,
-    nom      TEXT NOT NULL,
-    role     TEXT NOT NULL,            -- interne / resident / senior
-    actif    INTEGER NOT NULL DEFAULT 1,
-    cree_le  TEXT NOT NULL,
-    supprime INTEGER NOT NULL DEFAULT 0
+    id          TEXT PRIMARY KEY,
+    nom         TEXT NOT NULL,
+    role        TEXT NOT NULL,            -- interne / resident / senior
+    actif       INTEGER NOT NULL DEFAULT 1,
+    -- Vide aujourd'hui : un seul poste, un seul utilisateur à la fois, aucune
+    -- authentification (config.AUTH_REQUISE = False). La colonne existe pour
+    -- que le jour du multi-postes ne demande pas une migration sur des données
+    -- cliniques déjà là (§2.4 — évolutions possibles, non décidées).
+    pin         TEXT,
+    cree_le     TEXT NOT NULL,
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_utilisateur_nom ON utilisateur(nom);
 
@@ -41,25 +70,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_utilisateur_nom ON utilisateur(nom);
 -- Identité (SPEC §4.1) — table séparée des données cliniques (règle 6)
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS patient (
-    id                     TEXT PRIMARY KEY,
-    matricule              TEXT NOT NULL,
-    nom_affichage          TEXT NOT NULL,   -- « K. Abdelaziz »
-    date_naissance         TEXT,            -- complète : permet l'âge et les tranches
-    sexe                   TEXT NOT NULL DEFAULT 'non_renseigne',
-    non_identifie          INTEGER NOT NULL DEFAULT 0,
-    fusionne_vers          TEXT REFERENCES patient(id),  -- patient non identifié réuni au vrai dossier
-    traitement_habituel    TEXT,            -- texte libre, un seul champ (SPEC §4.2)
-    sans_antecedent_connu  INTEGER NOT NULL DEFAULT 0,
+    id                    TEXT PRIMARY KEY,
+    matricule             TEXT NOT NULL,
+    nom_affichage         TEXT NOT NULL,   -- « K. Abdelaziz »
+    date_naissance        TEXT,            -- complète : permet l'âge et les tranches
+    sexe                  TEXT NOT NULL DEFAULT 'non_renseigne',
+    non_identifie         INTEGER NOT NULL DEFAULT 0,
+    fusionne_vers         TEXT REFERENCES patient(id),  -- patient non identifié réuni au vrai dossier
+    traitement_habituel   TEXT,            -- texte libre, un seul champ (SPEC §4.2)
+    sans_antecedent_connu INTEGER NOT NULL DEFAULT 0,
     -- Groupe sanguin : propriété de la personne, pas du séjour — il ne
     -- change pas d'une admission à l'autre et n'a pas à être resaisi.
-    groupe_sanguin         TEXT,
+    groupe_sanguin        TEXT,
     -- identifiant d'étude stable, utilisé par l'export pseudonymisé (règle 8)
-    identifiant_etude      TEXT NOT NULL,
-    cree_le                TEXT NOT NULL,
-    cree_par               TEXT REFERENCES utilisateur(id),
-    modifie_le             TEXT,
-    modifie_par            TEXT REFERENCES utilisateur(id),
-    supprime               INTEGER NOT NULL DEFAULT 0
+    identifiant_etude     TEXT NOT NULL,
+    cree_le               TEXT NOT NULL,
+    cree_par              TEXT REFERENCES utilisateur(id),
+    modifie_le            TEXT,
+    modifie_par           TEXT REFERENCES utilisateur(id),
+    supprime              INTEGER NOT NULL DEFAULT 0,
+    version               INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_matricule ON patient(matricule);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_etude ON patient(identifiant_etude);
@@ -68,61 +98,62 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_etude ON patient(identifiant_etude
 -- Séjour (SPEC §4.1, §4.7)
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sejour (
-    id                  TEXT PRIMARY KEY,
-    patient_id          TEXT NOT NULL REFERENCES patient(id),
-    numero_sejour       INTEGER NOT NULL DEFAULT 1,
-    date_admission      TEXT NOT NULL,
-    lit_admission       INTEGER NOT NULL,          -- 1-12, figé
-    provenance_type     TEXT,
-    provenance_detail   TEXT,
-    est_readmission     INTEGER NOT NULL DEFAULT 0,
+    id                     TEXT PRIMARY KEY,
+    patient_id             TEXT NOT NULL REFERENCES patient(id),
+    numero_sejour          INTEGER NOT NULL DEFAULT 1,
+    date_admission         TEXT NOT NULL,
+    lit_admission          INTEGER NOT NULL,          -- 1-12, figé
+    provenance_type        TEXT,
+    provenance_detail      TEXT,
+    est_readmission        INTEGER NOT NULL DEFAULT 0,
     -- Poids et taille à l'admission. Le poids est ce qui rend la clairance de
     -- la créatinine calculable (Cockcroft-Gault) ; sans lui, aucune formule
     -- pondérale n'est possible a posteriori.
-    poids_kg            REAL,
-    taille_cm           REAL,
+    poids_kg               REAL,
+    taille_cm              REAL,
     -- Créatinine antérieure connue, en µmol/L. Sans elle, la définition KDIGO
     -- de l'insuffisance rénale aiguë est incalculable a posteriori
     -- (feuille de route §5, exploitée au bloc 15).
-    creatinine_base     REAL,
-    motif_readmission   TEXT,
+    creatinine_base        REAL,
+    motif_readmission      TEXT,
     -- Deux variables de l'IGS II qu'aucune autre donnée ne permet de
     -- reconstituer après coup : le type d'admission (une chirurgie programmée
     -- ne pèse pas le même poids qu'une admission médicale) et la maladie
     -- chronique au sens du score, dont les trois catégories ne recouvrent pas
     -- celles des conditions chroniques ANZICS saisies par ailleurs.
-    type_admission      TEXT,
+    type_admission         TEXT,
     maladie_chronique_igs2 TEXT,
     -- Diagnostic principal codé CIM-10 (bloc 12). Sur le séjour et non sur le
     -- motif : un séjour traumatique n'a pas de ligne de motif, et il doit
     -- pouvoir être codé comme les autres.
-    code_icd10          TEXT,
+    code_icd10             TEXT,
 
     -- Question filtre : conditionne toute la suite de l'écran d'admission
-    traumatique         INTEGER,                   -- NULL = non renseigné
-    mecanisme           TEXT,
-    mecanisme_detail    TEXT,
+    traumatique            INTEGER,                   -- NULL = non renseigné
+    mecanisme              TEXT,
+    mecanisme_detail       TEXT,
 
     -- Sortie (SPEC §4.7)
-    date_sortie         TEXT,
-    mode_sortie         TEXT,
-    destination         TEXT,
-    meme_etablissement  INTEGER,                   -- NULL = non renseigné
-    complication_statut TEXT NOT NULL DEFAULT 'non_renseigne',
-    complication_texte  TEXT,
-    ordonnance_sortie   TEXT,
-    consultation_externe TEXT,
+    date_sortie            TEXT,
+    mode_sortie            TEXT,
+    destination            TEXT,
+    meme_etablissement     INTEGER,                   -- NULL = non renseigné
+    complication_statut    TEXT NOT NULL DEFAULT 'non_renseigne',
+    complication_texte     TEXT,
+    ordonnance_sortie      TEXT,
+    consultation_externe   TEXT,
 
     -- Devenir (SPEC §9.2) — deux champs distincts, question ouverte 5
-    deces_reanimation   INTEGER,                   -- NULL = non renseigné
-    statut_j28          TEXT,                      -- vivant / decede / perdu_de_vue
-    date_statut_j28     TEXT,
+    deces_reanimation      INTEGER,                   -- NULL = non renseigné
+    statut_j28             TEXT,                      -- vivant / decede / perdu_de_vue
+    date_statut_j28        TEXT,
 
-    cree_le             TEXT NOT NULL,
-    cree_par            TEXT REFERENCES utilisateur(id),
-    modifie_le          TEXT,
-    modifie_par         TEXT REFERENCES utilisateur(id),
-    supprime            INTEGER NOT NULL DEFAULT 0
+    cree_le                TEXT NOT NULL,
+    cree_par               TEXT REFERENCES utilisateur(id),
+    modifie_le             TEXT,
+    modifie_par            TEXT REFERENCES utilisateur(id),
+    supprime               INTEGER NOT NULL DEFAULT 0,
+    version                INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_sejour_patient ON sejour(patient_id);
 CREATE INDEX IF NOT EXISTS idx_sejour_ouvert ON sejour(date_sortie, supprime);
@@ -136,7 +167,10 @@ CREATE TABLE IF NOT EXISTS sejour_lit (
     date_fin    TEXT,
     cree_le     TEXT NOT NULL,
     cree_par    TEXT REFERENCES utilisateur(id),
-    supprime    INTEGER NOT NULL DEFAULT 0
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_sejour_lit_sejour ON sejour_lit(sejour_id);
 
@@ -158,19 +192,23 @@ CREATE TABLE IF NOT EXISTS antecedent (
     cree_par              TEXT REFERENCES utilisateur(id),
     modifie_le            TEXT,
     modifie_par           TEXT REFERENCES utilisateur(id),
-    supprime              INTEGER NOT NULL DEFAULT 0
+    supprime              INTEGER NOT NULL DEFAULT 0,
+    version               INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_antecedent_patient ON antecedent(patient_id, supprime);
 
 -- Conditions chroniques ANZICS (SPEC §9.5) — sept catégories + « aucune »
 CREATE TABLE IF NOT EXISTS condition_chronique (
-    id         TEXT PRIMARY KEY,
-    sejour_id  TEXT NOT NULL REFERENCES sejour(id),
-    code       TEXT NOT NULL,
-    statut     TEXT NOT NULL DEFAULT 'non_renseigne',  -- present / absent / non_renseigne
-    cree_le    TEXT NOT NULL,
-    cree_par   TEXT REFERENCES utilisateur(id),
-    supprime   INTEGER NOT NULL DEFAULT 0
+    id          TEXT PRIMARY KEY,
+    sejour_id   TEXT NOT NULL REFERENCES sejour(id),
+    code        TEXT NOT NULL,
+    statut      TEXT NOT NULL DEFAULT 'non_renseigne',  -- present / absent / non_renseigne
+    cree_le     TEXT NOT NULL,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_condition_sejour_code ON condition_chronique(sejour_id, code);
 
@@ -180,16 +218,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_condition_sejour_code ON condition_chroniq
 -- Traumatique : multi-sélection de régions. Le statut « polytraumatisé » n'est
 -- pas stocké — il se calcule (>= 2 régions), voir domaine/sejours.py.
 CREATE TABLE IF NOT EXISTS sejour_region_trauma (
-    id         TEXT PRIMARY KEY,
-    sejour_id  TEXT NOT NULL REFERENCES sejour(id),
-    region     TEXT NOT NULL,
+    id          TEXT PRIMARY KEY,
+    sejour_id   TEXT NOT NULL REFERENCES sejour(id),
+    region      TEXT NOT NULL,
     -- Commentaire libre sur la lésion réelle (ex. « hématome extra-dural
     -- droit avec engagement temporal / embarrure pariétale ») : la région
     -- seule ne dit rien de la gravité ni du geste attendu.
-    precision  TEXT,
-    cree_le    TEXT NOT NULL,
-    cree_par   TEXT REFERENCES utilisateur(id),
-    supprime   INTEGER NOT NULL DEFAULT 0
+    precision   TEXT,
+    cree_le     TEXT NOT NULL,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_region_sejour ON sejour_region_trauma(sejour_id, region);
 
@@ -198,16 +239,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_region_sejour ON sejour_region_trauma(sejo
 -- choc septique, surface brûlée, agent…) en JSON — ces champs varient d'un
 -- motif à l'autre et n'ont pas à peupler la table de colonnes vides.
 CREATE TABLE IF NOT EXISTS sejour_motif (
-    id         TEXT PRIMARY KEY,
-    sejour_id  TEXT NOT NULL REFERENCES sejour(id),
-    code       TEXT NOT NULL,
-    principal  INTEGER NOT NULL DEFAULT 0,
-    texte      TEXT,
-    donnees    TEXT,          -- JSON
-    code_icd10 TEXT,          -- posé tôt, exploité au bloc 17
-    cree_le    TEXT NOT NULL,
-    cree_par   TEXT REFERENCES utilisateur(id),
-    supprime   INTEGER NOT NULL DEFAULT 0
+    id          TEXT PRIMARY KEY,
+    sejour_id   TEXT NOT NULL REFERENCES sejour(id),
+    code        TEXT NOT NULL,
+    principal   INTEGER NOT NULL DEFAULT 0,
+    texte       TEXT,
+    donnees     TEXT,          -- JSON
+    code_icd10  TEXT,          -- posé tôt, exploité au bloc 17
+    cree_le     TEXT NOT NULL,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_motif_sejour ON sejour_motif(sejour_id, supprime);
 
@@ -229,7 +273,8 @@ CREATE TABLE IF NOT EXISTS intervention (
     cree_par            TEXT REFERENCES utilisateur(id),
     modifie_le          TEXT,
     modifie_par         TEXT REFERENCES utilisateur(id),
-    supprime            INTEGER NOT NULL DEFAULT 0
+    supprime            INTEGER NOT NULL DEFAULT 0,
+    version             INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_intervention_sejour ON intervention(sejour_id, supprime);
 
@@ -274,7 +319,8 @@ CREATE TABLE IF NOT EXISTS prescription_ligne (
     cree_par           TEXT REFERENCES utilisateur(id),   -- le prescripteur
     modifie_le         TEXT,
     modifie_par        TEXT REFERENCES utilisateur(id),
-    supprime           INTEGER NOT NULL DEFAULT 0
+    supprime           INTEGER NOT NULL DEFAULT 0,
+    version            INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_prescription_sejour ON prescription_ligne(sejour_id, supprime);
 CREATE INDEX IF NOT EXISTS idx_prescription_periode ON prescription_ligne(sejour_id, date_debut, date_arret);
@@ -301,7 +347,8 @@ CREATE TABLE IF NOT EXISTS vitesse_reglage (
     cree_par    TEXT REFERENCES utilisateur(id),
     modifie_le  TEXT,
     modifie_par TEXT REFERENCES utilisateur(id),
-    supprime    INTEGER NOT NULL DEFAULT 0
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_vitesse_cible
     ON vitesse_reglage(cible, cible_id, date_heure);
@@ -310,31 +357,37 @@ CREATE INDEX IF NOT EXISTS idx_vitesse_cible
 -- Elle ne contient pas les lignes de prescription (elles se calculent) mais
 -- porte les bilans demandés pour ce jour et la trace de qui a préparé.
 CREATE TABLE IF NOT EXISTS journee (
-    id            TEXT PRIMARY KEY,
-    sejour_id     TEXT NOT NULL REFERENCES sejour(id),
-    date_jour     TEXT NOT NULL,
-    preparee_le   TEXT,
-    preparee_par  TEXT REFERENCES utilisateur(id),
+    id           TEXT PRIMARY KEY,
+    sejour_id    TEXT NOT NULL REFERENCES sejour(id),
+    date_jour    TEXT NOT NULL,
+    preparee_le  TEXT,
+    preparee_par TEXT REFERENCES utilisateur(id),
     -- Un pas de plus que « préparée » : quelqu'un a relu la pancarte
     -- reconduite avant qu'elle ne devienne imprimable (demande du service).
-    validee_le    TEXT,
-    validee_par   TEXT REFERENCES utilisateur(id),
-    note          TEXT,
-    cree_le       TEXT NOT NULL,
-    cree_par      TEXT REFERENCES utilisateur(id),
-    supprime      INTEGER NOT NULL DEFAULT 0
+    validee_le   TEXT,
+    validee_par  TEXT REFERENCES utilisateur(id),
+    note         TEXT,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1,
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_journee_sejour_date ON journee(sejour_id, date_jour);
 
 -- Bilans à demander pour le lendemain (SPEC §5.2 bis)
 CREATE TABLE IF NOT EXISTS bilan_demande (
-    id                 TEXT PRIMARY KEY,
-    journee_id         TEXT NOT NULL REFERENCES journee(id),
-    examen_code        TEXT NOT NULL,
-    heure_prelevement  TEXT NOT NULL DEFAULT '06:00',
-    cree_le            TEXT NOT NULL,
-    cree_par           TEXT REFERENCES utilisateur(id),
-    supprime           INTEGER NOT NULL DEFAULT 0
+    id                TEXT PRIMARY KEY,
+    journee_id        TEXT NOT NULL REFERENCES journee(id),
+    examen_code       TEXT NOT NULL,
+    heure_prelevement TEXT NOT NULL DEFAULT '06:00',
+    cree_le           TEXT NOT NULL,
+    cree_par          TEXT REFERENCES utilisateur(id),
+    supprime          INTEGER NOT NULL DEFAULT 0,
+    version           INTEGER NOT NULL DEFAULT 1,
+    modifie_le        TEXT,
+    modifie_par       TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bilan_demande_unique ON bilan_demande(journee_id, examen_code);
 
@@ -364,7 +417,10 @@ CREATE TABLE IF NOT EXISTS protocole_applique (
     protocole_version TEXT NOT NULL,
     cree_le           TEXT NOT NULL,
     cree_par          TEXT REFERENCES utilisateur(id),
-    supprime          INTEGER NOT NULL DEFAULT 0
+    supprime          INTEGER NOT NULL DEFAULT 0,
+    version           INTEGER NOT NULL DEFAULT 1,
+    modifie_le        TEXT,
+    modifie_par       TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_protocole_sejour ON protocole_applique(sejour_id);
 
@@ -382,18 +438,24 @@ CREATE TABLE IF NOT EXISTS exploration (
     cree_par    TEXT REFERENCES utilisateur(id),
     modifie_le  TEXT,
     modifie_par TEXT REFERENCES utilisateur(id),
-    supprime    INTEGER NOT NULL DEFAULT 0
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_exploration_sejour ON exploration(sejour_id, date_heure);
 
 CREATE TABLE IF NOT EXISTS exploration_valeur (
-    id              TEXT PRIMARY KEY,
-    exploration_id  TEXT NOT NULL REFERENCES exploration(id),
-    cle             TEXT NOT NULL,
-    valeur_num      REAL,
-    valeur_texte    TEXT,
-    unite           TEXT,
-    supprime        INTEGER NOT NULL DEFAULT 0
+    id             TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES exploration(id),
+    cle            TEXT NOT NULL,
+    valeur_num     REAL,
+    valeur_texte   TEXT,
+    unite          TEXT,
+    supprime       INTEGER NOT NULL DEFAULT 0,
+    version        INTEGER NOT NULL DEFAULT 1,
+    cree_le        TEXT NOT NULL,
+    cree_par       TEXT REFERENCES utilisateur(id),
+    modifie_le     TEXT,
+    modifie_par    TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_expl_valeur ON exploration_valeur(exploration_id, cle);
 
@@ -402,24 +464,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_expl_valeur ON exploration_valeur(explorat
 -- directement : mêmes analytes, même format de texte généré.
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bilan_resultat (
-    id           TEXT PRIMARY KEY,
-    sejour_id    TEXT NOT NULL REFERENCES sejour(id),
-    date_heure   TEXT NOT NULL,
-    analyte      TEXT NOT NULL,     -- 'hb', 'creatinine', 'crp'…
-    valeur_num   REAL,
-    valeur_texte TEXT,
-    unite        TEXT,              -- unité affichée, telle que saisie
+    id            TEXT PRIMARY KEY,
+    sejour_id     TEXT NOT NULL REFERENCES sejour(id),
+    date_heure    TEXT NOT NULL,
+    analyte       TEXT NOT NULL,     -- 'hb', 'creatinine', 'crp'…
+    valeur_num    REAL,
+    valeur_texte  TEXT,
+    unite         TEXT,              -- unité affichée, telle que saisie
     -- Codes standards, remplis depuis le catalogue au moment de
     -- l'enregistrement (feuille de route §5). Une unité UCUM normalisée est ce
     -- qui empêche de confondre µmol/L et mg/L à l'analyse.
-    code_loinc   TEXT,
-    unite_ucum   TEXT,
+    code_loinc    TEXT,
+    unite_ucum    TEXT,
     -- Valeur enregistrée malgré un avertissement de cohérence (bloc 4).
     saisie_forcee INTEGER NOT NULL DEFAULT 0,
-    source       TEXT,              -- 'import_html' / 'saisie'
-    cree_le      TEXT NOT NULL,
-    cree_par     TEXT REFERENCES utilisateur(id),
-    supprime     INTEGER NOT NULL DEFAULT 0
+    source        TEXT,              -- 'import_html' / 'saisie'
+    cree_le       TEXT NOT NULL,
+    cree_par      TEXT REFERENCES utilisateur(id),
+    supprime      INTEGER NOT NULL DEFAULT 0,
+    version       INTEGER NOT NULL DEFAULT 1,
+    modifie_le    TEXT,
+    modifie_par   TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_bilan_sejour ON bilan_resultat(sejour_id, date_heure);
 CREATE INDEX IF NOT EXISTS idx_bilan_analyte ON bilan_resultat(sejour_id, analyte, date_heure);
@@ -446,23 +511,27 @@ CREATE TABLE IF NOT EXISTS gaz_du_sang (
     ai                REAL,          -- aide inspiratoire, cmH2O
     cree_le           TEXT NOT NULL,
     cree_par          TEXT REFERENCES utilisateur(id),
-    supprime          INTEGER NOT NULL DEFAULT 0
+    supprime          INTEGER NOT NULL DEFAULT 0,
+    version           INTEGER NOT NULL DEFAULT 1,
+    modifie_le        TEXT,
+    modifie_par       TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_gds_sejour ON gaz_du_sang(sejour_id, date_heure);
 
 CREATE TABLE IF NOT EXISTS microbiologie (
-    id                TEXT PRIMARY KEY,
-    sejour_id         TEXT NOT NULL REFERENCES sejour(id),
-    date_prelevement  TEXT NOT NULL,
-    type_prelevement  TEXT NOT NULL,
-    resultat          TEXT NOT NULL DEFAULT 'en_cours',
-    germe             TEXT,
-    antibiogramme     TEXT,           -- texte libre en v1
-    cree_le           TEXT NOT NULL,
-    cree_par          TEXT REFERENCES utilisateur(id),
-    modifie_le        TEXT,
-    modifie_par       TEXT REFERENCES utilisateur(id),
-    supprime          INTEGER NOT NULL DEFAULT 0
+    id               TEXT PRIMARY KEY,
+    sejour_id        TEXT NOT NULL REFERENCES sejour(id),
+    date_prelevement TEXT NOT NULL,
+    type_prelevement TEXT NOT NULL,
+    resultat         TEXT NOT NULL DEFAULT 'en_cours',
+    germe            TEXT,
+    antibiogramme    TEXT,           -- texte libre en v1
+    cree_le          TEXT NOT NULL,
+    cree_par         TEXT REFERENCES utilisateur(id),
+    modifie_le       TEXT,
+    modifie_par      TEXT REFERENCES utilisateur(id),
+    supprime         INTEGER NOT NULL DEFAULT 0,
+    version          INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_micro_sejour ON microbiologie(sejour_id, date_prelevement);
 
@@ -472,19 +541,20 @@ CREATE INDEX IF NOT EXISTS idx_micro_sejour ON microbiologie(sejour_id, date_pre
 -- Seule la partie rédigée par le médecin est stockée. L'en-tête, les
 -- explorations, les bilans et le traitement sont générés à l'affichage.
 CREATE TABLE IF NOT EXISTS evolution_jour (
-    id                   TEXT PRIMARY KEY,
-    sejour_id            TEXT NOT NULL REFERENCES sejour(id),
-    date_jour            TEXT NOT NULL,
-    plan_neurologique    TEXT,
-    plan_respiratoire    TEXT,
-    plan_hemodynamique   TEXT,
-    plan_infectieux      TEXT,
-    conduite             TEXT,
-    cree_le              TEXT NOT NULL,
-    cree_par             TEXT REFERENCES utilisateur(id),
-    modifie_le           TEXT,
-    modifie_par          TEXT REFERENCES utilisateur(id),
-    supprime             INTEGER NOT NULL DEFAULT 0
+    id                 TEXT PRIMARY KEY,
+    sejour_id          TEXT NOT NULL REFERENCES sejour(id),
+    date_jour          TEXT NOT NULL,
+    plan_neurologique  TEXT,
+    plan_respiratoire  TEXT,
+    plan_hemodynamique TEXT,
+    plan_infectieux    TEXT,
+    conduite           TEXT,
+    cree_le            TEXT NOT NULL,
+    cree_par           TEXT REFERENCES utilisateur(id),
+    modifie_le         TEXT,
+    modifie_par        TEXT REFERENCES utilisateur(id),
+    supprime           INTEGER NOT NULL DEFAULT 0,
+    version            INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evolution_unique ON evolution_jour(sejour_id, date_jour);
 
@@ -503,7 +573,8 @@ CREATE TABLE IF NOT EXISTS evolution_element (
     cree_par     TEXT REFERENCES utilisateur(id),
     modifie_le   TEXT,
     modifie_par  TEXT REFERENCES utilisateur(id),
-    supprime     INTEGER NOT NULL DEFAULT 0
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evolution_element_unique
     ON evolution_element(sejour_id, date_jour, cle);
@@ -522,7 +593,8 @@ CREATE TABLE IF NOT EXISTS escarre (
     cree_par      TEXT REFERENCES utilisateur(id),
     modifie_le    TEXT,
     modifie_par   TEXT REFERENCES utilisateur(id),
-    supprime      INTEGER NOT NULL DEFAULT 0
+    supprime      INTEGER NOT NULL DEFAULT 0,
+    version       INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_escarre_sejour ON escarre(sejour_id, supprime);
 
@@ -555,35 +627,42 @@ CREATE TABLE IF NOT EXISTS dispositif (
     cree_par      TEXT REFERENCES utilisateur(id),
     modifie_le    TEXT,
     modifie_par   TEXT REFERENCES utilisateur(id),
-    supprime      INTEGER NOT NULL DEFAULT 0
+    supprime      INTEGER NOT NULL DEFAULT 0,
+    version       INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_dispositif_sejour ON dispositif(sejour_id, supprime);
 CREATE INDEX IF NOT EXISTS idx_dispositif_type ON dispositif(sejour_id, type, date_pose);
 
 CREATE TABLE IF NOT EXISTS infection_nosocomiale (
-    id               TEXT PRIMARY KEY,
-    sejour_id        TEXT NOT NULL REFERENCES sejour(id),
-    type             TEXT NOT NULL,    -- pavm / ilc / iu / iss / autre
-    date_diagnostic  TEXT NOT NULL,
-    germe            TEXT,
-    commentaire      TEXT,
-    cree_le          TEXT NOT NULL,
-    cree_par         TEXT REFERENCES utilisateur(id),
-    supprime         INTEGER NOT NULL DEFAULT 0
+    id              TEXT PRIMARY KEY,
+    sejour_id       TEXT NOT NULL REFERENCES sejour(id),
+    type            TEXT NOT NULL,    -- pavm / ilc / iu / iss / autre
+    date_diagnostic TEXT NOT NULL,
+    germe           TEXT,
+    commentaire     TEXT,
+    cree_le         TEXT NOT NULL,
+    cree_par        TEXT REFERENCES utilisateur(id),
+    supprime        INTEGER NOT NULL DEFAULT 0,
+    version         INTEGER NOT NULL DEFAULT 1,
+    modifie_le      TEXT,
+    modifie_par     TEXT REFERENCES utilisateur(id)
 );
 CREATE INDEX IF NOT EXISTS idx_infection_sejour ON infection_nosocomiale(sejour_id);
 
 -- Scores quotidiens en format long : une ligne par score et par jour (règle 4)
 CREATE TABLE IF NOT EXISTS score_quotidien (
-    id         TEXT PRIMARY KEY,
-    sejour_id  TEXT NOT NULL REFERENCES sejour(id),
-    date_jour  TEXT NOT NULL,
-    score      TEXT NOT NULL,     -- 'sofa', 'igs2'…
-    valeur     REAL,
-    detail     TEXT,              -- JSON des sous-scores
-    cree_le    TEXT NOT NULL,
-    cree_par   TEXT REFERENCES utilisateur(id),
-    supprime   INTEGER NOT NULL DEFAULT 0
+    id          TEXT PRIMARY KEY,
+    sejour_id   TEXT NOT NULL REFERENCES sejour(id),
+    date_jour   TEXT NOT NULL,
+    score       TEXT NOT NULL,     -- 'sofa', 'igs2'…
+    valeur      REAL,
+    detail      TEXT,              -- JSON des sous-scores
+    cree_le     TEXT NOT NULL,
+    cree_par    TEXT REFERENCES utilisateur(id),
+    supprime    INTEGER NOT NULL DEFAULT 0,
+    version     INTEGER NOT NULL DEFAULT 1,
+    modifie_le  TEXT,
+    modifie_par TEXT REFERENCES utilisateur(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_score_unique ON score_quotidien(sejour_id, date_jour, score);
 
@@ -591,30 +670,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_score_unique ON score_quotidien(sejour_id,
 -- pas pires valeurs des 24 h — simplification assumée, à mentionner dans
 -- toute publication.
 CREATE TABLE IF NOT EXISTS evaluation_admission (
-    id                     TEXT PRIMARY KEY,
-    sejour_id              TEXT NOT NULL REFERENCES sejour(id),
-    glasgow_oeil           INTEGER,
-    glasgow_verbal         INTEGER,
-    glasgow_moteur         INTEGER,
-    glasgow_non_evaluable  INTEGER NOT NULL DEFAULT 0,   -- patient sédaté
-    fragilite              INTEGER,       -- score de fragilité clinique 1-9
-    temperature_min        REAL,
-    temperature_max        REAL,
-    fc_min                 REAL,
-    fc_max                 REAL,
-    pas_min                REAL,
-    pas_max                REAL,
-    pam_min                REAL,
-    pam_max                REAL,
-    fr_min                 REAL,
-    fr_max                 REAL,
-    diurese_24h            REAL,          -- mL
+    id                      TEXT PRIMARY KEY,
+    sejour_id               TEXT NOT NULL REFERENCES sejour(id),
+    glasgow_oeil            INTEGER,
+    glasgow_verbal          INTEGER,
+    glasgow_moteur          INTEGER,
+    glasgow_non_evaluable   INTEGER NOT NULL DEFAULT 0,   -- patient sédaté
+    fragilite               INTEGER,       -- score de fragilité clinique 1-9
+    temperature_min         REAL,
+    temperature_max         REAL,
+    fc_min                  REAL,
+    fc_max                  REAL,
+    pas_min                 REAL,
+    pas_max                 REAL,
+    pam_min                 REAL,
+    pam_max                 REAL,
+    fr_min                  REAL,
+    fr_max                  REAL,
+    diurese_24h             REAL,          -- mL
     ventilation_invasive_j1 INTEGER,      -- NULL = non renseigné
-    cree_le                TEXT NOT NULL,
-    cree_par               TEXT REFERENCES utilisateur(id),
-    modifie_le             TEXT,
-    modifie_par            TEXT REFERENCES utilisateur(id),
-    supprime               INTEGER NOT NULL DEFAULT 0
+    cree_le                 TEXT NOT NULL,
+    cree_par                TEXT REFERENCES utilisateur(id),
+    modifie_le              TEXT,
+    modifie_par             TEXT REFERENCES utilisateur(id),
+    supprime                INTEGER NOT NULL DEFAULT 0,
+    version                 INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_sejour ON evaluation_admission(sejour_id);
 

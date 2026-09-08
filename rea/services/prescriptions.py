@@ -300,3 +300,14 @@ def lignes_echues(base: Base, sejour_id: str, a_la_date: str) -> list[dict]:
         for ligne in lignes_actives_le(base, sejour_id, a_la_date)
         if dom.etiquette_jour(ligne, a_la_date).echue
     ]
+
+
+def pancarte_preparee(base: Base, sejour_id: str, date_jour: str) -> bool:
+    """La pancarte de ce jour a-t-elle été préparée ?
+
+    `etat_journee` rend la ligne entière ; cette question-ci n'en veut que la
+    réponse, et c'est la seule dont le tableau des lits ait besoin pour dire
+    quels lits restent à préparer.
+    """
+    journee = etat_journee(base, sejour_id, date_jour)
+    return bool(journee and journee["preparee_le"])

@@ -138,3 +138,140 @@ def test_aucun_cycle_d_import_dans_le_paquet():
     assert not cycles, "cycles d'import : " + "; ".join(
         " -> ".join(c) for c in cycles[:5]
     )
+
+
+# =========================================================================
+# §2.4 — contraintes d'architecture
+#
+# Un poste unique, un utilisateur à la fois, pas de réseau. Le §2.4 pose des
+# invariants dont l'intérêt est justement de tenir *avant* qu'on en ait
+# besoin : le jour du multi-postes, aucun d'eux ne doit demander une migration
+# sur des données cliniques réelles. Un invariant qu'aucun test ne tient finit
+# par ne plus être vrai — et celui-là ne se remarquerait que trop tard.
+# =========================================================================
+
+import re  # noqa: E402
+import tomllib  # noqa: E402
+
+SCHEMA = (RACINE / "rea" / "schema.sql").read_text(encoding="utf-8")
+
+# Quatre tables hors du dispositif de traçabilité, chacune pour sa raison —
+# voir l'en-tête de schema.sql.
+HORS_TRACABILITE = {"meta", "pancarte_snapshot", "journal", "sauvegarde"}
+TRACABILITE = ("version", "cree_le", "cree_par", "modifie_le", "modifie_par", "supprime")
+
+
+def _tables_du_schema() -> dict[str, str]:
+    return {
+        m.group(1): m.group(2)
+        for m in re.finditer(
+            r"CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\((.*?)\n\);", SCHEMA, re.S
+        )
+    }
+
+
+def _tables_tracees() -> list[str]:
+    return [t for t in _tables_du_schema() if t not in HORS_TRACABILITE]
+
+
+@pytest.mark.parametrize("table", _tables_tracees())
+@pytest.mark.parametrize("colonne", TRACABILITE)
+def test_chaque_table_modifiable_porte_la_tracabilite(table, colonne):
+    """§2.4, invariant 1 — aucune hypothèse « un seul utilisateur ».
+
+    Ces six colonnes coûtent une minute aujourd'hui et une migration sur des
+    dossiers réels demain. C'est le dernier moment où elles sont bon marché.
+    """
+    corps = _tables_du_schema()[table]
+    assert re.search(rf"^\s*{colonne}\s", corps, re.M), (
+        f"{table} n'a pas de colonne {colonne}"
+    )
+
+
+def test_la_table_utilisateur_porte_un_pin():
+    """§2.4, invariant 1 — vide aujourd'hui (AUTH_REQUISE = False), présent
+    pour que le jour du multi-postes ne touche pas au schéma."""
+    assert re.search(r"^\s*pin\s+TEXT", _tables_du_schema()["utilisateur"], re.M)
+
+
+def test_la_version_sincremente_a_chaque_ecriture(base):
+    """Personne ne la lit encore : c'est justement pour ça qu'un test doit la
+    tenir, sinon elle cesserait d'être juste sans que rien ne le signale."""
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(base, matricule="V1", nom_affichage="V",
+                                date_naissance=None)
+    lire = lambda: base.une_ligne("SELECT version FROM patient WHERE id = ?", (pid,))["version"]  # noqa: E731
+    assert lire() == 1
+    sejours.modifier_identite(base, pid, matricule="V2", nom_affichage="V",
+                              date_naissance=None, sexe="M", groupe_sanguin=None)
+    assert lire() == 2
+    sejours.modifier_identite(base, pid, matricule="V3", nom_affichage="V",
+                              date_naissance=None, sexe="M", groupe_sanguin=None)
+    assert lire() == 3
+
+
+def test_une_suppression_logique_incremente_aussi_la_version(base):
+    from rea.services import sejours
+
+    pid = sejours.creer_patient(base, matricule="V9", nom_affichage="V",
+                                date_naissance=None)
+    aid = sejours.ajouter_antecedent(base, patient_id=pid, categorie="personnel",
+                                     libelle="Diabète")
+    sejours.supprimer_antecedent(base, aid)
+    ligne = base.une_ligne("SELECT version, supprime FROM antecedent WHERE id = ?", (aid,))
+    assert (ligne["version"], ligne["supprime"]) == (2, 1)
+
+
+def test_le_numero_dimpression_dune_feuille_nest_pas_un_compteur_de_version(base):
+    """`pancarte_snapshot.version` désigne le numéro d'impression (v1, v2 de la
+    même feuille). L'incrémenter à chaque écriture renumérote des feuilles déjà
+    sorties de l'imprimante : la table est explicitement exclue."""
+    from rea.db import TABLES_SANS_COMPTEUR_DE_VERSION
+
+    assert "pancarte_snapshot" in TABLES_SANS_COMPTEUR_DE_VERSION
+
+
+def test_aucune_suppression_physique_dans_le_code():
+    """§2.4 rappelle la règle de conception 2 : rien ne s'efface, tout se
+    marque supprimé. Un DELETE sur un dossier clinique est irrattrapable."""
+    fautifs = []
+    for chemin in (RACINE / "rea").rglob("*.py"):
+        texte = chemin.read_text(encoding="utf-8")
+        if re.search(r"\bDELETE\s+FROM\b", texte, re.I):
+            fautifs.append(chemin.name)
+    assert not fautifs, f"DELETE FROM trouvé dans : {fautifs}"
+
+
+@pytest.mark.parametrize("chemin", _fichiers(UI), ids=lambda p: p.name)
+def test_aucun_ecran_ne_contient_de_sql(chemin):
+    """§2.4, invariant 3 — les vues appellent des fonctions métier, jamais une
+    requête. Une requête écrite dans un écran échappe aux tests et se recopie
+    au prochain écran qui en a besoin."""
+    texte = chemin.read_text(encoding="utf-8")
+    trouve = re.findall(r"\b(SELECT\s+\w|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b",
+                        texte, re.I)
+    assert not trouve, f"{chemin.name} contient du SQL : {trouve}"
+
+
+def test_ladresse_decoute_reste_la_boucle_locale():
+    """§2.4 — état actuel : un seul poste, pas de réseau. Sans adresse
+    explicite, Streamlit écoute sur toutes les interfaces : le jour où le poste
+    touche le réseau de l'hôpital, le dossier des patients devient lisible
+    depuis n'importe quelle machine, sans mot de passe."""
+    from rea import config
+
+    reglages = tomllib.loads((RACINE / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert reglages["server"]["address"] == config.HOTE == "127.0.0.1"
+    assert reglages["server"]["port"] == config.PORT
+
+
+def test_ouvrir_le_reseau_sans_authentification_est_signale():
+    """Les deux vont ensemble : le jour où HOTE s'ouvre, AUTH_REQUISE passe à
+    True. Ce test est là pour que le second ne s'oublie pas."""
+    from rea import config
+
+    if config.HOTE != "127.0.0.1":
+        assert config.AUTH_REQUISE, (
+            "HOTE n'est plus la boucle locale : AUTH_REQUISE doit passer à True"
+        )

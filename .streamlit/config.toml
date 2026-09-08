@@ -11,6 +11,14 @@ font = "sans serif"
 
 [server]
 headless = true
+# Boucle locale uniquement (§2.4 — état actuel : un seul poste, pas de réseau).
+# Doit rester identique à config.HOTE et config.PORT ; un test du dépôt vérifie
+# que les deux ne divergent pas. Sans cette adresse, Streamlit écoute sur
+# toutes les interfaces : le jour où le poste touche le réseau de l'hôpital, le
+# dossier des patients devient lisible depuis n'importe quelle machine.
+address = "127.0.0.1"
+port = 8501
+
 # L'application ne sort jamais du poste : aucune télémétrie.
 [browser]
 gatherUsageStats = false
