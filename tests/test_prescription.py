@@ -161,3 +161,48 @@ def test_volume_entrees_24h_cumule_plusieurs_sources():
     bilan = p.volume_entrees_24h(lignes)
     assert bilan.total_ml == 2808.0
     assert len(bilan.detail) == 4
+
+
+# --- heure de prise choisie à la ligne (demande du service, 8 septembre) ----
+
+def test_horaires_par_defaut_suit_le_rythme():
+    assert p.horaires_par_defaut("Perfalgan", "x3/j") == (8, 16, 24)
+
+
+def test_enoxaparine_en_une_prise_est_du_soir():
+    """Une HBPM préventive se donne le soir. Prescrite à 8 h par défaut, il
+    fallait corriger l'horaire à chaque ligne."""
+    assert p.horaires_par_defaut("Enoxaparine 4000 UI", "x1/j") == (20,)
+    assert p.horaires_par_defaut("Lovenox", "x1/j") == (20,)
+
+
+def test_la_regle_enoxaparine_ne_vaut_que_pour_une_prise_par_jour():
+    """En deux prises, c'est une dose curative : elle reprend les horaires du
+    rythme, matin et soir."""
+    assert p.horaires_par_defaut("Enoxaparine", "x2/j") == (8, 20)
+
+
+def test_le_produit_est_reconnu_sans_accent_ni_casse():
+    assert p.horaires_par_defaut("ENOXAPARINE", "x1/j") == (20,)
+
+
+def test_un_produit_quelconque_garde_lhoraire_du_rythme():
+    assert p.horaires_par_defaut("Augmentin", "x1/j") == (8,)
+
+
+def test_analyser_horaires_accepte_ce_qui_se_tape_au_lit_du_malade():
+    assert p.analyser_horaires("20") == "20"
+    assert p.analyser_horaires("8h 20h") == "8,20"
+    assert p.analyser_horaires("8, 14, 20") == "8,14,20"
+
+
+def test_analyser_horaires_ignore_une_saisie_illisible():
+    """Rien d'exploitable ne doit pas écraser silencieusement l'horaire du
+    rythme : mieux vaut None, et le défaut s'applique."""
+    assert p.analyser_horaires("") is None
+    assert p.analyser_horaires("le matin") is None
+    assert p.analyser_horaires("99") is None
+
+
+def test_un_horaire_choisi_prime_sur_le_rythme():
+    assert p.horaires_pour_rythme("x1/j", "20") == (20,)

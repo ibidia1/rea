@@ -810,6 +810,59 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.3 — 8 septembre 2026 — quatorze retours du service, écran par écran**
+
+*Identité.* « Modifier l'admission » descend sous « Transférer vers un autre
+lit », dans un tiroir de même forme : deux gestes occasionnels, au même
+endroit, plutôt qu'un bouton en permanence dans la rangée de tête. Les trois
+blocs de tête (identité, motif, antécédents) reprennent la largeur libérée et
+passent en grand — ce sont les seules lignes de l'écran qu'on relit debout, à
+distance. Chaque antécédent porte enfin sa croix : un antécédent se saisit
+vite et se trompe vite, et sans moyen de le retirer il se recopiait sur
+chaque feuille imprimée. La suppression reste logique, tracée au journal
+(règle de conception 2).
+
+*Prescrit.* Vérification demandée : imprimer la pancarte d'un jour choisi
+imprime bien **ce jour-là**, pas le jour courant — c'était déjà le cas, trois
+tests le tiennent désormais. L'heure de prise se choisit à la ligne ; laissée
+vide, elle suit l'horaire habituel du produit et du rythme, et l'enoxaparine
+en une prise part à 20 h (`referentiels/horaires_par_produit.json`, une règle
+en données, pas en code). La sédation, posée comme dispositif, se lit
+maintenant dans le bloc P.S.E. de l'écran comme elle se lisait déjà sur la
+feuille — et sa vitesse se règle en cours de route, ce qui manquait
+complètement : une sédation se conduit surtout en descendant. Enfin la
+colonne dose de la feuille porte le nombre de prises, « 1 g × 3 » : la dose
+d'une prise ne dit pas la dose de la journée.
+
+*Feuille imprimée.* Un jour passé qui ne porte qu'un seul bilan n'a plus ses
+quatre créneaux numérotés : la valeur tient dans le premier, les trois
+suivants redeviennent du papier réglé. Le bloc « Bilans infectieux » perd sa
+colonne Date, qui suit désormais le libellé entre parenthèses —
+« Hémoculture (06/09) » : 62 px pour cinq caractères prenaient la place du
+résultat, seul texte du bloc dont la longueur soit imprévisible.
+
+*Explorations et actes.* Une deuxième intubation s'appelle une réintubation,
+et le logiciel le dit avant la saisie comme après (`libelle_repete` /
+`en_cours_repete` dans le référentiel des dispositifs, rang d'épisode calculé
+sur l'ensemble du séjour). Le retrait peut porter un motif : « extubation
+programmée » ou « extubation accidentelle » ne se lisent pas pareil, et seule
+la seconde est un événement à compter.
+
+*Bilans.* La microbiologie rejoint le mode « Saisir » : c'est une saisie, pas
+une relecture. L'antibiogramme se coche au lieu de se taper — trois listes
+S / I / R puisées dans une liste fermée de molécules
+(`referentiels/antibiotiques_antibiogramme.json`) ; en texte libre, la même
+molécule s'écrivait de six façons et aucun profil de résistance du service ne
+se comptait. L'ordre de saisie suit enfin celui de la visite : gaz du sang
+d'abord — le seul bilan refait plusieurs fois par jour —, puis la chimie,
+puis l'hémato, le bilan hépatique et le bilan lipidique repliés derrière.
+
+*Évolution.* La check-list FAST HUG est retirée de l'écran : elle occupait la
+moitié de la page pour redire ce que l'interne relit dans les quatre plans
+juste en dessous. Le moteur de règles qui la calculait reste en place — ce
+sont les mêmes règles qui produisent les rappels — et elle se rebranche en
+une ligne si le service la redemande.
+
 **v3.2 — 6 septembre 2026 — arrêter un traitement d'un geste sur sa ligne**
 
 Consigne du service : arrêter un traitement se faisait dans un encart

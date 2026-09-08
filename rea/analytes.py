@@ -116,6 +116,34 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
     )),
 )
 
+# Ordre de saisie à l'écran, demandé par le service (8 septembre). Le gaz du
+# sang est traité à part, avant tout le reste : c'est le seul bilan qu'on
+# refait plusieurs fois dans la journée. Viennent ensuite la chimie, puis
+# l'hémato ; ce qui ne se demande pas tous les jours passe derrière, replié.
+#
+# Cet ordre ne vaut que pour la saisie : `GROUPES` garde l'ordre du catalogue,
+# celui de la cinétique et des exports.
+ORDRE_SAISIE: tuple[str, ...] = (
+    "ionogramme", "metabolique", "renale", "inflammation",   # chimie
+    "nfs", "hemostase",                                      # hémato
+)
+GROUPES_OCCASIONNELS: tuple[str, ...] = ("hepatique", "lipidique")
+
+
+def groupes_de_saisie() -> tuple[tuple[GroupeAnalytes, ...], tuple[GroupeAnalytes, ...]]:
+    """(groupes courants, groupes non systématiques), dans l'ordre de saisie.
+
+    Un groupe ajouté au catalogue et oublié dans les deux listes ci-dessus
+    n'est jamais perdu de vue : il rejoint les non systématiques, replié mais
+    saisissable — un analyte qu'on ne peut plus taper vaut un analyte perdu.
+    """
+    par_code = {g.code: g for g in GROUPES}
+    courants = tuple(par_code[c] for c in ORDRE_SAISIE if c in par_code)
+    occasionnels = tuple(par_code[c] for c in GROUPES_OCCASIONNELS if c in par_code)
+    connus = {g.code for g in courants + occasionnels}
+    return courants, occasionnels + tuple(g for g in GROUPES if g.code not in connus)
+
+
 # Les correspondances LOINC ci-dessus n'ont pas encore été vérifiées contre le
 # référentiel officiel. Mettre à True le jour où un senior ou une source
 # officielle les a relues, ligne à ligne.

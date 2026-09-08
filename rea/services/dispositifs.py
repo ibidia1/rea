@@ -79,7 +79,7 @@ def en_place(base: Base, sejour_id: str) -> list[dict]:
 
 
 def etats(base: Base, sejour_id: str, a_la_date: str | None = None) -> list[dom.EtatDispositif]:
-    return [dom.etat(l, a_la_date) for l in du_sejour(base, sejour_id)]
+    return dom.etats(du_sejour(base, sejour_id), a_la_date)
 
 
 def resume(base: Base, sejour_id: str, a_la_date: str | None = None) -> str:

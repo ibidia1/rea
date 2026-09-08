@@ -117,6 +117,9 @@ TYPES_EXPLORATION: dict[str, dict] = _charger("types_exploration")
 # --------------------------------------------------------------------------
 PRELEVEMENTS = _charger("prelevements")
 RESULTATS_MICROBIO = _charger("resultats_microbio")
+# Molécules proposées à la saisie d'un antibiogramme (S / I / R) — une liste
+# fermée, pour qu'une même molécule s'écrive toujours pareil et se compte.
+ANTIBIOTIQUES_ANTIBIOGRAMME = _charger("antibiotiques_antibiogramme")
 
 # --------------------------------------------------------------------------
 # Infections nosocomiales (SPEC §9.2)

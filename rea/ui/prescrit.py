@@ -67,15 +67,21 @@ def onglet_prescrit(sejour: dict) -> None:
 
     pancarte = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], date_jour_str)
 
+    # La sédation est posée comme dispositif, pas prescrite en ligne : sans
+    # cette reprise, la seule vitesse que l'infirmier règle sur une pompe
+    # n'apparaissait nulle part sur l'écran du prescrit (demande du service,
+    # 8 septembre). Elle est déjà reportée ainsi sur la feuille imprimée.
+    sedation = _ligne_sedation(sejour, date_jour_str)
     voies_remplies = [
-        v for v in listes.ORDRE_VOIES if pancarte["lignes_par_voie"].get(v)
+        v for v in listes.ORDRE_VOIES
+        if pancarte["lignes_par_voie"].get(v) or (v == "PSE" and sedation)
     ]
     zone_pancarte, zone_ajout = st.columns([2.1, 1])
 
     with zone_pancarte:
         st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
         gauche, droite = st.columns(2)
-        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite)
+        _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite, sedation)
 
     # Le panneau d'ajout reste à l'écran en permanence à côté de la pancarte
     # (capture du service) plutôt que dans un tiroir qu'il faut rouvrir à
@@ -151,11 +157,34 @@ def _historique_fiches(sejour: dict) -> None:
         st.components.v1.html(ancienne["html"], height=700, scrolling=True)
 
 
-def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) -> None:
-    """Chaque traitement porte sa propre croix « ✕ » : l'arrêter est un
+def _ligne_sedation(sejour: dict, date_jour_str: str) -> str | None:
+    """La sédation en cours, telle qu'elle se lit dans le bloc P.S.E.
+
+    Elle n'est pas prescrite en ligne : elle est posée comme dispositif, dans
+    l'écran « Explorations et actes », avec sa molécule et sa vitesse. Mais
+    c'est une seringue électrique comme une autre pour l'infirmier qui règle
+    la pompe — elle doit se lire là où les seringues se règlent.
+    """
+    from ..services import dispositifs as dispositifs_service
+
+    etats = dispositifs_service.etats(contexte.base(), sejour["id"], date_jour_str)
+    sedation = next((e for e in etats if e.type == "sedation" and e.en_place), None)
+    if sedation is None:
+        return None
+    details = sedation.details or {}
+    texte = details.get("molecules") or "Sédation"
+    if details.get("vitesse") is not None:
+        texte += f" — vitesse {champs.format_valeur(details['vitesse'])} cc/h"
+    return f"{texte} <span style='color:{theme.GRIS}'>· {sedation.texte}</span>"
+
+
+def _afficher_pancarte(
+    voies_remplies, pancarte, date_jour_str, gauche, droite, sedation: str | None = None
+) -> None:
+    """Chaque traitement porte sa propre croix « X » : l'arrêter est un
     geste sur la ligne elle-même, plus une liste séparée à rouvrir."""
     for i, code_voie in enumerate(voies_remplies):
-        lignes = pancarte["lignes_par_voie"][code_voie]
+        lignes = pancarte["lignes_par_voie"].get(code_voie, [])
         colonne = gauche if i % 2 == 0 else droite
         couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
         with colonne:
@@ -165,6 +194,13 @@ def _afficher_pancarte(voies_remplies, pancarte, date_jour_str, gauche, droite) 
                     f'{listes.VOIES[code_voie]["titre"]}</div>',
                     unsafe_allow_html=True,
                 )
+                if code_voie == "PSE" and sedation:
+                    # Pas de croix : une sédation s'arrête depuis l'écran des
+                    # actes, là où elle a été posée, avec sa date de retrait.
+                    st.markdown(
+                        f'<div style="font-size:.82rem;margin-left:2.3rem">{sedation}</div>',
+                        unsafe_allow_html=True,
+                    )
                 for ligne in lignes:
                     texte = dom.libelle_ligne(ligne, date_jour_str)
                     etiquette = dom.etiquette_jour(ligne, date_jour_str)
@@ -249,8 +285,19 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
             vitesse = champs.nombre_saisi(
                 st.text_input("Vitesse (cc/h)", value="", placeholder="ex. 2")
             )
+        heures_saisies = None
         if "rythme" in champs_voie:
             rythme = st.selectbox("Rythme", listes.codes(listes.RYTHMES), format_func=lambda c: listes.libelle(listes.RYTHMES, c))
+            # L'heure de prise se choisit à la ligne. Laissée vide, elle suit
+            # l'horaire habituel du produit et du rythme : 8 h pour une prise
+            # unique, 20 h pour l'enoxaparine (demande du service,
+            # 8 septembre). Le champ reste libre parce que le formulaire ne se
+            # réaffiche pas tant qu'il n'est pas soumis : proposer une valeur
+            # calculée ici la figerait au rythme affiché à l'ouverture.
+            heures_saisies = st.text_input(
+                "Heure(s) de prise", value="",
+                placeholder="ex. 20 ou 8,14,20 — vide : horaire habituel",
+            )
         if "condition" in champs_voie:
             condition = st.text_input("Condition (si conditionnel)")
         if "volume_dilution" in champs_voie:
@@ -291,9 +338,13 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                 cible="prescription_ligne",
                 ligne_id=sejour["id"],
             ):
+                horaires = dom.analyser_horaires(heures_saisies)
+                if horaires is None and rythme:
+                    heures = dom.horaires_par_defaut(produit, rythme)
+                    horaires = ",".join(str(h) for h in heures) or None
                 prescriptions_service.ajouter_ligne(
                     contexte.base(), sejour_id=sejour["id"], voie=voie, produit=produit,
-                    date_debut=str(date_debut),
+                    date_debut=str(date_debut), horaires_override=horaires,
                     dose=dose or None, unite=unite, rythme=rythme,
                     condition_texte=condition or None, dilution=dilution or None,
                     nb_ampoules=nb_ampoules or None, vitesse=vitesse or None,

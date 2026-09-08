@@ -149,6 +149,12 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 }}
 .rea-bloc ul {{ margin: 0; padding-left: .95rem; }}
 .rea-bloc li {{ font-size: .82rem; line-height: 1.55; }}
+/* Variante « grand » — pour les trois blocs de tête de l'écran Identité, lus
+   de loin et rarement plus de six lignes : la place est là (demande du
+   service, 8 septembre). */
+.rea-bloc.grand {{ padding: 10px 13px 9px 13px; }}
+.rea-bloc.grand .rea-bloc-titre {{ font-size: .72rem; margin-bottom: 6px; }}
+.rea-bloc.grand li {{ font-size: 1rem; line-height: 1.75; }}
 .rea-bloc li.arretee, .rea-bloc li span.arretee, .arretee {{ text-decoration: line-through; color: {GRIS}; }}
 .rea-j {{ font-weight: 700; color: {BLEU}; }}
 .rea-fin {{ color: {ROUGE}; font-weight: 700; }}
@@ -180,12 +186,17 @@ def chips(elements: list[tuple[str, str]]) -> None:
     )
 
 
-def bloc(titre: str, lignes_html: list[str], couleur: str = GRIS) -> None:
+def bloc(titre: str, lignes_html: list[str], couleur: str = GRIS, *, grand: bool = False) -> None:
     """Bloc de section : un titre coloré et une liste. Bien plus compact
-    qu'un `st.subheader` suivi de `st.write` ligne à ligne."""
+    qu'un `st.subheader` suivi de `st.write` ligne à ligne.
+
+    `grand` agrandit le texte : réservé aux blocs qu'on lit de loin et qui
+    tiennent en quelques lignes (les trois blocs de tête de l'écran Identité).
+    """
     corps = "".join(f"<li>{l}</li>" for l in lignes_html) if lignes_html else ""
+    classe = "rea-bloc grand" if grand else "rea-bloc"
     st.markdown(
-        f'<div class="rea-bloc" style="border-left-color:{couleur}">'
+        f'<div class="{classe}" style="border-left-color:{couleur}">'
         f'<div class="rea-bloc-titre" style="color:{couleur}">{titre}</div>'
         f"<ul>{corps}</ul></div>",
         unsafe_allow_html=True,

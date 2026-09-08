@@ -18,13 +18,6 @@ from . import contexte, theme
 from . import champs
 
 
-_STYLE_ETAT = {
-    "ok": ("●", theme.VERT),
-    "a_verifier": ("○", theme.ORANGE),
-    "non_renseigne": ("·", theme.GRIS),
-}
-
-
 _STYLE_GRAVITE = {
     "alerte": theme.ROUGE,
     "attention": theme.ORANGE,
@@ -70,51 +63,32 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
 
 
 def panneau_aides(sejour: dict, date_jour_str: str) -> None:
-    """Check-list du jour et rappels — des questions, jamais des consignes.
+    """Rappels du jour — des questions, jamais des consignes.
 
-    Le logiciel coche ce qu'il sait lire de ce qui est déjà saisi, laisse
-    « non renseigné » ce qu'il ne sait pas, et ne prescrit rien.
+    La check-list FAST HUG occupait la moitié de l'écran pour redire ce que
+    l'interne relit déjà dans les quatre plans juste en dessous ; le service
+    l'a fait retirer (8 septembre). Le moteur de règles qui la calculait
+    (`regles/*.json`, `services.aides.checklist`) reste en place : ce sont les
+    mêmes règles qui produisent les rappels ci-dessous, et la check-list se
+    rebranche en une ligne si le service la redemande.
     """
-    items = aides_service.checklist(contexte.base(), sejour["id"], date_jour_str)
     rappels = aides_service.rappels(contexte.base(), sejour["id"], date_jour_str)
-    if not items and not rappels:
-        return
-
-    gauche, droite = st.columns([1.1, 1], gap="large")
-    with gauche:
-        if items:
-            lignes = []
-            for i in items:
-                marque, couleur = _STYLE_ETAT.get(i.etat, ("·", theme.GRIS))
-                titre = f"<b>{i.lettre}</b> · {i.libelle}"
-                question = (
-                    f"<br><span style='color:#94a3b8'>{i.question}</span>"
-                    if i.etat != "ok" and i.question else ""
-                )
-                lignes.append(
-                    f"<span style='color:{couleur}'>{marque}</span> {titre}{question}"
-                )
-            reste = sum(1 for i in items if i.etat != "ok")
-            theme.bloc_html(
-                f"Check-list du jour — {len(items) - reste}/{len(items)}",
-                "<br>".join(lignes),
-                theme.VERT if reste == 0 else theme.ORANGE,
+    if rappels:
+        # En colonnes plutôt qu'empilés : un rappel par bloc pleine largeur
+        # repousserait les quatre plans hors de l'écran.
+        colonnes = st.columns(min(len(rappels), 3))
+        for i, r in enumerate(rappels):
+            note = "" if r["valide"] else (
+                "<br><span style='color:#94a3b8;font-size:0.78rem'>"
+                "Règle de service non encore signée par un senior.</span>"
             )
-    with droite:
-        if rappels:
-            for r in rappels:
-                note = "" if r["valide"] else (
-                    "<br><span style='color:#94a3b8;font-size:0.78rem'>"
-                    "Règle de service non encore signée par un senior.</span>"
-                )
+            with colonnes[i % len(colonnes)]:
                 theme.bloc_html(
                     r["libelle"], r["message"] + note,
                     _STYLE_GRAVITE.get(r["gravite"], theme.GRIS),
                 )
-        else:
-            theme.bloc_html(
-                "Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT
-            )
+    else:
+        theme.bloc_html("Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT)
     st.caption(
         "Ces rappels sont déclaratifs : leurs seuils se modifient dans "
         "`regles/*.json`, sans reprogrammer le logiciel. Aucun ne propose de "

@@ -1,9 +1,9 @@
 {
   "nom": "types_dispositif",
   "libelle": "Dispositifs et actes invasifs",
-  "version": "2026-09-05.2",
-  "date": "2026-09-05",
-  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords.",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Format : ordre d'affichage, types (libellé, sites, champs, formulations du compteur de jours), et libellés des champs supplémentaires [libellé du formulaire, préfixe d'affichage, unité]. La sédation porte aussi une vitesse (cc/h) : c'est ce qui permet de la reporter comme consigne infirmière dans le bloc P.S.E de la feuille imprimée, en plus de son compteur de jours affiché dans les abords. Trois clés facultatives : `libelle_repete` et `en_cours_repete` nomment les épisodes suivants du même type chez un même patient (deuxième intubation = réintubation) ; `motifs_retrait` propose une liste de motifs au retrait (une extubation programmée et une extubation accidentelle ne se lisent pas pareil).",
   "valeurs": {
     "ordre": [
       "intubation",
@@ -25,14 +25,26 @@
     "types": {
       "intubation": {
         "libelle": "Intubation",
+        "libelle_repete": "Réintubation",
         "sites": [],
         "champs": [
           "taille_sonde",
           "reperage_cm"
         ],
         "en_cours": "Intubé",
+        "en_cours_repete": "Réintubé",
         "apres": "Extubé",
-        "verbe_retrait": "Extubation"
+        "verbe_retrait": "Extubation",
+        "motifs_retrait": [
+          [
+            "programmee",
+            "Extubation programmée"
+          ],
+          [
+            "accidentelle",
+            "Extubation accidentelle"
+          ]
+        ]
       },
       "sedation": {
         "libelle": "Sédation",

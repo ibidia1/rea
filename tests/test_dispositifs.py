@@ -165,3 +165,76 @@ def test_compte_rendu_sortie_reprend_la_ventilation(base):
     compte_rendu = sejours.compte_rendu_sortie(base, sid)
     assert "Ventilation du 30/08/2026 au 02/09/2026" in compte_rendu
     assert "Durée totale de ventilation : 3 jours" in compte_rendu
+
+
+# --- réintubation et extubation accidentelle (demande du service, 8 sept.) --
+
+def test_une_deuxieme_intubation_est_une_reintubation(base):
+    """Après une extubation, réintuber n'est pas intuber : c'est l'échec de
+    l'extubation précédente, et ça se lit au premier coup d'œil."""
+    sid = _sejour(base)
+    premier = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
+    dispositifs.retirer(base, premier, date_retrait="2026-09-01")
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-09-02")
+
+    etats = dispositifs.etats(base, sid, "2026-09-03")
+    en_place = next(e for e in etats if e.en_place)
+    assert en_place.rang == 2
+    assert en_place.libelle_type == "Réintubation"
+    assert en_place.texte.startswith("Réintubé J2")
+
+
+def test_la_premiere_intubation_reste_une_intubation(base):
+    sid = _sejour(base)
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-09-02")
+    etat = dispositifs.etats(base, sid, "2026-09-02")[0]
+    assert etat.rang == 1
+    assert etat.libelle_type == "Intubation"
+    assert etat.texte.startswith("Intubé J1")
+
+
+def test_le_rang_se_compte_du_plus_ancien_au_plus_recent(base):
+    """Les lignes sont lues du plus récent au plus ancien : compter dans cet
+    ordre ferait de l'intubation d'aujourd'hui la première."""
+    sid = _sejour(base)
+    premier = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
+    dispositifs.retirer(base, premier, date_retrait="2026-09-01")
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-09-02")
+    rangs = {e.date_pose: e.rang for e in dispositifs.etats(base, sid, "2026-09-03")}
+    assert rangs == {"2026-08-30": 1, "2026-09-02": 2}
+
+
+def test_un_type_sans_libelle_repete_ne_change_pas_de_nom(base):
+    """Un deuxième KT central reste un KT central : seuls les types qui
+    déclarent `libelle_repete` changent de nom."""
+    sid = _sejour(base)
+    premier = dispositifs.poser(base, sejour_id=sid, type_="kt_central", date_pose="2026-08-30")
+    dispositifs.retirer(base, premier, date_retrait="2026-09-01")
+    dispositifs.poser(base, sejour_id=sid, type_="kt_central", date_pose="2026-09-02")
+    en_place = next(e for e in dispositifs.etats(base, sid, "2026-09-03") if e.en_place)
+    assert en_place.rang == 2
+    assert en_place.libelle_type == "Cathéter veineux central (KT)"
+
+
+def test_une_extubation_accidentelle_se_lit_sur_la_ligne(base):
+    sid = _sejour(base)
+    did = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
+    dispositifs.retirer(base, did, date_retrait="2026-09-01", motif_retrait="accidentelle")
+    etat = dispositifs.etats(base, sid, "2026-09-02")[0]
+    assert etat.motif_retrait == "accidentelle"
+    assert "extubation accidentelle" in etat.texte
+
+
+def test_une_extubation_sans_motif_ne_dit_rien_de_plus(base):
+    sid = _sejour(base)
+    did = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
+    dispositifs.retirer(base, did, date_retrait="2026-09-01")
+    etat = dispositifs.etats(base, sid, "2026-09-02")[0]
+    assert etat.texte == "Extubé J1"
+
+
+def test_le_motif_ne_saffiche_pas_tant_que_le_dispositif_est_en_place(base):
+    sid = _sejour(base)
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-08-30")
+    etat = dispositifs.etats(base, sid, "2026-08-31")[0]
+    assert "accidentelle" not in etat.texte

@@ -31,6 +31,57 @@ def horaires_affiches(rythme: str | None, override: str | None = None) -> str:
     return "-".join(f"{h}h" if h < 24 else "24h" for h in heures)
 
 
+def _sans_accent(texte: str) -> str:
+    import unicodedata
+
+    return "".join(
+        c for c in unicodedata.normalize("NFD", texte.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def horaires_par_defaut(produit: str | None, rythme: str | None) -> tuple[int, ...]:
+    """L'heure de prise proposée à la saisie d'une ligne.
+
+    C'est l'horaire du rythme (une prise → 8 h), sauf pour les produits qui se
+    donnent traditionnellement à une autre heure : l'enoxaparine préventive
+    est du soir, et la prescrire à 8 h obligeait à corriger l'horaire à chaque
+    ligne (demande du service, 8 septembre). Les exceptions sont déclarées
+    dans `referentiels/horaires_par_produit.json`, pas ici.
+    """
+    from .. import referentiels
+
+    nom = _sans_accent(produit or "")
+    if nom:
+        for regle in referentiels.charger("horaires_par_produit"):
+            rythmes = regle.get("rythmes")
+            if rythmes and rythme not in rythmes:
+                continue
+            if any(_sans_accent(f) in nom for f in regle.get("fragments", ())):
+                return tuple(regle["horaires"])
+    return horaires_pour_rythme(rythme)
+
+
+def analyser_horaires(texte: str | None) -> str | None:
+    """Lit des heures tapées à la main — « 20 », « 8h 20h », « 8, 14, 20 ».
+
+    Renvoie la forme normalisée « 8,14,20 » que stocke `horaires_override`, ou
+    None si rien d'exploitable n'a été tapé : une saisie illisible ne doit pas
+    effacer silencieusement l'horaire du rythme.
+    """
+    if not texte or not texte.strip():
+        return None
+    heures = []
+    for morceau in texte.replace("h", " ").replace(";", " ").replace(",", " ").split():
+        try:
+            heure = int(morceau)
+        except ValueError:
+            continue
+        if 0 <= heure <= 24:
+            heures.append(heure)
+    return ",".join(str(h) for h in heures) or None
+
+
 # --------------------------------------------------------------------------
 # Nombre de prises par jour — utile au bilan hydrique (SPEC §5.6)
 # --------------------------------------------------------------------------

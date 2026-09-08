@@ -222,7 +222,15 @@ def _dose(ligne: dict) -> str:
 
     morceaux = []
     if ligne.get("dose"):
-        morceaux.append(_nombre(ligne["dose"]) + (f" {ligne['unite']}" if ligne.get("unite") else ""))
+        dose = _nombre(ligne["dose"]) + (f" {ligne['unite']}" if ligne.get("unite") else "")
+        # « 1 g × 3 » plutôt que « 1 g » : la dose d'une prise ne dit pas la
+        # dose de la journée, et c'est celle-là qu'on relit pour juger d'une
+        # posologie (demande du service, 8 septembre). Une prise unique ne
+        # gagne rien à porter un « × 1 » ; un jour sur deux non plus.
+        prises = dom.nb_prises_par_jour(ligne.get("rythme"))
+        if prises >= 2 and float(prises).is_integer():
+            dose += f" × {int(prises)}"
+        morceaux.append(dose)
     if ligne.get("nb_ampoules"):
         mot = "cp" if ligne.get("voie") == "PO" else "amp"
         morceaux.append(f"{_nombre(ligne['nb_ampoules'])} {mot}")
@@ -270,6 +278,41 @@ def _jours_biologie(date_jour: str) -> list[str]:
         (aujourdhui - timedelta(days=n)).isoformat()
         for n in range(NB_JOURS_BIOLOGIE - 1, -1, -1)
     ]
+
+
+def _nb_prelevements_du_jour(dossier, jour: str) -> int:
+    """Combien de fois on a prélevé ce jour-là, gaz du sang compris."""
+    heures = {
+        r["date_heure"] for r in dossier.resultats
+        if (r["date_heure"] or "").startswith(jour)
+    }
+    heures |= {
+        g["date_heure"] for g in dossier.gaz_du_sang
+        if (g["date_heure"] or "").startswith(jour)
+    }
+    return len(heures)
+
+
+def _entetes_jours(dossier, jours: list[str]) -> list[dict]:
+    """Les colonnes de jours, avec leurs créneaux numérotés — ou non.
+
+    Un jour passé qui ne porte qu'un seul bilan n'a pas besoin de ses quatre
+    créneaux numérotés : la valeur tient dans le premier, et les trois cases
+    suivantes redeviennent du papier réglé où la garde écrit à la main
+    (demande du service, 8 septembre). Le jour en cours garde sa numérotation :
+    il est manuscrit d'un bout à l'autre, et les quatre créneaux disent
+    justement combien de bilans y tiennent.
+    """
+    entetes = []
+    for index, jour in enumerate(jours):
+        en_cours = index == len(jours) - 1
+        numerote = en_cours or _nb_prelevements_du_jour(dossier, jour) > 1
+        entetes.append({
+            "libelle": format_date_fr(jour)[:5],
+            "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)] if numerote
+                     else [""] * NB_CRENEAUX_PAR_JOUR,
+        })
+    return entetes
 
 
 def _valeurs_biologie(
@@ -530,7 +573,13 @@ def _microbiologie(dossier) -> list[dict]:
     """« Bilans infectieux » : les prélèvements microbiologiques, et la CRP
     avec eux — remarque du service, 6 septembre : elle appartient au même
     bilan d'infection que les cultures, pas au récapitulatif de chimie
-    générale."""
+    générale.
+
+    La date n'a plus sa colonne (demande du service, 8 septembre) : elle suit
+    le nom du prélèvement entre parenthèses. Une colonne de 62 px pour cinq
+    caractères prenait la place du résultat, qui est le seul texte de ce bloc
+    dont la longueur soit imprévisible.
+    """
     brutes = []
     for ligne in dossier.microbiologie:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, ligne["resultat"])
@@ -539,8 +588,10 @@ def _microbiologie(dossier) -> list[dict]:
         brutes.append((
             ligne["date_prelevement"],
             {
-                "prelevement": listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
-                "date": format_date_fr(ligne["date_prelevement"])[:5],
+                "prelevement": _avec_date(
+                    listes.libelle(listes.PRELEVEMENTS, ligne["type_prelevement"]),
+                    ligne["date_prelevement"],
+                ),
                 "resultat": resultat,
             },
         ))
@@ -549,16 +600,19 @@ def _microbiologie(dossier) -> list[dict]:
             brutes.append((
                 r["date_heure"],
                 {
-                    "prelevement": "CRP",
-                    "date": format_date_fr(r["date_heure"])[:5],
+                    "prelevement": _avec_date("CRP", r["date_heure"]),
                     "resultat": f"{_nombre(r['valeur_num'])} mg/L",
                 },
             ))
     brutes.sort(key=lambda t: t[0], reverse=True)
     lignes = [ligne for _date, ligne in brutes[:LIGNES_MICROBIO]]
     while len(lignes) < LIGNES_MICROBIO:
-        lignes.append({"prelevement": "", "date": "", "resultat": ""})
+        lignes.append({"prelevement": "", "resultat": ""})
     return lignes
+
+
+def _avec_date(libelle: str, date_heure: str) -> str:
+    return f"{libelle} ({format_date_fr(date_heure)[:5]})"
 
 
 # --------------------------------------------------------------------------
@@ -610,8 +664,7 @@ def contexte(dossier) -> dict:
         "survRowsC": _lignes_manuscrites(lignes_ref["surveillance_c"]),
         "bilanRows": _lignes_manuscrites(lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
-        "days": [format_date_fr(j)[:5] for j in jours],
-        "slots": [str(i + 1) for i in range(NB_CRENEAUX_PAR_JOUR)],
+        "days": _entetes_jours(dossier, jours),
         "bioHemato": _valeurs_biologie(dossier, jours, list(lignes_ref["hemato"]), "bilan"),
         "bioIono": _valeurs_biologie(dossier, jours, list(lignes_ref["iono"]), "bilan"),
         "bioRenal": _valeurs_biologie(dossier, jours, list(lignes_ref["renal"]), "bilan"),

@@ -59,3 +59,47 @@ def test_dates_avec_impression_ignore_les_jours_vides(base):
 
 def test_snapshot_introuvable_rend_none(base):
     assert pancarte.snapshot(base, "id-inexistant") is None
+
+
+# --- imprimer le jour choisi, pas le jour courant --------------------------
+#
+# Vérification demandée par le service (8 septembre) : « si je choisis un jour
+# différent et que je clique sur imprimer la pancarte de ce jour, est-ce que
+# ça imprime le jour sélectionné ou le jour actuel ? » — c'est bien le jour
+# sélectionné, et ces tests le tiennent.
+
+def test_imprimer_un_autre_jour_date_la_fiche_de_ce_jour_la(base):
+    from rea.services import prescriptions
+
+    sid = _sejour(base, "M9", 9, date_admission="2026-09-01")
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="PO", produit="Kardégic",
+                                date_debut="2026-09-01", dose=75, unite="mg",
+                                rythme="x1/j")
+    fiche = pancarte.imprimer(base, sid, "2026-09-03")
+    assert fiche["date_jour"] == "2026-09-03"
+    assert "03/09/2026" in fiche["html"]
+    assert "J3" in fiche["html"]          # troisième jour d'hospitalisation
+
+
+def test_une_ligne_commencee_plus_tard_nest_pas_sur_la_fiche_du_jour_choisi(base):
+    """La pancarte d'un jour passé est celle de ce jour-là : un traitement
+    introduit depuis n'y figure pas."""
+    from rea.services import prescriptions
+
+    sid = _sejour(base, "M10", 10, date_admission="2026-09-01")
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="PO", produit="Tienam",
+                                date_debut="2026-09-05", dose=1, unite="g",
+                                rythme="x3/j")
+    fiche = pancarte.imprimer(base, sid, "2026-09-02")
+    assert "Tienam" not in fiche["html"]
+
+
+def test_deux_jours_differents_donnent_deux_fiches_distinctes(base):
+    sid = _sejour(base, "M11", 11, date_admission="2026-09-01")
+    veille = pancarte.imprimer(base, sid, "2026-09-02")
+    jour = pancarte.imprimer(base, sid, "2026-09-03")
+    assert veille["date_jour"] != jour["date_jour"]
+    assert veille["html"] != jour["html"]
+    # Chaque jour repart à la version 1 : la version compte les impressions
+    # d'une même journée, pas celles du séjour.
+    assert veille["version"] == jour["version"] == 1

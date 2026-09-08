@@ -1,0 +1,22 @@
+{
+  "nom": "horaires_par_produit",
+  "libelle": "Heures de prise habituelles, par produit",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Exceptions à l'horaire standard du rythme (config.HORAIRES_PAR_RYTHME). Reconnaissance par fragment de nom, insensible à la casse et aux accents : le service écrit « Enoxa », « enoxaparine » ou « Lovenox » pour la même chose. Ne s'applique qu'aux rythmes cités dans `rythmes` — l'HBPM du soir n'a de sens qu'en une prise par jour. Le prescripteur reste libre de taper une autre heure à la ligne : cette liste ne fait que proposer le défaut.",
+  "valeurs": [
+    {
+      "libelle": "Enoxaparine (HBPM préventive du soir)",
+      "fragments": [
+        "enoxa",
+        "lovenox"
+      ],
+      "rythmes": [
+        "x1/j"
+      ],
+      "horaires": [
+        20
+      ]
+    }
+  ]
+}
