@@ -239,3 +239,34 @@ def test_le_bilan_apparait_dans_le_plan_hemodynamique(base):
     debut = lignes.index("Sur le plan hémodynamique :")
     suite = lignes[debut + 1:debut + 4]
     assert any("Bilan hydrique" in l for l in suite)
+
+
+def test_un_drain_pose_apres_coup_napparait_pas_les_jours_davant(base):
+    """Un drain posé aujourd'hui n'a rien recueilli avant-hier : le bilan
+    hydrique d'un jour passé ne doit pas changer parce qu'on pose un drain
+    aujourd'hui."""
+    sid = _sejour(base)
+    dispositifs.poser(base, sejour_id=sid, type_="redon", date_pose="2026-09-08")
+    assert [d["libelle"] for d in evolution.drains_du_jour(base, sid, "2026-09-08")] == ["Redon"]
+    assert evolution.drains_du_jour(base, sid, "2026-09-07") == []
+
+
+def test_un_drain_apparait_des_le_jour_de_sa_pose(base):
+    sid = _sejour(base)
+    dispositifs.poser(base, sejour_id=sid, type_="drain_abdominal", date_pose="2026-09-07")
+    assert len(evolution.drains_du_jour(base, sid, "2026-09-07")) == 1
+    assert len(evolution.drains_du_jour(base, sid, "2026-09-09")) == 1
+
+
+def test_tous_les_types_de_drains_du_referentiel_sont_proposables(base):
+    """Redon, drain thoracique, drain abdominal, DVE : les quatre se posent
+    depuis l'écran des actes et se retrouvent dans l'évolution."""
+    from rea import listes
+
+    sid = _sejour(base)
+    draines = [c for c, t in listes.TYPES_DISPOSITIF.items() if t.get("draine")]
+    assert set(draines) == {"redon", "drain_thoracique", "drain_abdominal", "dve"}
+    for code in draines:
+        assert code in listes.ORDRE_DISPOSITIFS      # proposé dans la liste de pose
+        dispositifs.poser(base, sejour_id=sid, type_=code, date_pose="2026-09-07")
+    assert len(evolution.drains_du_jour(base, sid, "2026-09-08")) == len(draines)

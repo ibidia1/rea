@@ -147,6 +147,14 @@ def onglet_actes(sejour: dict) -> None:
                 f"Déjà {len(deja)} épisode(s) enregistré(s) : celui-ci comptera "
                 f"comme une {config_type['libelle_repete'].lower()}."
             )
+        # Poser le drain ici, en relever le volume là-bas : le dire évite de
+        # chercher un champ « volume » qui n'existe pas sur cet écran.
+        if config_type.get("draine"):
+            st.caption(
+                "Une fois posé, son recueil des 24 h se relève dans "
+                "l'évolution, plan hémodynamique — il entre alors dans le "
+                "bilan hydrique."
+            )
         with st.form(f"pose_{type_}"):
             date_pose = st.date_input("Date de pose", value=date.today())
             site = None

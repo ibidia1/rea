@@ -846,6 +846,18 @@ et les boissons per os ne sont pas saisies.
 Corrigé au passage : les valeurs relues d'un jour précédent s'affichaient
 « 96,0 » et se réenregistraient avec leur zéro décimal.
 
+*Le lien entre les deux écrans.* Les quatre types drainés se posent depuis
+« Explorations et actes » comme n'importe quel dispositif, et apparaissent
+aussitôt dans le recueil de l'évolution — le Redon compris, désormais. À la
+pose, l'écran le dit : « son recueil des 24 h se relève dans l'évolution, plan
+hémodynamique ». Sans cette phrase, on cherche sur l'écran des actes un champ
+« volume » qui n'y est pas et n'a pas à y être : un drain se pose une fois,
+son recueil se relève tous les jours.
+
+Défaut corrigé du même coup : un drain posé aujourd'hui apparaissait dans
+l'évolution des jours précédents, où il n'avait rien pu recueillir — le bilan
+hydrique d'un jour passé changeait donc chaque fois qu'on posait un drain.
+
 **v3.4 — 8 septembre 2026 — antidater la garde, et la vitesse heure par heure**
 
 *Antidater ce qui a été fait pendant la garde.* C'était déjà possible en base

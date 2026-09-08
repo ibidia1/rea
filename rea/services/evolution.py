@@ -180,11 +180,18 @@ def drains_du_jour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     « Drainé » veut dire : dispositif dont `types_dispositif.json` déclare
     `draine`. La sonde urinaire n'en est pas — son volume, c'est la diurèse,
     comptée à part, et l'ajouter la compterait deux fois.
+
+    « Ce jour-là » compte dans les deux sens : un drain posé aujourd'hui n'a
+    rien recueilli avant-hier, et ne doit pas apparaître en rouvrant
+    l'évolution d'avant-hier — sans quoi le bilan hydrique d'un jour passé
+    changerait chaque fois qu'on pose un drain.
     """
     valeurs = elements_du_jour(base, sejour_id, date_jour)
     drains = []
     for etat in dispositifs_service.etats(base, sejour_id, date_jour):
         if not etat.en_place or not listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine"):
+            continue
+        if etat.date_pose and etat.date_pose > date_jour:
             continue
         cle = f"{PREFIXE_VOLUME_DRAIN}{etat.id}"
         drains.append({
