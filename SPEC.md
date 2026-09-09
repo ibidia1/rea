@@ -926,6 +926,40 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.14 — 9 septembre 2026 — un seul écran construit à la fois**
+
+L'application était lente sur une base presque vide : neuf secondes pour ouvrir
+une fiche, près d'une seconde pour le moindre clic dans le prescrit. Une base
+vide qui rame, c'est le signe que ce n'est pas la base — et la mesure l'a
+confirmé : les 110 requêtes SQL d'une exécution complète tiennent en **20 ms**,
+et les référentiels sont déjà en cache.
+
+Le coût était ailleurs. `st.tabs` n'est pas un aiguillage : Streamlit exécute le
+corps des sept onglets à chaque exécution du script, qu'on les regarde ou non,
+et garde tout dans la page. Une fiche chargée, c'était **2 785 widgets** et
+**5 404 éléments de page** reconstruits à chaque clic — y compris les six écrans
+qu'on ne regardait pas.
+
+Les onglets deviennent un sélecteur (`st.segmented_control`) et un seul écran
+est construit :
+
+| | avant | après |
+|---|---|---|
+| ouverture d'une fiche | 9 300 ms | **121 ms** |
+| widgets | 2 785 | **342** |
+| éléments de page | 5 404 | **754** |
+| clic dans le prescrit | 700–1 100 ms | 65–550 ms |
+
+La contrepartie est assumée : changer d'écran coûte désormais un aller-retour au
+serveur (190 à 740 ms, les Bilans étant le plus lourd) au lieu d'être instantané.
+On change d'écran quelques fois par patient ; on clique dedans des dizaines de
+fois. L'échange est largement favorable.
+
+*Effet de bord réglé au passage :* les panneaux d'onglets restant tous dans la
+page, une sonde de test pouvait lire un champ appartenant à un autre écran —
+c'est ce qui avait fait croire à un faux « FR affichée dans tous les modes
+ventilatoires ». Un seul écran présent, la page dit désormais ce qu'elle montre.
+
 **v3.13 — 9 septembre 2026 — un mode Visite, et la pancarte enfin lisible**
 
 Le reste de l'application est fait pour être lu assis, à cinquante centimètres,
