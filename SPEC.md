@@ -926,6 +926,27 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.16 — 9 septembre 2026 — le bouton Copier ne suppose plus la dernière version de Streamlit**
+
+L'écran Évolution plantait sur le poste du service : `AttributeError: module
+'streamlit' has no attribute 'iframe'`. Le bouton Copier venait d'être écrit
+avec `st.iframe`, parce que la version de développement signalait
+`st.components.v1.html` comme déprécié. Suivre l'avertissement était juste sur
+la machine qui le donnait, et faux sur celle qui fait tourner le service : elle
+est plus ancienne, `st.iframe` n'y existe pas encore.
+
+Le logiciel prend maintenant celui des deux noms qui est là, le récent d'abord.
+Le poste du service n'est pas mis à jour d'un clic — il est hors ligne, et on
+ne touche pas à son environnement pendant qu'il porte des patients.
+
+Au passage, `requirements.txt` annonçait `streamlit>=1.36` alors que deux écrans
+appellent `st.segmented_control`, arrivé en 1.40 : un plancher faux ne se voit
+qu'à l'installation sur un poste neuf, écran blanc à l'appui. Il passe à 1.40,
+et un test le compare aux appels réellement utilisés.
+
+Vérifié en relançant l'application avec `st.iframe` retiré de Streamlit : la
+page se rend, et le bouton copie.
+
 **v3.15 — 9 septembre 2026 — l'Évolution rend sa moitié droite, les avis sortent des plans**
 
 *Le texte à recopier s'en va.* Il tenait la moitié droite de l'écran — 640
