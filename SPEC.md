@@ -926,6 +926,48 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.19 — 9 septembre 2026 — croiser ses données, pas six variables prévues ; le total des pertes**
+
+*Les exemples étaient des exemples.* « Mortalité et E/e' », « mortalité et
+PaO₂/FiO₂ » illustraient une idée — pouvoir se servir de ce que le dossier
+contient — et non un catalogue à implémenter. Les facteurs croisables ne sont
+donc plus une liste écrite dans le code : ils sont **dérivés des données**.
+
+* les champs du séjour — provenance, type d'admission, mécanisme, Glasgow
+  d'arrivée, mode de sortie, statut J28, poids, taille, IMC ;
+* **tous** les analytes, y compris ceux que le service a ajoutés lui-même,
+  chacun en quatre lectures : première valeur, la plus basse, la plus haute,
+  dernière ;
+* **tous** les champs des gaz du sang — pH, PaO₂, PaCO₂, HCO₃⁻, lactates,
+  FiO₂, PEP, Vt, SpO₂ ;
+* **toutes** les mesures des quatre plans effectivement saisies — FC, PA,
+  RASS, Glasgow, diurèse, température… ;
+* les produits réellement prescrits (exposition *et* durée), les dispositifs
+  réellement posés (exposition *et* durée), les germes réellement isolés, les
+  antécédents réellement saisis.
+
+Sur la base de démonstration, un seul patient : **227 facteurs en 13
+familles**. Une donnée nouvelle dans le dossier devient un facteur sans que
+personne touche au code. Les résultats s'élargissent de la même façon :
+mortalité en réanimation et à J28, durée de séjour, de ventilation, jours sans
+ventilation, survenue d'une infection nosocomiale, réadmission.
+
+Deux règles de lecture, tenues par des tests. Un séjour dont le facteur n'est
+pas renseigné reste hors du tableau — sauf pour « a reçu / a eu / a isolé »,
+où l'absence de ligne *est* un non, et dire « inconnu » viderait le croisement
+de sa moitié utile. Une colonne booléenne se lit « Oui / Non » : « traumatique
+= 1 » n'apprend rien à personne dans un tableau. Et un patient perdu de vue à
+J28 n'est pas un survivant.
+
+*Le total des pertes.* Devant un redon qui donne, la question est « combien
+a-t-il perdu ? » — elle demandait d'additionner de tête diurèse, drains et
+pertes insensibles. Le bilan affiche maintenant **entrées − total pertes** en
+grand, le détail en dessous, et chaque drain nommé avant son total : « drain
+thoracique 320 + redon 180 = 500 mL ». Deux redons à 90 et 410 ne se lisent
+pas comme deux à 250, et c'est le genre de chiffre qui fait rappeler le
+chirurgien. La feuille imprimée gagne une ligne « Total des pertes (ml) » sous
+les drains, et le texte généré porte le total lui aussi.
+
 **v3.18 — 9 septembre 2026 — l'évolution se documente après coup, une posologie dans les protocoles, décrocher c'est ne plus être fébrile**
 
 *Le bilan des 24 h se calculait sur une journée qui n'avait que deux heures.*

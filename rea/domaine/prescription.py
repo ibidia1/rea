@@ -641,10 +641,35 @@ class BilanHydrique:
 
     @property
     def sorties_ml(self) -> float | None:
-        """Sorties mesurées et pertes insensibles réunies."""
+        """Le **total des pertes** : diurèse, drains et pertes insensibles.
+
+        Il s'affiche désormais tel quel (demande du service, 9 septembre).
+        Auparavant on ne montrait que les trois composantes et le net : pour
+        savoir combien un patient avait perdu — la question qu'on se pose
+        devant un redon qui donne — il fallait en additionner trois de tête,
+        au lit du malade.
+        """
         if self.diurese_ml is None or self.pertes_insensibles_ml is None:
             return None
         return self.diurese_ml + self.drains_ml + self.pertes_insensibles_ml
+
+    @property
+    def texte_drains(self) -> str:
+        """« thoracique 320 + redon 180 = 500 mL » — le détail avant le total.
+
+        Deux redons qui donnent 90 et 410 ne se lisent pas comme deux qui
+        donnent 250 chacun, et c'est le genre de chiffre qui fait rappeler le
+        chirurgien.
+        """
+        if not self.detail_drains:
+            return ""
+        if len(self.detail_drains) == 1:
+            libelle, volume = self.detail_drains[0]
+            return f"{libelle} {volume:.0f} mL"
+        morceaux = " + ".join(
+            f"{libelle} {volume:.0f}" for libelle, volume in self.detail_drains
+        )
+        return f"{morceaux} = {self.drains_ml:.0f} mL"
 
     @property
     def net_ml(self) -> float | None:

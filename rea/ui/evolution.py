@@ -380,11 +380,10 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
         return
 
     detail = [
-        f"Entrées {champs.format_valeur(round(bilan.entrees_ml))} mL",
         f"Diurèse {champs.format_valeur(round(bilan.diurese_ml))} mL",
     ]
     if bilan.drains_ml:
-        detail.append(f"Drains {champs.format_valeur(round(bilan.drains_ml))} mL")
+        detail.append(f"Drains {bilan.texte_drains}")
     detail.append(
         f"Pertes insensibles {champs.format_valeur(round(bilan.pertes_insensibles_ml))} mL"
     )
@@ -395,11 +394,17 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
             f", {_texte_nombre(bilan.temperature_c)} °C "
             f"(+ {_texte_nombre(round(bilan.majoration_fievre_ml))} mL)"
         )
+    # Entrées et total des pertes face à face : c'est la soustraction qu'on
+    # fait de tête devant un redon qui donne, et elle n'a plus à être faite.
     theme.bloc_html(
         "Bilan hydrique /24 h",
         f"<span style='font-size:1.4rem;font-weight:600'>{signe}"
         f"{champs.format_valeur(round(bilan.net_ml))} mL</span>"
-        f"<br><span style='font-size:.8rem'>{' · '.join(detail)}</span>"
+        f"<br><span style='font-size:.9rem'>"
+        f"Entrées <b>{champs.format_valeur(round(bilan.entrees_ml))} mL</b>"
+        f" − Total pertes <b>{champs.format_valeur(round(bilan.sorties_ml))} mL</b>"
+        f"</span>"
+        f"<br><span style='font-size:.8rem;color:#64748b'>{' · '.join(detail)}</span>"
         f"<br><span style='color:#94a3b8;font-size:.75rem'>{note}</span>",
         theme.BLEU,
     )

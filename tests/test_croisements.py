@@ -11,7 +11,8 @@ Ce fichier protège trois refus, qui sont l'essentiel de ce module :
   comme décédé.
 """
 
-from rea.services import bilans, croisements, sejours
+from rea.services import (bilans, croisements,
+                          prescriptions as prescriptions_mod, sejours)
 
 
 def _patient(base, nom, *, admission="2026-01-05", sortie=None, mode=None,
@@ -146,3 +147,73 @@ def test_le_pafi_ignore_un_gaz_sans_fio2(base):
 
     sejour = next(s for s in _cohorte(base) if s["id"] == sid)
     assert croisements.valeur_facteur(base, sejour, "pafi_min") == 150
+
+
+# --- les facteurs sortent des données, pas d'une liste écrite d'avance -----
+#
+# « Ce que je veux, c'est pouvoir utiliser les données que j'ai » — les
+# exemples cités (mortalité et E/e', mortalité et PaO₂/FiO₂) étaient des
+# exemples, pas le catalogue (précision du service, 9 septembre).
+
+def test_les_familles_de_facteurs_couvrent_tout_le_dossier(base):
+    import importlib
+
+    module = importlib.import_module("rea.services.croisements")
+    familles = {v.famille for v in module.facteurs_disponibles(base)}
+    for attendue in ("Dossier", "Scores", "Gaz du sang"):
+        assert attendue in familles, familles
+
+
+def test_un_champ_du_dossier_est_croisable(base):
+    """La provenance, le mode de sortie, le Glasgow d'admission : ce sont des
+    colonnes du séjour, elles n'avaient aucune raison d'être hors de portée."""
+    codes = {v.code for v in croisements.facteurs_disponibles(base)}
+    for attendu in ("sejour:provenance_type", "sejour:mode_sortie",
+                    "sejour:glasgow_initial", "imc"):
+        assert attendu in codes
+
+
+def test_un_produit_prescrit_ouvre_l_exposition_et_la_duree(base):
+    for i in range(2):
+        sid = _patient(base, f"P{i}")
+        prescriptions_mod.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                        produit="Tienam",
+                                        date_debut="2026-01-06")
+    codes = {v.code for v in croisements.facteurs_disponibles(base)}
+    assert "produit:Tienam" in codes
+    assert "duree_produit:Tienam" in codes
+
+
+def test_la_duree_d_un_traitement_se_calcule(base):
+    sid = _patient(base, "Duree", sortie="2026-01-12", mode="domicile")
+    ligne = prescriptions_mod.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Tienam",
+        date_debut="2026-01-06",
+    )
+    prescriptions_mod.arreter_ligne(base, ligne, date_arret="2026-01-10")
+    sejour = next(s for s in _cohorte(base) if s["id"] == sid)
+    assert croisements.valeur_facteur(base, sejour, "duree_produit:Tienam") == 5
+
+
+def test_un_facteur_d_exposition_repond_non_et_non_inconnu(base):
+    """Pour « a reçu / a eu / a isolé », l'absence de ligne est un non. Le
+    dire « inconnu » viderait le croisement de sa moitié utile."""
+    sid = _patient(base, "Sans", sortie="2026-01-12", mode="domicile")
+    sejour = next(s for s in _cohorte(base) if s["id"] == sid)
+    assert croisements.valeur_facteur(base, sejour, "produit:Tienam") == "Non"
+
+
+def test_une_colonne_booleenne_se_lit_oui_non(base):
+    """« traumatique = 1 » n'apprend rien à personne dans un tableau."""
+    sid = _patient(base, "Trauma", sortie="2026-01-12", mode="domicile")
+    base.mettre_a_jour("sejour", sid, {"traumatique": 1})
+    sejour = next(s for s in _cohorte(base) if s["id"] == sid)
+    assert croisements.valeur_facteur(base, sejour, "sejour:traumatique") == "Oui"
+
+
+def test_un_resultat_manquant_reste_manquant(base):
+    """Un patient perdu de vue à J28 n'est pas un survivant."""
+    sid = _patient(base, "Perdu", sortie="2026-01-12", mode="domicile")
+    base.mettre_a_jour("sejour", sid, {"statut_j28": "perdu_de_vue"})
+    sejour = next(s for s in _cohorte(base) if s["id"] == sid)
+    assert croisements.valeur_resultat(base, sejour, "deces_j28") is None

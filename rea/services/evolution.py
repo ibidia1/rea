@@ -426,6 +426,7 @@ def texte_bilan_hydrique(base: Base, sejour_id: str, date_jour: str) -> str:
         return ""
     detail = [
         f"entrées {_nombre_fr(round(bilan.entrees_ml))} mL",
+        f"total pertes {_nombre_fr(round(bilan.sorties_ml))} mL",
         f"diurèse {_nombre_fr(round(bilan.diurese_ml))} mL",
     ]
     if bilan.drains_ml:
