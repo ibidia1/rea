@@ -926,6 +926,26 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.11 — 9 septembre 2026 — les colonnes de biologie, pour de bon**
+
+Deux défauts restaient, visibles dès la première feuille imprimée.
+
+*Une colonne vide au milieu d'un jour.* Le nombre de colonnes d'un jour était
+compté sur **tous** ses prélèvements, bilans et gaz du sang confondus, alors que
+chaque tableau ne remplit que les siens. Un jour à deux bilans et deux gaz
+recevait quatre colonnes dans le récapitulatif de chimie, qui n'en remplissait
+que deux : la troisième restait vide au milieu du jour, pendant qu'un autre
+jour, faute de place, n'était pas montré du tout. Chaque tableau compte
+désormais sa propre source, et a son propre en-tête de jours (`days` pour la
+chimie, `daysGaz` pour les gaz).
+
+*Un bloc sans date entre deux jours.* Les colonnes sans emploi — séjour trop
+court pour remplir les huit — formaient un groupe anonyme entre le dernier jour
+passé et le jour en cours, ce qui se lisait comme un jour manquant. Elles
+reviennent maintenant au jour en cours, seul à avoir de vraies raisons d'avoir
+des cases libres : la garde y écrit ses bilans de la nuit. Il n'y a plus aucune
+colonne anonyme sur la feuille, et toute colonne appartient à un jour daté.
+
 **v3.10 — 8 septembre 2026 — actes de réanimation, avis spécialisés, Glasgow d'arrivée**
 
 *Correction de la v3.9.* Le tableau de biologie se remplit de gauche à droite.

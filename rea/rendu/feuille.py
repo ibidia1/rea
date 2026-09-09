@@ -370,7 +370,7 @@ def _bilans_a_faire(dossier) -> list[dict]:
     return lignes
 
 
-def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
+def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
     """Comment les douze colonnes du récapitulatif se partagent les jours.
 
     Douze colonnes, toujours : la page est imprimée, elle ne s'élargit pas.
@@ -403,7 +403,7 @@ def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
         jour = aujourdhui - timedelta(days=recul)
         if jour < admission:
             break
-        nombre = _nb_prelevements_du_jour(dossier, jour.isoformat())
+        nombre = _nb_prelevements_du_jour(dossier, jour.isoformat(), source)
         if nombre == 0:
             continue
         colonnes = min(nombre, restant)
@@ -412,14 +412,14 @@ def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
         restant -= colonnes
 
     repartition = list(reversed(passes))          # du plus ancien au plus récent
-    if restant > 0:
-        # Séjour trop court, ou pas encore de bilan : ce qui reste est du
-        # papier réglé, et il se place APRÈS les jours datés, juste avant le
-        # jour en cours. Le tableau se remplit de gauche à droite : on lit la
-        # cinétique en partant du bord gauche, sans commencer par une zone
-        # vide qui donne à croire qu'un jour manque.
-        repartition.append({"jour": None, "colonnes": restant, "en_cours": False})
-    repartition.append({"jour": date_jour, "colonnes": COLONNES_JOUR_EN_COURS,
+    # Ce qui reste — séjour trop court, ou pas encore de bilan — va au jour en
+    # cours, qui est le seul à avoir de vraies raisons d'avoir des cases
+    # libres : la garde y écrit ses bilans de la nuit. Il n'y a donc aucune
+    # colonne anonyme sur la feuille. Un bloc sans date entre le 07 et le 08 se
+    # lisait comme un jour manquant, ce qui est exactement ce qu'il ne fallait
+    # pas laisser croire.
+    repartition.append({"jour": date_jour,
+                        "colonnes": COLONNES_JOUR_EN_COURS + max(restant, 0),
                         "en_cours": True})
     return repartition
 
@@ -433,17 +433,20 @@ def _bornes_de_jour(repartition: list[dict]) -> set[int]:
     return bornes
 
 
-def _nb_prelevements_du_jour(dossier, jour: str) -> int:
-    """Combien de fois on a prélevé ce jour-là, gaz du sang compris."""
-    heures = {
-        r["date_heure"] for r in dossier.resultats
-        if (r["date_heure"] or "").startswith(jour)
-    }
-    heures |= {
-        g["date_heure"] for g in dossier.gaz_du_sang
-        if (g["date_heure"] or "").startswith(jour)
-    }
-    return len(heures)
+def _nb_prelevements_du_jour(dossier, jour: str, source: str) -> int:
+    """Combien de fois ce tableau-là a quelque chose à écrire, ce jour-là.
+
+    Compté **par source**, et c'est tout le point. En comptant les bilans et
+    les gaz du sang ensemble, un jour à deux bilans et deux gaz recevait
+    quatre colonnes dans le récapitulatif de chimie, qui n'en remplissait que
+    deux : la troisième restait vide au milieu d'un jour, pendant qu'un autre
+    jour, faute de place, n'était pas montré du tout.
+    """
+    lignes = dossier.resultats if source == "bilan" else dossier.gaz_du_sang
+    return len({
+        l["date_heure"] for l in lignes
+        if (l["date_heure"] or "").startswith(jour)
+    })
 
 
 def _entetes_jours(repartition: list[dict]) -> list[dict]:
@@ -876,7 +879,11 @@ def contexte(dossier) -> dict:
     date_jour = dossier.date_jour
 
     prescrit = _lignes_prescription(dossier)
-    repartition = _repartition_biologie(dossier, date_jour)
+    # Deux tableaux, deux répartitions : le récapitulatif de chimie compte ses
+    # bilans, le tableau des gaz du sang compte ses gaz. Une répartition
+    # commune donnait à l'un des colonnes que l'autre remplissait.
+    repartition = _repartition_biologie(dossier, date_jour, "bilan")
+    repartition_gaz = _repartition_biologie(dossier, date_jour, "gaz")
     lignes_ref = referentiels.charger("feuille_lignes")
 
     ideal = calculs.poids_ideal_devine(
@@ -913,14 +920,15 @@ def contexte(dossier) -> dict:
         "bilanRows": _lignes_sorties(dossier, lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
         "days": _entetes_jours(repartition),
+        "daysGaz": _entetes_jours(repartition_gaz),
         "bioHemato": _valeurs_biologie(dossier, repartition, list(lignes_ref["hemato"]), "bilan"),
         "bioIono": _valeurs_biologie(dossier, repartition, list(lignes_ref["iono"]), "bilan"),
         "bioRenal": _valeurs_biologie(dossier, repartition, list(lignes_ref["renal"]), "bilan"),
         "bioHepat": _valeurs_biologie(dossier, repartition, list(lignes_ref["hepat"]), "bilan"),
         "bioAutres": _valeurs_biologie(dossier, repartition, list(lignes_ref["autres"]), "bilan"),
-        "gdsGaz": _valeurs_biologie(dossier, repartition, list(lignes_ref["gaz"]), "gaz"),
-        "pfRow": _rapport_pf(dossier, repartition),
-        "gdsVent": _valeurs_biologie(dossier, repartition, list(lignes_ref["ventilation"]), "gaz"),
+        "gdsGaz": _valeurs_biologie(dossier, repartition_gaz, list(lignes_ref["gaz"]), "gaz"),
+        "pfRow": _rapport_pf(dossier, repartition_gaz),
+        "gdsVent": _valeurs_biologie(dossier, repartition_gaz, list(lignes_ref["ventilation"]), "gaz"),
         "infRows": _microbiologie(dossier),
         "examensDemain": _examens_demain(dossier),
         "pied": _pied(prescrit["debordements"]),
