@@ -1,0 +1,16 @@
+{
+  "nom": "temperature",
+  "libelle": "Catégories de température",
+  "version": "2026-09-09.1",
+  "date": "2026-09-09",
+  "note": "En réanimation, « fébrile » n'est pas « a de la température » : on distingue apyrétique, subfébrile et fébrile, et cette différence décide d'une conduite (demande du service, 9 septembre). Les seuils ci-dessous sont ceux couramment retenus — fièvre à partir de 38,3 °C — et sont à confirmer par un senior : ce sont eux qui définissent « décrocher » dans l'analyse du délai d'apyrexie. Les bornes sont inclusives en bas, exclusives en haut : apyrétique = t < 37,5 ; subfébrile = 37,5 ≤ t < 38,3 ; fébrile = t ≥ 38,3.",
+  "valeurs": {
+    "seuil_subfebrile_c": 37.5,
+    "seuil_febrile_c": 38.3,
+    "categories": [
+      {"code": "apyretique", "libelle": "Apyrétique", "abrege": "apyr."},
+      {"code": "subfebrile", "libelle": "Subfébrile", "abrege": "subfébr."},
+      {"code": "febrile", "libelle": "Fébrile", "abrege": "fébr."}
+    ]
+  }
+}

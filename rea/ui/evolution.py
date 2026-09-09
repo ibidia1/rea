@@ -5,11 +5,10 @@ avis spécialisés.
 from __future__ import annotations
 
 import json
-from datetime import date
 
 import streamlit as st
 
-from .. import listes, protocoles
+from .. import config, listes, protocoles
 from ..db import ConflitDeVersion
 from ..domaine import avis as dom_avis
 from ..domaine import prescription as dom
@@ -106,11 +105,17 @@ def _protocole_de_la_regle(sejour: dict, date_jour_str: str, code_regle: str) ->
             if p.lignes_prescription:
                 st.markdown("**Lignes proposées au prescrit :**")
                 for ligne in p.lignes_prescription:
+                    posologie = " ".join(
+                        str(m) for m in (ligne.get("dose"), ligne.get("unite")) if m
+                    )
+                    if ligne.get("vitesse"):
+                        posologie += f" à {ligne['vitesse']} cc/h"
                     detail = " · ".join(
-                        m for m in (ligne.get("rythme"), ligne.get("note")) if m
+                        m for m in (posologie.strip(), ligne.get("rythme"),
+                                    ligne.get("note")) if m
                     )
                     st.markdown(
-                        f"- {ligne.get('voie', '?')} — {ligne.get('produit', '?')}"
+                        f"- {ligne.get('voie', '?')} — **{ligne.get('produit', '?')}**"
                         + (f" ({detail})" if detail else "")
                     )
                 if st.button("Ajouter ces lignes au prescrit",
@@ -369,8 +374,7 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     if bilan.net_ml is None:
         theme.bloc_html(
             "Bilan hydrique /24 h",
-            "<span style='color:#94a3b8'>Non calculable — il manque "
-            + " et ".join(bilan.manquants) + ".</span>",
+            f"<span style='color:#94a3b8'>{bilan.motif_indisponible}</span>",
             theme.GRIS,
         )
         return
@@ -584,8 +588,25 @@ def _bouton_copier(texte: str) -> None:
 
 
 def onglet_evolution(sejour: dict) -> None:
-    date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
+    """L'évolution se documente **après coup**, jamais sur la journée en cours.
+
+    On ne remplit pas une évolution des 24 h à 9 h du matin : la diurèse, les
+    drains, le bilan hydrique se relèvent sur une journée révolue, et la
+    visite documente celle qui vient de se terminer à 8 h. L'écran s'ouvre
+    donc sur la **dernière journée close** — le 8 quand on est le 9 au matin —
+    et non sur aujourd'hui, qui n'a que deux heures et rien à raconter.
+    """
+    defaut = dom.dernier_jour_clos()
+    date_jour = st.date_input("Jour", value=defaut, key="date_evolution")
     date_jour_str = str(date_jour)
+    if not dom.journee_close(date_jour):
+        st.info(
+            f"**{format_date_fr(date_jour_str)} est la journée en cours** — "
+            f"elle se termine à {config.HEURE_DEBUT_JOURNEE} h demain. On peut "
+            "y noter ce qui est déjà arrivé, mais le bilan des 24 h ne s'y "
+            "calcule pas. La journée qu'on documente à la visite est celle "
+            f"de la veille, {format_date_fr(str(defaut))}."
+        )
     panneau_aides(sejour, date_jour_str)
     entree = evolution_service.obtenir_ou_creer(
         contexte.base(), sejour["id"], date_jour_str, utilisateur_id=contexte.utilisateur_id()

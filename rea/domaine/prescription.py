@@ -5,7 +5,7 @@ elle ne calcule jamais une dose (SPEC §3.1)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from .. import config
 from .dates import jour_traitement, parse_date
@@ -184,6 +184,51 @@ def _heures_entre(debut: str, fin: str) -> float:
     except ValueError:
         return 0.0
     return ecart.total_seconds() / 3600
+
+
+def jour_de_service(instant: datetime | None = None) -> date:
+    """La journée de service ouverte à cet instant.
+
+    La journée court de 8 h à 8 h. À 6 h du matin le 9, on est donc encore
+    dans la feuille ouverte le 8 — c'est ce que dit la feuille papier, et
+    c'est ainsi que la garde la remplit.
+    """
+    instant = instant or datetime.now()
+    jour = instant.date()
+    if instant.hour < config.HEURE_DEBUT_JOURNEE:
+        jour = jour - timedelta(days=1)
+    return jour
+
+
+def dernier_jour_clos(instant: datetime | None = None) -> date:
+    """La dernière journée de service dont les 24 h sont écoulées.
+
+    C'est celle qu'on documente à la visite du matin : à 9 h le 9 septembre,
+    la journée qui vient de se terminer à 8 h est celle **du 8**. La journée
+    du 9 vient de commencer et ne se remplira que demain.
+    """
+    return jour_de_service(instant) - timedelta(days=1)
+
+
+def journee_close(date_jour: str | date, instant: datetime | None = None) -> bool:
+    """Les 24 h de cette journée de service sont-elles écoulées ?
+
+    Ce qui en dépend : un bilan hydrique des 24 h ne se calcule pas sur une
+    journée en cours. Diurèse, drains, pertes insensibles se relèvent sur 24 h
+    révolues ; les entrées, elles, se calculeraient sur la fenêtre entière
+    d'une journée qui n'a que deux heures. On obtiendrait un bilan qui n'est
+    ni celui d'aujourd'hui ni celui d'hier — c'est-à-dire un chiffre faux dans
+    la case qui décide d'une déplétion ou d'un remplissage.
+    """
+    return parse_date(date_jour) <= dernier_jour_clos(instant)
+
+
+def heures_ecoulees(date_jour: str | date, instant: datetime | None = None) -> float:
+    """Combien d'heures de cette journée de service sont passées (0 à 24)."""
+    instant = instant or datetime.now()
+    debut, _fin = fenetre_journee(date_jour)
+    ecart = (instant - datetime.fromisoformat(debut)).total_seconds() / 3600
+    return max(0.0, min(24.0, ecart))
 
 
 def vitesses_par_heure(
@@ -581,6 +626,12 @@ class BilanHydrique:
     pertes_base_ml: float | None
     majoration_fievre_ml: float | None
     formule_insensibles: str
+    #: Les 24 h de la journée sont-elles écoulées ? Sans quoi il n'y a pas de
+    #: bilan des 24 h : diurèse, drains et pertes insensibles se relèvent sur
+    #: une journée révolue, et les entrées se compteraient sur une fenêtre
+    #: pleine alors que la journée n'a que deux heures.
+    journee_close: bool = True
+    heures_ecoulees: float | None = None
 
     @property
     def pertes_insensibles_ml(self) -> float | None:
@@ -597,8 +648,29 @@ class BilanHydrique:
 
     @property
     def net_ml(self) -> float | None:
+        if not self.journee_close:
+            return None
         sorties = self.sorties_ml
         return None if sorties is None else self.entrees_ml - sorties
+
+    @property
+    def motif_indisponible(self) -> str | None:
+        """Pourquoi il n'y a pas de bilan — en une phrase, pas une case vide.
+
+        L'ordre compte : une journée en cours n'a pas de bilan *incomplet*,
+        elle n'en a pas du tout. Réclamer la diurèse des 24 h d'une journée
+        qui vient de commencer serait absurde.
+        """
+        if not self.journee_close:
+            reste = 24 - (self.heures_ecoulees or 0)
+            return (
+                "Journée en cours : le bilan des 24 h se calcule quand elles "
+                f"sont écoulées, dans {reste:.0f} h. C'est la journée de la "
+                "veille qu'on documente à la visite."
+            )
+        if self.manquants:
+            return "Il manque " + " et ".join(self.manquants) + "."
+        return None
 
     @property
     def manquants(self) -> list[str]:
@@ -667,6 +739,7 @@ def bilan_hydrique(
     temperature_c: float | None,
     reglages_par_ligne: dict[str, list[dict]] | None = None,
     date_jour: str | date | None = None,
+    instant: datetime | None = None,
 ) -> BilanHydrique:
     """Le bilan des 24 h, tel que le service l'a défini (8 septembre 2026) :
 
@@ -682,7 +755,12 @@ def bilan_hydrique(
     )
     drains = list(drains or [])
     base, majoration, formule = pertes_insensibles_24h(poids_kg, temperature_c)
+    close = journee_close(date_jour, instant) if date_jour else True
     return BilanHydrique(
+        journee_close=close,
+        heures_ecoulees=(
+            None if date_jour is None else heures_ecoulees(date_jour, instant)
+        ),
         entrees_ml=entrees.total_ml,
         detail_entrees=entrees.detail,
         diurese_ml=diurese_ml,

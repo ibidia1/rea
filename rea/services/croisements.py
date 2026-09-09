@@ -39,7 +39,8 @@ from dataclasses import dataclass, field
 
 from .. import analytes as catalogue
 from ..db import Base
-from ..domaine.dates import age_ans
+from ..domaine import temperature as temp_dom
+from ..domaine.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
 from . import scores as scores_service
 from . import statistiques as stats
@@ -397,3 +398,116 @@ def _nb(valeur: float) -> str:
     if float(valeur).is_integer():
         return str(int(valeur))
     return f"{valeur:.1f}".replace(".", ",")
+
+
+# --------------------------------------------------------------------------
+# Délai d'apyrexie sous une molécule
+# --------------------------------------------------------------------------
+# « À partir de combien de jours un patient décroche sous telle molécule ? »
+# Décrocher, c'est **ne plus être fébrile** (définition du service,
+# 9 septembre) : ni fébrile ni subfébrile — apyrétique.
+#
+# Ce n'est pas un croisement en tranches mais un délai jusqu'à un événement,
+# donc un module à part. Le piège de ce genre de calcul a un nom : ne compter
+# que ceux qui ont décroché. Un patient encore fébrile à l'arrêt du traitement
+# n'a pas un délai « très long », il n'a **pas** de délai — et l'oublier fait
+# paraître efficace une molécule sous laquelle personne ne décroche.
+
+
+@dataclass
+class Apyrexie:
+    produit: str
+    episodes: int = 0            # traitements commencés chez un patient fébrile
+    decroches: int = 0           # devenus apyrétiques avant la fin du traitement
+    delais: list[int] = field(default_factory=list)
+    jamais_decroches: int = 0
+    sans_temperature: int = 0    # température non mesurée au départ
+    avertissements: list[str] = field(default_factory=list)
+
+    @property
+    def delai_median(self) -> float | None:
+        return statistics.median(self.delais) if self.delais else None
+
+    @property
+    def part_decroches(self) -> float | None:
+        if self.episodes < EFFECTIF_MINIMAL:
+            return None
+        return self.decroches / self.episodes
+
+
+def delai_apyrexie(base: Base, sejours: list[dict], produit: str) -> Apyrexie:
+    """Combien de jours avant l'apyrexie, sous ce produit.
+
+    Un épisode compte si le patient était **fébrile le jour où le traitement
+    a commencé** : sans fièvre au départ, il n'y a rien à mesurer. Le délai
+    est le nombre de jours jusqu'au premier jour apyrétique, le jour de début
+    comptant pour J1 — la même convention que les compteurs J de la pancarte.
+
+    Une température non mesurée n'est jamais lue comme une apyrexie : ce
+    serait faire décrocher tout patient qu'on a simplement cessé de mesurer.
+    """
+    resultat = Apyrexie(produit=produit)
+    for sejour in sejours:
+        for episode in base.requete(
+            "SELECT id, date_debut, date_arret FROM prescription_ligne "
+            "WHERE sejour_id = ? AND produit = ? AND supprime = 0 "
+            "ORDER BY date_debut",
+            (sejour["id"], produit),
+        ):
+            _compter_episode(base, sejour, episode, resultat)
+
+    if resultat.sans_temperature:
+        resultat.avertissements.append(
+            f"{resultat.sans_temperature} traitement(s) écartés : température "
+            "non mesurée le jour du début."
+        )
+    if resultat.jamais_decroches:
+        resultat.avertissements.append(
+            f"{resultat.jamais_decroches} patient(s) sur {resultat.episodes} "
+            "n'ont pas décroché avant la fin du traitement. Ils ne sont pas "
+            "dans la médiane — la lire seule ferait paraître efficace une "
+            "molécule sous laquelle personne ne décroche."
+        )
+    if resultat.episodes < EFFECTIF_MINIMAL:
+        resultat.avertissements.append(
+            f"Moins de {EFFECTIF_MINIMAL} traitements : rien à conclure."
+        )
+    resultat.avertissements.append(
+        "Aucun ajustement sur la gravité, le germe ou les traitements "
+        "associés : ce délai décrit, il ne compare pas."
+    )
+    return resultat
+
+
+def _compter_episode(base: Base, sejour: dict, episode: dict, resultat: Apyrexie) -> None:
+    temperatures = _temperatures_du_sejour(base, sejour["id"])
+    debut = episode["date_debut"]
+    if not temp_dom.est_febrile(temperatures.get(debut)):
+        if temperatures.get(debut) is None:
+            resultat.sans_temperature += 1
+        return
+
+    resultat.episodes += 1
+    fin = episode["date_arret"] or sejour.get("date_sortie") or max(temperatures, default=debut)
+    jours = sorted(j for j in temperatures if debut <= j <= str(fin)[:10])
+    for jour in jours:
+        if temp_dom.est_apyretique(temperatures[jour]):
+            resultat.decroches += 1
+            resultat.delais.append(
+                (parse_date(jour) - parse_date(debut)).days + 1
+            )
+            return
+    resultat.jamais_decroches += 1
+
+
+def _temperatures_du_sejour(base: Base, sejour_id: str) -> dict[str, float]:
+    """date_jour -> température relevée ce jour-là (plan infectieux)."""
+    return {
+        ligne["date_jour"]: ligne["valeur_num"]
+        for ligne in base.requete(
+            "SELECT date_jour, valeur_num FROM evolution_element "
+            "WHERE sejour_id = ? AND cle = 'temperature' AND supprime = 0 "
+            "AND valeur_num IS NOT NULL ORDER BY date_jour",
+            (sejour_id,),
+        )
+    }

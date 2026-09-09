@@ -488,7 +488,10 @@ def _charger_protocole_dans_editeur(code: str | None) -> None:
     for i, ligne in enumerate(p.get("lignes_prescription", [])[:6]):
         st.session_state[f"ed_proto_ligne_voie_{i}"] = ligne.get("voie", "")
         st.session_state[f"ed_proto_ligne_produit_{i}"] = ligne.get("produit", "")
+        st.session_state[f"ed_proto_ligne_dose_{i}"] = str(ligne.get("dose") or "")
+        st.session_state[f"ed_proto_ligne_unite_{i}"] = ligne.get("unite", "")
         st.session_state[f"ed_proto_ligne_rythme_{i}"] = ligne.get("rythme", "")
+        st.session_state[f"ed_proto_ligne_vitesse_{i}"] = str(ligne.get("vitesse") or "")
         st.session_state[f"ed_proto_ligne_note_{i}"] = ligne.get("note", "")
     for i, expl in enumerate(p.get("explorations_proposees", [])[:4]):
         st.session_state[f"ed_proto_expl_type_{i}"] = expl.get("type", "")
@@ -574,9 +577,16 @@ def _editeur_protocoles() -> None:
         c2.caption("Jamais proposé automatiquement — un dossier à part.")
 
     st.markdown("**Lignes de prescription proposées**")
+    st.caption(
+        "La posologie écrite ici est reprise telle quelle dans la ligne posée. "
+        "Elle vient de vous, pas d'un calcul du logiciel — c'est ce qui la "
+        "distingue de ce qu'interdit le §3.1. Laisser vide ce que le "
+        "prescripteur doit décider au lit du malade : un champ vide reste "
+        "vide, il n'est jamais deviné."
+    )
     lignes_prescription = []
     for i in range(6):
-        cc1, cc2, cc3, cc4 = st.columns([1, 2, 1, 2])
+        cc1, cc2, cc3, cc4, cc5, cc6, cc7 = st.columns([1, 2, 1, 1, 1, 1, 2])
         voie = cc1.selectbox(
             "Voie", [""] + list(listes.ORDRE_VOIES), key=f"ed_proto_ligne_voie_{i}",
             format_func=lambda c: "—" if not c else listes.VOIES[c]["titre"],
@@ -586,21 +596,36 @@ def _editeur_protocoles() -> None:
             "Produit", key=f"ed_proto_ligne_produit_{i}",
             label_visibility="collapsed" if i else "visible",
         )
-        rythme = cc3.selectbox(
+        dose = cc3.text_input(
+            "Dose", key=f"ed_proto_ligne_dose_{i}", placeholder="1",
+            label_visibility="collapsed" if i else "visible",
+        )
+        unite = cc4.selectbox(
+            "Unité", [""] + list(listes.codes(listes.UNITES)),
+            key=f"ed_proto_ligne_unite_{i}",
+            format_func=lambda c: "—" if not c else listes.libelle(listes.UNITES, c),
+            label_visibility="collapsed" if i else "visible",
+        )
+        rythme = cc5.selectbox(
             "Rythme", [""] + list(listes.codes(listes.RYTHMES)), key=f"ed_proto_ligne_rythme_{i}",
             format_func=lambda c: "—" if not c else listes.libelle(listes.RYTHMES, c),
             label_visibility="collapsed" if i else "visible",
         )
-        note = cc4.text_input(
+        vitesse = cc6.text_input(
+            "Vitesse", key=f"ed_proto_ligne_vitesse_{i}", placeholder="cc/h",
+            label_visibility="collapsed" if i else "visible",
+        )
+        note = cc7.text_input(
             "Note (optionnel)", key=f"ed_proto_ligne_note_{i}",
             label_visibility="collapsed" if i else "visible",
         )
         if voie and produit:
             ligne = {"voie": voie, "produit": produit}
-            if rythme:
-                ligne["rythme"] = rythme
-            if note:
-                ligne["note"] = note
+            for cle, valeur in (("dose", dose), ("unite", unite),
+                                ("rythme", rythme), ("vitesse", vitesse),
+                                ("note", note)):
+                if valeur:
+                    ligne[cle] = valeur
             lignes_prescription.append(ligne)
 
     st.markdown("**Explorations proposées**")

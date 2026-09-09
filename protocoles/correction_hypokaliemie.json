@@ -1,7 +1,7 @@
 {
   "code": "correction_hypokaliemie",
   "titre": "Correction d'une hypokaliémie",
-  "version": "2026-09-09-v1",
+  "version": "2026-09-09-v2",
   "date_version": "2026-09-09",
   "signe_par": null,
   "valide": false,
@@ -9,13 +9,13 @@
     "type": "regle",
     "valeur": "hypokaliemie"
   },
-  "note": "BROUILLON — non signé. Écrit pour montrer le mécanisme : un protocole attaché au code d'une règle d'aide (`regles/rappels_biologie.json`, règle `hypokaliemie`) est proposé sous le rappel qui vient de le déclencher. Le contenu doit être relu, complété et signé par le chef de service avant d'être proposé aux internes (SPEC §4.5, règle de sécurité 1). Les lignes sont posées SANS DOSE : le logiciel ne propose aucune posologie (SPEC §3.1), les doses et vitesses restent à celui qui signe la prescription.",
+  "note": "BROUILLON — non signé. Écrit pour montrer le mécanisme : un protocole attaché au code d'une règle d'aide (`regles/rappels_biologie.json`, règle `hypokaliemie`) est proposé sous le rappel qui vient de le déclencher. LES DOSES CI-DESSOUS SONT DES EMPLACEMENTS, PAS UNE RECOMMANDATION : elles doivent être remplacées par celles du service, relues et signées par le chef de service avant que ce protocole soit proposé aux internes (SPEC §4.5, règle de sécurité 1). Depuis le 9 septembre, un protocole signé a le droit de porter une posologie : elle vient du senior qui signe, pas d'un calcul du logiciel.",
   "lignes_prescription": [
     {
       "voie": "IV",
       "produit": "Chlorure de potassium",
       "rythme": "conditionnel",
-      "note": "sur voie centrale, dose et vitesse à préciser par le prescripteur"
+      "note": "sur voie centrale — dose et vitesse à fixer par le service"
     },
     {
       "voie": "SOINS",

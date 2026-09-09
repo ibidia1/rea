@@ -21,6 +21,7 @@ import streamlit as st
 
 from .. import listes
 from ..domaine import prescription as dom
+from ..domaine import temperature as temp_dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from ..services import avis as avis_service
 from ..services import bilans as bilans_service
@@ -163,6 +164,12 @@ def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
             texte = f"{_nombre(valeur)}/{_nombre(elements['pad'])}"
         else:
             texte = _nombre(valeur)
+        if cle == "temperature":
+            # « 38,4 °C » demande un instant de conversion ; « fébrile » se lit
+            # d'un coup d'œil, et c'est ce mot-là qui déclenche une conduite.
+            texte += unite + f" · {temp_dom.libelle(temp_dom.categorie(valeur)).lower()}"
+            mesures.append(_mesure(libelle, texte, None))
+            continue
         mesures.append(_mesure(libelle, texte + unite, None))
     hydrique = evolution_service.texte_bilan_hydrique(
         contexte.base(), sejour["id"], date_jour_str
