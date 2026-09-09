@@ -408,3 +408,56 @@ def test_le_motif_dit_ce_qui_manque_quand_la_journee_est_close(base):
     assert bilan.net_ml is None
     assert "Il manque" in bilan.motif_indisponible
     assert "Journée en cours" not in bilan.motif_indisponible
+
+
+# --- le total des pertes ---------------------------------------------------
+#
+# Devant un redon qui donne, la question est « combien a-t-il perdu ? ». Elle
+# demandait d'additionner de tête diurèse, drains et pertes insensibles
+# (demande du service, 9 septembre).
+
+def test_le_total_des_pertes_additionne_diurese_drains_et_insensibles(base):
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=1200, drains=[("Redon", 150)], poids_kg=70,
+        temperature_c=37, date_jour="2026-09-08",
+        instant=_datetime(2026, 9, 9, 10, 0),
+    )
+    assert bilan.sorties_ml == 1200 + 150 + bilan.pertes_insensibles_ml
+
+
+def test_le_detail_des_drains_nomme_chacun_avant_le_total():
+    """Deux redons à 90 et 410 ne se lisent pas comme deux à 250 — et c'est
+    le genre de chiffre qui fait rappeler le chirurgien."""
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=1200,
+        drains=[("Drain thoracique (droit)", 90), ("Redon (abdomen)", 410)],
+        poids_kg=70, temperature_c=37,
+    )
+    assert bilan.texte_drains == (
+        "Drain thoracique (droit) 90 + Redon (abdomen) 410 = 500 mL"
+    )
+
+
+def test_un_seul_drain_n_a_pas_besoin_d_un_total():
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=1200, drains=[("Redon (abdomen)", 180)],
+        poids_kg=70, temperature_c=37,
+    )
+    assert bilan.texte_drains == "Redon (abdomen) 180 mL"
+
+
+def test_sans_drain_le_texte_est_vide():
+    bilan = dom.bilan_hydrique(_lignes(), diurese_ml=1200, poids_kg=70,
+                               temperature_c=37)
+    assert bilan.texte_drains == ""
+
+
+def test_le_texte_genere_porte_le_total_des_pertes(base):
+    sid = _sejour(base, poids=70)
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="ENTREES",
+                                produit="Ringer", sous_type="perfusion",
+                                vitesse=60, date_debut="2026-09-07")
+    evolution.enregistrer_elements(base, sid, "2026-09-08",
+                                   {"diurese_24h": 1200, "temperature": 37})
+    texte = evolution.texte_bilan_hydrique(base, sid, "2026-09-08")
+    assert "total pertes" in texte

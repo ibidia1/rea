@@ -288,6 +288,10 @@ def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
     assert libelles_sorties == [
         "Diurèse (ml/h)", "Bandelette urinaire",
         "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)",
+        # Le total des pertes ferme le bloc : devant un redon qui donne, on
+        # veut savoir combien le patient a perdu, pas additionner trois
+        # colonnes de tête (demande du service, 9 septembre).
+        "Total des pertes (ml)",
     ]
 
 

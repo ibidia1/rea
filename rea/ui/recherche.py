@@ -95,26 +95,45 @@ def _croisements(base: Base, selection: list[dict]) -> None:
     st.caption(
         "Choisir un **résultat** et un **facteur** : la cohorte est découpée "
         "en tranches selon le facteur, et le résultat est affiché tranche par "
-        "tranche, avec son effectif."
+        "tranche, avec son effectif. Les facteurs ne sont pas une liste écrite "
+        "d'avance — ils sortent de vos données : les champs du dossier, tous "
+        "les analytes (y compris ceux que vous avez ajoutés), les gaz du sang, "
+        "les mesures des quatre plans, les produits prescrits, les dispositifs "
+        "posés, les germes isolés, les antécédents saisis."
     )
 
     facteurs = croisements_service.facteurs_disponibles(base)
     resultats = list(croisements_service.RESULTATS)
 
-    c1, c2 = st.columns(2)
+    # Plusieurs centaines de facteurs : une liste à plat n'est plus une liste.
+    # On choisit d'abord la famille — dossier, biologie, gaz du sang,
+    # traitements, dispositifs, microbiologie, antécédents.
+    familles: dict[str, list] = {}
+    for v in facteurs:
+        familles.setdefault(v.famille, []).append(v)
+
+    c1, c2, c3 = st.columns([2, 1.4, 2])
     resultat = c1.selectbox(
         "Résultat à expliquer", resultats, format_func=lambda v: v.libelle,
     )
-    facteur = c2.selectbox(
-        "Croisé avec", facteurs, format_func=lambda v: v.libelle,
+    famille = c2.selectbox(
+        "Famille du facteur", sorted(familles), index=None,
+        placeholder="Choisir",
+    )
+    facteur = c3.selectbox(
+        "Croisé avec", familles.get(famille, []), format_func=lambda v: v.libelle,
         index=None, placeholder="Choisir un facteur",
+        disabled=famille is None,
     )
     if facteur is None:
         st.info(
-            "Exemples : mortalité selon le PaO₂/FiO₂ le plus bas · durée de "
-            "ventilation selon le SOFA maximal · mortalité selon la dernière "
-            "valeur d'un analyte que le service a ajouté lui-même (E/e', par "
-            "exemple, saisi dans l'écran Bilans)."
+            f"**{len(facteurs)} facteurs** disponibles dans "
+            f"{len(familles)} familles, tous issus de ce que contient la base. "
+            "Quelques exemples de ce que ça permet de demander : mortalité "
+            "selon le PaO₂/FiO₂ le plus bas · durée de ventilation selon le "
+            "SOFA maximal · mortalité selon un antécédent · durée de séjour "
+            "selon le germe isolé · jours sans ventilation selon la durée "
+            "d'une molécule. Ce ne sont que des exemples : le choix est libre."
         )
         return
 
