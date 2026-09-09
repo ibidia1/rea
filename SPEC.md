@@ -926,6 +926,30 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.15 — 9 septembre 2026 — l'Évolution rend sa moitié droite, les avis sortent des plans**
+
+*Le texte à recopier s'en va.* Il tenait la moitié droite de l'écran — 640
+pixels de haut — pour n'être lu par personne : on le relit dans le DMI après
+l'avoir collé, pas dans le logiciel qui vient de l'écrire. Pendant ce temps les
+quatre plans se saisissaient dans ce qu'il restait. Il ne reste qu'un bouton
+**Copier le compte rendu du jour**, en bas de page, et la largeur entière
+revient à la saisie.
+
+Deux chemins vers le presse-papiers, parce qu'un seul ne suffit pas :
+`navigator.clipboard` quand le navigateur l'accorde, `execCommand('copy')`
+sinon — l'iframe d'un composant n'a pas toujours la permission
+`clipboard-write`. Si les deux échouent, le bouton le dit ; et il ne s'affiche
+pas du tout tant que la journée est vide. Un bouton qui copie le vide en
+silence ne se remarque qu'au moment où on colle, dans le DMI, c'est-à-dire trop
+tard.
+
+*Les avis spécialisés quittent le plan infectieux.* Ils y avaient été rangés
+parce que c'est là qu'on décide de rappeler un chirurgien. À l'usage c'était
+faux : on demande un avis de cardiologie sur un trouble du rythme, de
+néphrologie sur une épuration — la moitié des avis n'a rien d'infectieux. Ils
+forment leur propre section, sous les quatre plans : la liste chronologique à
+gauche, la saisie à droite (demande du service, 9 septembre).
+
 **v3.14 — 9 septembre 2026 — un seul écran construit à la fois**
 
 L'application était lente sur une base presque vide : neuf secondes pour ouvrir
