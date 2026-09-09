@@ -10,6 +10,7 @@ import streamlit as st
 from .. import analytes as cat, listes
 from ..domaine import calculs, coherence
 from ..domaine.dates import age_ans, format_date_fr
+from ..services import analytes_locaux
 from ..services import bilans as bilans_service, microbiologie as micro_service
 from . import contexte, theme
 
@@ -239,21 +240,40 @@ def _saisie_gaz_du_sang() -> tuple[str, float | None, dict[str, float | None]]:
     tout le reste de l'écran.
     """
     st.markdown("**Gaz du sang & ventilation**")
-    g1, g2 = st.columns(2)
-    mode_vent = g1.selectbox("Mode ventilatoire", ["—", *cat.MODES_VENTILATOIRES], key="gds_mode")
-    debit_o2 = champs.nombre_saisi(
-        g2.text_input("Débit O₂ (L/min)", value="", placeholder="si masque ou lunette",
-                      key="gds_debit")
+    codes_modes = listes.codes(listes.MODES_VENTILATOIRES)
+    mode_vent = st.selectbox(
+        "Mode ventilatoire", codes_modes,
+        format_func=lambda c: listes.libelle(listes.MODES_VENTILATOIRES, c),
+        index=None, placeholder="Choisir le mode", key="gds_mode",
     )
+    # Chaque mode déclare les paramètres qui ont un sens pour lui : afficher
+    # une PEP sous air ambiant, ou une AI en VAC, c'est proposer des cases qui
+    # n'existent pas cliniquement — et qu'on finit par remplir avec le
+    # paramètre d'à côté (demande du service, 9 septembre).
+    parametres = listes.parametres_du_mode(mode_vent)
     gaz: dict[str, float | None] = {}
-    champs_gaz = [
+    debit_o2 = None
+    if "debit_o2" in parametres:
+        debit_o2 = champs.nombre_saisi(st.text_input(
+            "Débit O₂ (L/min)", value="", placeholder="ex. 6", key="gds_debit",
+        ))
+    elif mode_vent is None:
+        st.caption("Choisir le mode ventilatoire fait apparaître ses paramètres.")
+
+    champs_ventilation = [
         ("fio2", "FiO₂ (%)", "21 – 100"), ("pep", "PEP (cmH₂O)", "0 – 20"),
-        ("fr", "FR (/min)", "12 – 25"), ("spo2", "SpO₂ (%)", "≥ 94"),
+        ("fr", "FR (/min)", "12 – 25"), ("vt", "Vt (mL)", "6-8 mL/kg"),
+        ("ai", "AI (cmH₂O)", "5 – 20"),
+    ]
+    # Le gaz du sang lui-même ne dépend d'aucun mode : c'est une seringue de
+    # sang artériel, qu'on soit ventilé ou en air ambiant.
+    champs_sang = [
         ("ph", "pH", "7,35 – 7,45"), ("pao2", "PaO₂ (mmHg)", "80 – 100"),
         ("paco2", "PaCO₂ (mmHg)", "35 – 45"), ("hco3", "HCO₃⁻ (mmol/L)", "22 – 26"),
         ("lactate", "Lactates (mmol/L)", "< 2"), ("sao2", "SaO₂ (%)", "≥ 94"),
-        ("vt", "Vt (mL)", "6-8 mL/kg"), ("ai", "AI (cmH₂O)", "5 – 20"),
+        ("spo2", "SpO₂ (%)", "≥ 94"),
     ]
+    champs_gaz = [c for c in champs_ventilation if c[0] in parametres] + champs_sang
     colonnes_gaz = st.columns(2)
     for i, (cle, libelle, plage) in enumerate(champs_gaz):
         with colonnes_gaz[i % 2]:
@@ -272,6 +292,50 @@ def _saisie_gaz_du_sang() -> tuple[str, float | None, dict[str, float | None]]:
                 )
             gaz[cle] = valeur
     return mode_vent, debit_o2, gaz
+
+
+def _panneau_ajouter_analyte() -> None:
+    """Ajouter au catalogue un bilan que le service dose et que le logiciel ne
+    connaît pas encore (demande du service, 9 septembre).
+
+    Sans ça, une troponine se note dans un commentaire libre : le résultat ne
+    se compare pas d'un jour à l'autre, ne trace aucune courbe et ne sort dans
+    aucune statistique. Attendre une nouvelle version du logiciel pour doser
+    quelque chose n'est pas une option dans un service.
+    """
+    st.divider()
+    st.markdown("**Bilans du service**")
+    existants = analytes_locaux.tous(contexte.base())
+    for a in existants:
+        col1, col2 = st.columns([5, 1])
+        unite = f" ({a['unite']})" if a["unite"] else ""
+        col1.caption(f"{a['libelle']}{unite} — code {a['code']}")
+        if col2.button("X", key=f"analyte_retrait_{a['id']}",
+                       help="Retirer de la liste à saisir"):
+            analytes_locaux.retirer(contexte.base(), a["id"],
+                                    utilisateur_id=contexte.utilisateur_id())
+            st.rerun()
+
+    with st.form("ajout_analyte"):
+        c1, c2 = st.columns([3, 1])
+        libelle = c1.text_input("Nouveau bilan", value="", placeholder="ex. Troponine")
+        unite = c2.text_input("Unité", value="", placeholder="ng/L")
+        c3, c4 = st.columns(2)
+        basse = champs.nombre_saisi(c3.text_input(
+            "Borne basse (facultatif)", value="", placeholder="si connue"))
+        haute = champs.nombre_saisi(c4.text_input(
+            "Borne haute (facultatif)", value="", placeholder="si connue"))
+        if st.form_submit_button("Ajouter au catalogue du service"):
+            try:
+                analytes_locaux.ajouter(
+                    contexte.base(), libelle=libelle, unite=unite or None,
+                    borne_basse=basse, borne_haute=haute,
+                    utilisateur_id=contexte.utilisateur_id(),
+                )
+            except ValueError as erreur:
+                st.error(str(erreur))
+            else:
+                st.rerun()
 
 
 def _saisie_groupe(groupe, valeurs: dict, unite_lipides: str) -> None:
@@ -309,6 +373,9 @@ def saisie_bilan(sejour: dict) -> None:
     mode_vent, debit_o2, gaz = _saisie_gaz_du_sang()
 
     valeurs: dict[str, float | None] = {}
+    # Les analytes ajoutés par le service entrent au catalogue avant l'écran :
+    # c'est ce qui leur donne leur libellé partout, saisie comme observation.
+    analytes_locaux.charger_dans_le_catalogue(contexte.base())
     courants, occasionnels = cat.groupes_de_saisie()
     for groupe in courants:
         _saisie_groupe(groupe, valeurs, "mmol/L")
@@ -319,6 +386,7 @@ def saisie_bilan(sejour: dict) -> None:
         )
         for groupe in occasionnels:
             _saisie_groupe(groupe, valeurs, unite_lipides)
+        _panneau_ajouter_analyte()
 
     # Valeurs dérivées, affichées dès que leurs ingrédients sont là.
     age = age_ans(sejour.get("date_naissance"))
@@ -361,7 +429,7 @@ def saisie_bilan(sejour: dict) -> None:
 
     saisi = any(v is not None for v in valeurs.values()) or any(
         v is not None for v in gaz.values()
-    ) or mode_vent != "—"
+    ) or mode_vent is not None
 
     if st.button("Enregistrer le bilan", type="primary", use_container_width=True,
                  disabled=not saisi):
@@ -375,10 +443,10 @@ def saisie_bilan(sejour: dict) -> None:
             contexte.base(), sejour["id"], date_heure, valeurs,
             utilisateur_id=contexte.utilisateur_id(), saisie_forcee=forcer,
         )
-        if mode_vent != "—" or any(v is not None for v in gaz.values()):
+        if mode_vent is not None or any(v is not None for v in gaz.values()):
             bilans_service.enregistrer_gaz_du_sang(
                 contexte.base(), sejour["id"], date_heure,
-                mode_ventilatoire=None if mode_vent == "—" else mode_vent,
+                mode_ventilatoire=mode_vent,
                 debit_o2=debit_o2, utilisateur_id=contexte.utilisateur_id(), **gaz,
             )
         # Le jour et l'heure du prélèvement survivent à l'enregistrement : un

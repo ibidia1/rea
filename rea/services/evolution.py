@@ -27,11 +27,22 @@ LIBELLES_PLANS = {
 }
 
 
-def obtenir_ou_creer(base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None) -> dict:
-    existante = base.une_ligne(
+def journee(base: Base, sejour_id: str, date_jour: str) -> dict | None:
+    """L'évolution d'un jour, ou rien — sans jamais l'écrire.
+
+    Lire n'est pas remplir : un écran de consultation qui appelle
+    `obtenir_ou_creer` sème une ligne vide pour chaque jour que quelqu'un a
+    seulement regardé, et « cette journée existe » cesse de vouloir dire
+    « quelqu'un l'a remplie ».
+    """
+    return base.une_ligne(
         "SELECT * FROM evolution_jour WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
         (sejour_id, date_jour),
     )
+
+
+def obtenir_ou_creer(base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None) -> dict:
+    existante = journee(base, sejour_id, date_jour)
     if existante:
         return existante
     id_ = base.inserer(

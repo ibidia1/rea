@@ -734,15 +734,35 @@ def test_plusieurs_bilans_le_meme_jour_prennent_autant_de_colonnes(base, dossier
     assert veille["slots"] == ["1", "2"]
 
 
-def test_un_gaz_du_sang_compte_comme_un_bilan_du_jour(base, dossier):
-    """Le gaz du sang partage l'en-tête des jours : deux gaz valent deux
-    colonnes."""
+def test_les_gaz_du_sang_ont_leurs_propres_colonnes(base, dossier):
+    """Chaque tableau compte ses propres prélèvements. En les comptant
+    ensemble, un jour à deux bilans et deux gaz recevait quatre colonnes dans
+    le récapitulatif de chimie, qui n'en remplissait que deux : la troisième
+    restait vide au milieu d'un jour, pendant qu'un autre jour, faute de place,
+    n'était pas montré du tout."""
     _pid, sid = dossier
     bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T06:00", ph=7.4)
     bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T14:00", ph=7.35)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T18:00",
+                                 valeurs={"na": 140})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    veille = next(j for j in contexte["days"] if j["libelle"] == "04/09")
-    assert veille["poids"] == "2"
+    # Un seul bilan ce jour-là : une colonne de chimie, pas trois.
+    assert next(j for j in contexte["days"] if j["libelle"] == "04/09")["poids"] == "1"
+    # Deux gaz : deux colonnes dans le tableau des gaz.
+    assert next(j for j in contexte["daysGaz"] if j["libelle"] == "04/09")["poids"] == "2"
+
+
+def test_aucune_colonne_vide_a_linterieur_dun_jour(base, dossier):
+    """Une case vide entre deux valeurs du même jour se lit comme un bilan
+    manquant, pas comme une place libre."""
+    _pid, sid = dossier
+    bilans.enregistrer_gaz_du_sang(base, sid, f"{J1}T14:00", ph=7.35)
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"na": 140})
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    ligne_na = next(l for l in contexte["bioIono"] if l["libelle"] == "Na⁺")
+    cellules = re.findall(r">([^<>]*)</div>", ligne_na["valeurs"].html)
+    assert cellules[0] == "140"          # la seule colonne du 04/09, remplie
 
 
 def test_la_largeur_du_recapitulatif_ne_bouge_jamais(base, dossier):
@@ -783,14 +803,40 @@ def test_le_jour_en_cours_garde_ses_quatre_colonnes_meme_charge(base, dossier):
     assert contexte["days"][-1]["libelle"] == "05/09"
 
 
+def test_les_colonnes_sans_emploi_reviennent_au_jour_en_cours(base, dossier):
+    """Séjour trop court pour remplir les huit : le reste va au jour en cours,
+    seul à avoir de vraies raisons d'avoir des cases libres. Un bloc sans date
+    entre deux jours se lisait comme un jour manquant."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"na": 140})
+    colonnes = feuille.contexte(_dossier(base, sid, AUJ))["days"]
+    assert [j["libelle"] for j in colonnes] == ["04/09", "05/09"]
+    assert [j["poids"] for j in colonnes] == ["1", "11"]
+
+
+def test_aucune_colonne_anonyme_sur_la_feuille(base, dossier):
+    """Toute colonne appartient à un jour daté : sans quoi la feuille donne à
+    croire qu'il manque une journée."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T06:00",
+                                 valeurs={"na": 140})
+    for bloc in ("days", "daysGaz"):
+        assert all(j["libelle"] for j in feuille.contexte(_dossier(base, sid, AUJ))[bloc])
+
+
 def test_le_jour_en_cours_garde_ses_creneaux_numerotes(base, dossier):
-    """Il est manuscrit d'un bout à l'autre : les quatre créneaux disent
-    justement combien de bilans y tiennent."""
+    """Il est manuscrit d'un bout à l'autre, et ses créneaux sont numérotés.
+
+    Sans aucun bilan antérieur à montrer, il prend toute la largeur : les
+    colonnes sans emploi lui reviennent plutôt que de former un bloc sans date
+    au milieu du tableau."""
     _pid, sid = dossier
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    assert contexte["days"][-1]["libelle"] == "05/09"
-    assert contexte["days"][-1]["slots"] == ["1", "2", "3", "4"]
-    assert contexte["days"][-1]["poids"] == "4"
+    jour = contexte["days"][-1]
+    assert jour["libelle"] == "05/09"
+    assert jour["poids"] == str(feuille.NB_COLONNES_BIOLOGIE)
+    assert jour["slots"][:4] == ["1", "2", "3", "4"]
 
 
 def test_les_bilans_infectieux_nont_plus_de_colonne_date(base, dossier):
@@ -922,15 +968,15 @@ def test_un_bilan_antidate_se_range_a_sa_date(base, dossier):
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J2}T23:00",
                                  valeurs={"hb": 8.4})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    # Un seul jour prélevé : il prend une colonne, précédée du papier réglé
-    # qui n'a pas trouvé de jour à montrer, et suivie du jour en cours.
+    # Un seul jour prélevé : il ouvre le tableau, à gauche. Les colonnes sans
+    # emploi reviennent au jour en cours — aucune colonne anonyme.
     assert [(j["libelle"], j["poids"]) for j in contexte["days"]] == [
-        ("", "7"), ("03/09", "1"), ("05/09", "4"),
+        ("03/09", "1"), ("05/09", "11"),
     ]
     ligne_hb = next(l for l in contexte["bioHemato"] if l["libelle"] == "Hb")
     cellules = re.findall(r">([^<>]*)</div>", ligne_hb["valeurs"].html)
-    assert cellules[7] == "8,4"
-    assert all(c == "" for i, c in enumerate(cellules) if i != 7)
+    assert cellules[0] == "8,4"
+    assert all(c == "" for c in cellules[1:])
 
 
 # -- les drains portent leur nom sur le papier -------------------------------
@@ -1006,17 +1052,6 @@ def test_sans_poids_la_clairance_nest_pas_inventee(base):
     assert cellules == ["184"]
 
 
-def test_les_colonnes_libres_ne_sont_pas_numerotees(base, dossier):
-    """Numéroter du papier réglé promettrait des créneaux d'un jour qui
-    n'existe pas."""
-    _pid, sid = dossier
-    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
-                                 valeurs={"na": 140})
-    contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    libre = next(j for j in contexte["days"] if j["libelle"] == "")
-    assert set(libre["slots"]) == {""}
-
-
 def test_les_additifs_sont_imprimes_avec_leur_perfusion(base, dossier):
     """L'infirmière prépare d'après la pancarte : une pancarte qui ne dit pas
     les additifs fait préparer un flacon incomplet."""
@@ -1029,3 +1064,35 @@ def test_les_additifs_sont_imprimes_avec_leur_perfusion(base, dossier):
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     ligne = contexte["entRows"][0]
     assert ligne["produit"] == "Ringer Lactate (perfusion) + (1 NaCl + 2 KCl)"
+
+
+def test_le_tableau_de_biologie_se_remplit_depuis_le_bord_gauche(base, dossier):
+    """Une zone vide en tête donnerait à croire qu'un jour manque : les jours
+    datés ouvrent le tableau."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"na": 140})
+    colonnes = feuille.contexte(_dossier(base, sid, AUJ))["days"]
+    assert colonnes[0]["libelle"] == "04/09"       # le jour prélevé, à gauche
+    assert colonnes[-1]["libelle"] == "05/09"      # le jour en cours au bout
+
+
+# -- Glasgow d'arrivée -------------------------------------------------------
+
+def test_le_glasgow_initial_est_imprime_sous_le_transport(base):
+    """À J3 sous midazolam, personne ne sait plus s'il est arrivé à 15 ou à 6,
+    et c'est un facteur pronostique majeur."""
+    pid = sejours.creer_patient(base, matricule="M-GCS", nom_affichage="Test",
+                                date_naissance="1980-01-01", sexe="M")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission=J2,
+                               lit_admission=5, glasgow_initial=7)
+    texte = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Glasgow initial" in texte
+    assert texte.index("Transport") < texte.index("Glasgow initial")
+    assert "7" in texte.split("Glasgow initial")[1][:40]
+
+
+def test_sans_glasgow_initial_la_ligne_nest_pas_imprimee(base, dossier):
+    """Une ligne « Glasgow initial : » vide se lit comme un 3."""
+    _pid, sid = dossier
+    assert "Glasgow initial" not in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html

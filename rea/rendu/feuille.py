@@ -27,6 +27,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import config, listes, referentiels
+from ..domaine import avis as dom_avis
 from ..domaine import calculs, prescription as dom
 from ..domaine.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
 from .gabarit import Brut, rendre
@@ -183,33 +184,50 @@ def _nombre(valeur) -> str:
 # Les blocs
 # --------------------------------------------------------------------------
 
-def _ligne_sedation_pse(dossier) -> list[dict]:
-    """La sédation en cours, reportée dans le bloc P.S.E. en plus des abords.
+def _lignes_dispositifs_pse(dossier) -> list[dict]:
+    """Les dispositifs qui coulent, reportés dans le bloc P.S.E.
 
-    Elle est déjà cochée dans les abords, avec son compteur de jours : c'est
-    la lecture neurologique. Mais la vitesse qui la fait couler est aussi une
-    consigne infirmière, au même titre qu'une noradrénaline ou un midazolam
-    prescrit en ligne — elle doit donc être là où les seringues électriques
-    se règlent, pas seulement dans la case des dispositifs.
+    Ils sont déjà cochés dans les abords, avec leur compteur de jours : c'est
+    la lecture clinique. Mais la vitesse qui les fait couler est aussi une
+    consigne infirmière, au même titre qu'une noradrénaline prescrite en
+    ligne — elle doit donc être là où les seringues électriques se règlent,
+    pas seulement dans la case des dispositifs.
+
+    La sédation était le seul cas, et cette fonction ne connaissait qu'elle.
+    Une péridurale thoracique coule exactement pareil et l'anesthésique local
+    n'apparaissait nulle part sur la pancarte (demande du service,
+    8 septembre) : c'est le fichier des types qui déclare maintenant lesquels
+    y vont, avec `pse`.
     """
-    sedation = next((e for e in dossier.etats_dispositifs if e.type == "sedation" and e.en_place), None)
-    if sedation is None:
-        return []
-    details = sedation.details or {}
-    produit = details.get("molecules") or "Sédation"
-    dose = f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else ""
-    # La sédation est justement celle qu'on allège dans la journée : sa vitesse
-    # s'écrit heure par heure comme celle d'une seringue prescrite.
-    par_heure = dossier.vitesses.get(sedation.id) or {}
-    return [{
-        "numero": "1",
-        "produit": Brut(
-            f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
-            "— sédation</span>"
-        ),
-        "dose": dose,
-        "grille": _grille_vitesses(par_heure) if par_heure else Brut(""),
-    }]
+    lignes = []
+    for etat in dossier.etats_dispositifs:
+        if not etat.en_place:
+            continue
+        config = listes.TYPES_DISPOSITIF.get(etat.type, {})
+        if not config.get("pse"):
+            continue
+        details = etat.details or {}
+        # Le site n'est pas répété ici : il est déjà sur le bandeau des abords,
+        # en haut de la même page, pour le même dispositif. L'écrire deux fois
+        # faisait passer la ligne sur deux hauteurs et cassait la grille des
+        # seringues — la ligne P.S.E. répond à « qu'est-ce qui coule, à quel
+        # débit », le bandeau répond à « où ».
+        produit = details.get("molecules") or config.get("libelle", etat.type)
+        suffixe = config.get("suffixe_pse") or config.get("libelle", "").lower()
+        # Ce qui coule en continu s'écrit heure par heure, comme une seringue
+        # prescrite : une sédation qu'on allège et une péridurale qu'on
+        # descend se relisent de la même façon.
+        par_heure = dossier.vitesses.get(etat.id) or {}
+        lignes.append({
+            "numero": str(len(lignes) + 1),
+            "produit": Brut(
+                f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
+                f"— {html.escape(suffixe)}</span>"
+            ),
+            "dose": f"{_nombre(details['vitesse'])} cc/h" if details.get("vitesse") else "",
+            "grille": _grille_vitesses(par_heure) if par_heure else Brut(""),
+        })
+    return lignes
 
 
 def _lignes_prescription(dossier) -> dict:
@@ -221,7 +239,7 @@ def _lignes_prescription(dossier) -> dict:
 
     # La sédation posée comme dispositif occupe une ligne du bloc P.S.E. avant
     # les lignes prescrites — elle vient du dossier, pas d'une prescription.
-    lignes_synthetiques = {"PSE": _ligne_sedation_pse(dossier)}
+    lignes_synthetiques = {"PSE": _lignes_dispositifs_pse(dossier)}
 
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
         synthetiques = lignes_synthetiques.get(voie, [])
@@ -352,7 +370,7 @@ def _bilans_a_faire(dossier) -> list[dict]:
     return lignes
 
 
-def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
+def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
     """Comment les douze colonnes du récapitulatif se partagent les jours.
 
     Douze colonnes, toujours : la page est imprimée, elle ne s'élargit pas.
@@ -385,7 +403,7 @@ def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
         jour = aujourdhui - timedelta(days=recul)
         if jour < admission:
             break
-        nombre = _nb_prelevements_du_jour(dossier, jour.isoformat())
+        nombre = _nb_prelevements_du_jour(dossier, jour.isoformat(), source)
         if nombre == 0:
             continue
         colonnes = min(nombre, restant)
@@ -394,11 +412,14 @@ def _repartition_biologie(dossier, date_jour: str) -> list[dict]:
         restant -= colonnes
 
     repartition = list(reversed(passes))          # du plus ancien au plus récent
-    if restant > 0:
-        # Séjour trop court, ou pas encore de bilan : le reste est du papier
-        # réglé, sans date, devant les jours qui en ont une.
-        repartition.insert(0, {"jour": None, "colonnes": restant, "en_cours": False})
-    repartition.append({"jour": date_jour, "colonnes": COLONNES_JOUR_EN_COURS,
+    # Ce qui reste — séjour trop court, ou pas encore de bilan — va au jour en
+    # cours, qui est le seul à avoir de vraies raisons d'avoir des cases
+    # libres : la garde y écrit ses bilans de la nuit. Il n'y a donc aucune
+    # colonne anonyme sur la feuille. Un bloc sans date entre le 07 et le 08 se
+    # lisait comme un jour manquant, ce qui est exactement ce qu'il ne fallait
+    # pas laisser croire.
+    repartition.append({"jour": date_jour,
+                        "colonnes": COLONNES_JOUR_EN_COURS + max(restant, 0),
                         "en_cours": True})
     return repartition
 
@@ -412,17 +433,20 @@ def _bornes_de_jour(repartition: list[dict]) -> set[int]:
     return bornes
 
 
-def _nb_prelevements_du_jour(dossier, jour: str) -> int:
-    """Combien de fois on a prélevé ce jour-là, gaz du sang compris."""
-    heures = {
-        r["date_heure"] for r in dossier.resultats
-        if (r["date_heure"] or "").startswith(jour)
-    }
-    heures |= {
-        g["date_heure"] for g in dossier.gaz_du_sang
-        if (g["date_heure"] or "").startswith(jour)
-    }
-    return len(heures)
+def _nb_prelevements_du_jour(dossier, jour: str, source: str) -> int:
+    """Combien de fois ce tableau-là a quelque chose à écrire, ce jour-là.
+
+    Compté **par source**, et c'est tout le point. En comptant les bilans et
+    les gaz du sang ensemble, un jour à deux bilans et deux gaz recevait
+    quatre colonnes dans le récapitulatif de chimie, qui n'en remplissait que
+    deux : la troisième restait vide au milieu d'un jour, pendant qu'un autre
+    jour, faute de place, n'était pas montré du tout.
+    """
+    lignes = dossier.resultats if source == "bilan" else dossier.gaz_du_sang
+    return len({
+        l["date_heure"] for l in lignes
+        if (l["date_heure"] or "").startswith(jour)
+    })
 
 
 def _entetes_jours(repartition: list[dict]) -> list[dict]:
@@ -493,6 +517,11 @@ def _valeurs_biologie(
     return lignes
 
 
+#: Ce qui dépend du mode ventilatoire, par opposition au gaz du sang lui-même :
+#: une seringue de sang artériel se lit pareil qu'on soit ventilé ou non.
+_PARAMETRES_VENTILATOIRES = ("fio2", "pep", "fr", "vt", "ai", "debit_o2")
+
+
 def _creneaux_du_jour(
     dossier, jour: str, code: str, source: str, colonnes: int
 ) -> list[str]:
@@ -517,7 +546,21 @@ def _creneaux_du_jour(
             g for g in dossier.gaz_du_sang
             if (g["date_heure"] or "").startswith(jour)
         ]
-        valeurs = [_nombre(g.get(code)) for g in lignes]
+        if code == "mode_ventilatoire":
+            # Le mode est enregistré sous son code : la feuille imprime le
+            # sigle que le service emploie, pas « vs_ai ».
+            valeurs = [listes.libelle_mode_court(g.get(code)) for g in lignes]
+        else:
+            # Un paramètre qui n'a pas de sens pour ce mode-là n'est pas
+            # imprimé même s'il traîne en base : une PEP sous air ambiant
+            # viendrait forcément d'une saisie antérieure au filtrage.
+            valeurs = [
+                _nombre(g.get(code))
+                if code not in _PARAMETRES_VENTILATOIRES
+                or code in listes.parametres_du_mode(g.get("mode_ventilatoire"))
+                else ""
+                for g in lignes
+            ]
     valeurs = [v for v in valeurs if v]
     return (valeurs + [""] * colonnes)[:colonnes]
 
@@ -700,11 +743,46 @@ def _motif_transport_atcd(dossier) -> Brut:
     if circonstances:
         corps += ligne("Circonstances", circonstances)
     corps += ligne("Transport", _transport_texte(dossier))
+    # Sous le transport, parce que c'est le même moment : ce que valait le
+    # patient en arrivant. À J3 sous midazolam, personne ne sait plus s'il est
+    # arrivé à 15 ou à 6, et c'est un facteur pronostique majeur du
+    # traumatisme crânien (demande du service, 8 septembre).
+    if sejour.get("glasgow_initial") is not None:
+        corps += ligne("Glasgow initial", str(int(sejour["glasgow_initial"])))
     corps += bloc("Motif", _lignes_motif(dossier))
     ttt = sejour.get("traitement_habituel")
     if ttt:
         corps += ligne("Ttt habituel", ttt)
     return Brut(f'<div style="font-size:9.5px;line-height:1.35;overflow:hidden">{corps}</div>')
+
+
+#: Combien d'avis la feuille imprime au plus. Le bloc partage sa hauteur avec
+#: la conduite à tenir, qui reste manuscrite : au-delà, ce sont les plus
+#: récents qui comptent pour la visite du jour.
+LIGNES_AVIS = 6
+
+
+def _avis_specialises(dossier) -> Brut:
+    """« Avis CCVT (09/09) : Rsdt X : Pas d'indication chirurgicale ».
+
+    Un avis n'annule jamais le précédent, même de la même spécialité : c'est la
+    suite des avis qui raconte l'évolution d'une décision chirurgicale, et le
+    second ne se comprend souvent qu'à la lumière du premier. Ils s'impriment
+    donc tous, dans l'ordre où ils ont été donnés.
+
+    Le bloc garde des lignes vides sous les avis : la conduite à tenir s'écrit
+    à la main au même endroit, à la visite.
+    """
+    lignes = [dom_avis.ligne_avis(a) for a in dossier.avis][-LIGNES_AVIS:]
+    if not lignes:
+        return Brut("")
+    corps = "".join(
+        '<div style="font-size:8.5px;line-height:1.5;padding:0 4px;'
+        'border-bottom:1px solid #d3dcdb;white-space:nowrap;overflow:hidden">'
+        f"{html.escape(l)}</div>"
+        for l in lignes
+    )
+    return Brut(corps)
 
 
 def _abords(dossier) -> list[dict]:
@@ -820,7 +898,11 @@ def contexte(dossier) -> dict:
     date_jour = dossier.date_jour
 
     prescrit = _lignes_prescription(dossier)
-    repartition = _repartition_biologie(dossier, date_jour)
+    # Deux tableaux, deux répartitions : le récapitulatif de chimie compte ses
+    # bilans, le tableau des gaz du sang compte ses gaz. Une répartition
+    # commune donnait à l'un des colonnes que l'autre remplissait.
+    repartition = _repartition_biologie(dossier, date_jour, "bilan")
+    repartition_gaz = _repartition_biologie(dossier, date_jour, "gaz")
     lignes_ref = referentiels.charger("feuille_lignes")
 
     ideal = calculs.poids_ideal_devine(
@@ -844,6 +926,7 @@ def contexte(dossier) -> dict:
                       if allergies else "ALLERGIE : non renseignée"),
         "scores": dossier.scores,
         "motifTransportAtcd": _motif_transport_atcd(dossier),
+        "avisRows": _avis_specialises(dossier),
         "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
@@ -856,14 +939,15 @@ def contexte(dossier) -> dict:
         "bilanRows": _lignes_sorties(dossier, lignes_ref["sorties_drains"]),
         # Verso — biologie reportée
         "days": _entetes_jours(repartition),
+        "daysGaz": _entetes_jours(repartition_gaz),
         "bioHemato": _valeurs_biologie(dossier, repartition, list(lignes_ref["hemato"]), "bilan"),
         "bioIono": _valeurs_biologie(dossier, repartition, list(lignes_ref["iono"]), "bilan"),
         "bioRenal": _valeurs_biologie(dossier, repartition, list(lignes_ref["renal"]), "bilan"),
         "bioHepat": _valeurs_biologie(dossier, repartition, list(lignes_ref["hepat"]), "bilan"),
         "bioAutres": _valeurs_biologie(dossier, repartition, list(lignes_ref["autres"]), "bilan"),
-        "gdsGaz": _valeurs_biologie(dossier, repartition, list(lignes_ref["gaz"]), "gaz"),
-        "pfRow": _rapport_pf(dossier, repartition),
-        "gdsVent": _valeurs_biologie(dossier, repartition, list(lignes_ref["ventilation"]), "gaz"),
+        "gdsGaz": _valeurs_biologie(dossier, repartition_gaz, list(lignes_ref["gaz"]), "gaz"),
+        "pfRow": _rapport_pf(dossier, repartition_gaz),
+        "gdsVent": _valeurs_biologie(dossier, repartition_gaz, list(lignes_ref["ventilation"]), "gaz"),
         "infRows": _microbiologie(dossier),
         "examensDemain": _examens_demain(dossier),
         "pied": _pied(prescrit["debordements"]),

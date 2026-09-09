@@ -1,0 +1,28 @@
+{
+  "nom": "specialites_avis",
+  "libelle": "Spécialités auxquelles un avis peut être demandé",
+  "version": "2026-09-08.1",
+  "date": "2026-09-08",
+  "note": "Les services que la réanimation appelle. L'abréviation est celle qui s'imprime sur la feuille — « Avis CCVT (09/09) » — parce que la ligne est étroite et que c'est le mot que le service emploie à l'oral. Format : [code, abréviation imprimée, nom complet].",
+  "valeurs": [
+    ["neurochirurgie", "Neurochir", "Neurochirurgie"],
+    ["chirurgie_viscerale", "Chir viscérale", "Chirurgie viscérale"],
+    ["ccvt", "CCVT", "Chirurgie cardio-vasculaire et thoracique"],
+    ["orthopedie", "Orthopédie", "Chirurgie orthopédique et traumatologique"],
+    ["urologie", "Urologie", "Urologie"],
+    ["orl", "ORL", "Oto-rhino-laryngologie"],
+    ["ophtalmologie", "Ophtalmo", "Ophtalmologie"],
+    ["maxillo_faciale", "Maxillo", "Chirurgie maxillo-faciale"],
+    ["cardiologie", "Cardiologie", "Cardiologie"],
+    ["neurologie", "Neurologie", "Neurologie"],
+    ["nephrologie", "Néphrologie", "Néphrologie"],
+    ["gastro", "Gastro", "Gastro-entérologie"],
+    ["pneumologie", "Pneumologie", "Pneumologie"],
+    ["infectiologie", "Infectio", "Maladies infectieuses"],
+    ["hematologie", "Hémato", "Hématologie"],
+    ["endocrinologie", "Endocrino", "Endocrinologie"],
+    ["radiologie_int", "Radio interv.", "Radiologie interventionnelle"],
+    ["psychiatrie", "Psychiatrie", "Psychiatrie"],
+    ["medecine_interne", "Méd. interne", "Médecine interne"]
+  ]
+}

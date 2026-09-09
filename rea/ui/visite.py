@@ -1,0 +1,311 @@
+"""Onglet « Visite » — la pancarte à l'écran, sans papier.
+
+Le reste de l'application est fait pour être lu assis, à cinquante
+centimètres, en train de saisir. La visite, c'est l'inverse : on ne tape rien,
+on lit un portable posé sur le chariot, debout, et ce qu'on cherche est
+toujours la même chose — quel traitement, à quel jour, à quelle dose, et
+comment la biologie a bougé depuis hier (demande du service, 9 septembre).
+
+Cet écran n'écrit rien. C'est délibéré : à la visite on lit et on discute,
+on ne prescrit pas d'une main en tenant un chariot de l'autre. Un bouton
+d'arrêt de traitement à portée de manche est un traitement arrêté par erreur.
+Ce qui doit changer se change ensuite, dans les onglets qui servent à ça.
+"""
+
+from __future__ import annotations
+
+import html
+from datetime import date
+
+import streamlit as st
+
+from .. import listes
+from ..domaine import prescription as dom
+from ..domaine.dates import format_date_fr, jour_hospitalisation
+from ..services import avis as avis_service
+from ..services import bilans as bilans_service
+from ..services import dispositifs as dispositifs_service
+from ..services import evolution as evolution_service
+from ..services import microbiologie as micro_service
+from ..services import prescriptions as prescriptions_service
+from ..services import vitesses as vitesses_service
+from . import contexte, theme
+
+#: Ce qu'on regarde à la visite, dans cet ordre. Pas tout le catalogue : une
+#: page de trente valeurs ne se lit pas debout, et ces huit-là décident de la
+#: conduite du jour.
+ANALYTES_VISITE = ("hb", "plq", "gb", "crp", "pct", "na", "k", "creat", "uree")
+
+
+def onglet_visite(sejour: dict) -> None:
+    date_jour = st.date_input(
+        "Jour", value=date.today(), key="visite_jour", format="DD/MM/YYYY",
+    )
+    date_jour_str = str(date_jour)
+    if date_jour_str != date.today().isoformat():
+        st.caption(
+            f"Vous regardez le {format_date_fr(date_jour_str)} — "
+            "les traitements et les valeurs sont ceux de ce jour-là."
+        )
+
+    gauche, droite = st.columns([1.15, 1], gap="medium")
+    with gauche:
+        _traitements(sejour, date_jour_str)
+    with droite:
+        _etat_du_jour(sejour, date_jour_str)
+        _biologie(sejour, date_jour_str)
+        _infectieux(sejour, date_jour_str)
+        _plans(sejour, date_jour_str)
+
+
+# --------------------------------------------------------------------------
+# Colonne de gauche — ce qui est prescrit
+# --------------------------------------------------------------------------
+
+def _traitements(sejour: dict, date_jour_str: str) -> None:
+    pancarte = prescriptions_service.pancarte_du_jour(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    vitesses_jour = _vitesses_du_jour(sejour, pancarte, date_jour_str)
+    par_voie = pancarte["lignes_par_voie"]
+
+    for code_voie in listes.ORDRE_VOIES:
+        lignes = par_voie.get(code_voie, [])
+        if not lignes:
+            continue
+        couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
+        corps = "".join(
+            _ligne_traitement(ligne, date_jour_str, vitesses_jour) for ligne in lignes
+        )
+        _bloc(listes.VOIES[code_voie]["titre"], corps, couleur)
+
+    if not any(par_voie.values()):
+        st.info("Aucun traitement prescrit ce jour-là.")
+
+
+def _ligne_traitement(ligne: dict, date_jour_str: str, vitesses_jour: dict) -> str:
+    """Une ligne : le compteur, le produit, la dose. Trois colonnes fixes.
+
+    L'œil descend la colonne des compteurs pour trouver le dernier jour d'un
+    antibiotique ; il descend celle des doses pour vérifier une posologie. Une
+    phrase d'un seul tenant l'oblige à relire chaque ligne en entier.
+    """
+    etiquette, libelle, dose = dom.parties_ligne(ligne, date_jour_str)
+    arretee = ligne["statut"] != "active"
+    classe_j = "rea-v-j fin" if etiquette.dernier_jour else "rea-v-j"
+    jour = "" if etiquette.introduction else etiquette.texte
+    produit = html.escape(libelle)
+
+    details = []
+    if etiquette.introduction:
+        details.append("introduit ce jour")
+    if arretee:
+        details.append("arrêté")
+    suffixe = (f' <span class="rea-v-detail">{html.escape(" — ".join(details))}</span>'
+               if details else "")
+    # Une seringue réglée plusieurs fois dans la journée : la suite des
+    # vitesses sous la ligne, sans répéter l'unité à chaque heure — elle est
+    # déjà dans la colonne des doses, et quatre « cc/h » de plus font déborder
+    # la ligne sans rien apprendre.
+    par_heure = (vitesses_jour or {}).get(ligne["id"]) or {}
+    sous_ligne = ""
+    if len(par_heure) > 1:
+        suite = " · ".join(f"{h} h : {_nombre(v)}" for h, v in sorted(par_heure.items()))
+        sous_ligne = (
+            f'<div class="rea-v-texte" style="padding:0 12px 6px 4.4rem;'
+            f'font-size:.8rem;color:{theme.GRIS}">{html.escape(suite)}</div>'
+        )
+    dose = html.escape(dose or "")
+    return (
+        f'<div class="rea-v-ligne{" arretee" if arretee else ""}">'
+        f'<span class="{classe_j}">{html.escape(jour)}</span>'
+        f'<span class="rea-v-produit">{produit}{suffixe}</span>'
+        f'<span class="rea-v-dose">{dose}</span>'
+        "</div>" + sous_ligne
+    )
+
+
+def _vitesses_du_jour(sejour: dict, pancarte: dict, date_jour_str: str) -> dict:
+    """La vitesse heure par heure de ce qui coule, comme sur la feuille."""
+    par_ligne = {}
+    for ligne in pancarte["lignes"]:
+        if ligne.get("vitesse") is None or ligne["statut"] != "active":
+            continue
+        par_heure = vitesses_service.par_heure(
+            contexte.base(), vitesses_service.LIGNE, ligne["id"],
+            ligne["vitesse"], date_jour_str,
+        )
+        if par_heure:
+            par_ligne[ligne["id"]] = par_heure
+    return par_ligne
+
+
+# --------------------------------------------------------------------------
+# Colonne de droite — ce qu'on a mesuré
+# --------------------------------------------------------------------------
+
+def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
+    """Ce qui répond en trois lignes à « comment va-t-il ce matin ? »."""
+    elements = evolution_service.elements_du_jour(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    mesures = []
+    for cle, libelle, unite in (
+        ("fc", "FC", "/min"), ("pas", "PA", " mmHg"), ("temperature", "T°", " °C"),
+        ("spo2_clinique", "SpO₂", " %"), ("glasgow", "Glasgow", "/15"),
+        ("rass", "RASS", ""), ("diurese_24h", "Diurèse", " mL"),
+    ):
+        valeur = elements.get(cle)
+        if valeur is None:
+            continue
+        texte = dom.dose_affichee({"dose": valeur}) or str(valeur)
+        if cle == "pas" and elements.get("pad") is not None:
+            texte = f"{_nombre(valeur)}/{_nombre(elements['pad'])}"
+        else:
+            texte = _nombre(valeur)
+        mesures.append(_mesure(libelle, texte + unite, None))
+    hydrique = evolution_service.texte_bilan_hydrique(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    if hydrique:
+        mesures.append(f'<div class="rea-v-texte">{html.escape(hydrique)}</div>')
+
+    # Celui du jour s'il existe ; sinon le dernier connu, daté. À la visite, un
+    # gaz d'hier renseigne ; une case vide, non — et c'est bien de savoir que
+    # le dernier remonte à hier.
+    gaz = bilans_service.dernier_gaz_du_sang(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    depuis = ""
+    if gaz is None:
+        gaz = bilans_service.dernier_gaz_du_sang(contexte.base(), sejour["id"])
+        if gaz and gaz["date_heure"][:10] > date_jour_str:
+            gaz = None                      # postérieur au jour regardé
+        elif gaz:
+            depuis = f" (du {format_date_fr(gaz['date_heure'])[:5]})"
+    if gaz:
+        mode = listes.libelle_mode_court(gaz.get("mode_ventilatoire"))
+        pf = bilans_service.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
+        morceaux = [m for m in (
+            mode,
+            f"pH {_nombre(gaz['ph'])}" if gaz.get("ph") is not None else "",
+            f"PaO₂ {_nombre(gaz['pao2'])}" if gaz.get("pao2") is not None else "",
+            f"PaCO₂ {_nombre(gaz['paco2'])}" if gaz.get("paco2") is not None else "",
+            f"P/F {_nombre(pf)}" if pf is not None else "",
+            f"lactates {_nombre(gaz['lactate'])}" if gaz.get("lactate") is not None else "",
+        ) if m]
+        if morceaux:
+            mesures.append(
+                '<div class="rea-v-texte">'
+                f'{html.escape(" · ".join(morceaux))}'
+                f'<span class="rea-v-detail">{html.escape(depuis)}</span></div>'
+            )
+
+    jour_hosp = jour_hospitalisation(sejour["date_admission"], date_jour_str)
+    _bloc(f"État du jour — J{jour_hosp}",
+          "".join(mesures) or '<div class="rea-v-vide">Rien de relevé ce jour-là.</div>',
+          theme.BLEU)
+
+    etats = dispositifs_service.etats(contexte.base(), sejour["id"], date_jour_str)
+    en_place = [e for e in etats if e.en_place]
+    if en_place:
+        _bloc("Abords et dispositifs",
+              "".join(f'<div class="rea-v-ligne"><span class="rea-v-produit">'
+                      f"{html.escape(e.texte)}</span></div>" for e in en_place),
+              theme.VIOLET)
+
+
+def _biologie(sejour: dict, date_jour_str: str) -> None:
+    """La dernière valeur et celle d'avant. Une valeur seule ne dit pas si le
+    rein décroche ; c'est l'écart qui décide."""
+    variations = bilans_service.dernieres_variations(
+        contexte.base(), sejour["id"], list(ANALYTES_VISITE)
+    )
+    lignes = []
+    for v in variations:
+        if v.valeur is None:
+            continue
+        avant = (f"était {_nombre(v.precedente)}" if v.precedente is not None else "")
+        lignes.append(_mesure(
+            f"{v.libelle}{f' ({v.unite})' if v.unite else ''}",
+            _nombre(v.valeur), avant, alerte=v.alerte,
+        ))
+    _bloc("Biologie",
+          "".join(lignes) or '<div class="rea-v-vide">Aucun bilan enregistré.</div>',
+          theme.VERT)
+
+
+def _infectieux(sejour: dict, date_jour_str: str) -> None:
+    lignes = []
+    for m in micro_service.du_sejour(contexte.base(), sejour["id"])[:6]:
+        resultat = listes.libelle(listes.RESULTATS_MICROBIO, m["resultat"])
+        if m["resultat"] == "positif" and m.get("germe"):
+            resultat = m["germe"]
+        prelevement = listes.libelle(listes.PRELEVEMENTS, m["type_prelevement"])
+        lignes.append(
+            '<div class="rea-v-ligne">'
+            f'<span class="rea-v-produit">{html.escape(prelevement)} '
+            f'<span class="rea-v-detail">'
+            f'{html.escape(format_date_fr(m["date_prelevement"])[:5])}</span></span>'
+            f'<span class="rea-v-dose">{html.escape(resultat)}</span>'
+            "</div>"
+        )
+    for a in avis_service.lignes_imprimees(contexte.base(), sejour["id"]):
+        lignes.append(f'<div class="rea-v-texte">{html.escape(a)}</div>')
+    if lignes:
+        _bloc("Infectieux et avis", "".join(lignes), theme.ORANGE)
+
+
+def _plans(sejour: dict, date_jour_str: str) -> None:
+    entree = evolution_service.journee(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    if not entree:
+        return
+    lignes = []
+    for cle in evolution_service.PLANS + ("conduite",):
+        texte = (entree.get(cle) or "").strip()
+        if not texte:
+            continue
+        titre = evolution_service.LIBELLES_PLANS.get(cle, "Conduite à tenir")
+        lignes.append(
+            f'<div class="rea-v-texte"><b>{html.escape(titre)}</b> — '
+            f"{html.escape(texte)}</div>"
+        )
+    if lignes:
+        _bloc("Évolution du jour", "".join(lignes), theme.GRIS)
+
+
+# --------------------------------------------------------------------------
+# Fragments
+# --------------------------------------------------------------------------
+
+def _bloc(titre: str, corps: str, couleur: str) -> None:
+    st.markdown(
+        f'<div class="rea-v-bloc" style="border-left-color:{couleur}">'
+        f'<div class="rea-v-titre" style="color:{couleur}">{html.escape(titre)}</div>'
+        f"{corps}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _mesure(nom: str, valeur: str, avant: str | None, *, alerte: str | None = None) -> str:
+    classe = f"rea-v-val {alerte}" if alerte else "rea-v-val"
+    return (
+        '<div class="rea-v-mesure">'
+        f'<span class="rea-v-nom">{html.escape(nom)}</span>'
+        f'<span class="{classe}">{html.escape(valeur)}</span>'
+        + (f'<span class="rea-v-avant">{html.escape(avant)}</span>' if avant else "")
+        + "</div>"
+    )
+
+
+def _nombre(valeur) -> str:
+    """38.6 s'écrit 38,6 ; 92.0 s'écrit 92."""
+    if valeur is None:
+        return ""
+    if isinstance(valeur, (int, float)):
+        if float(valeur) == int(valeur):
+            return str(int(valeur))
+        return f"{valeur}".replace(".", ",")
+    return str(valeur)

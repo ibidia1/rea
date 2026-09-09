@@ -199,23 +199,36 @@ def onglet_actes(sejour: dict) -> None:
             theme.VIOLET,
         )
 
-    with st.expander("Ajouter une exploration"):
+    with st.expander("Ajouter une exploration ou un acte"):
         type_expl = st.selectbox(
-            "Type d'exploration", list(listes.TYPES_EXPLORATION.keys()),
+            "Type", list(listes.TYPES_EXPLORATION.keys()),
             format_func=lambda c: listes.TYPES_EXPLORATION[c]["libelle"],
             key="type_exploration",
         )
-        definition = listes.TYPES_EXPLORATION[type_expl]
         with st.form(f"exploration_{type_expl}"):
-            date_heure = st.text_input(
-                "Date / heure", value=datetime.now().isoformat(timespec="minutes")
+            # La date et l'heure se choisissent, comme pour un bilan ou un
+            # traitement : un acte fait à 3 h du matin et saisi à la relève
+            # appartient à la nuit, pas au jour de la frappe (demande du
+            # service, 8 septembre). C'était une chaîne de caractères
+            # pré-remplie à « maintenant » — modifiable en théorie, mais il
+            # fallait réécrire un horodatage ISO à la main.
+            c_date, c_heure = st.columns(2)
+            jour_acte = c_date.date_input(
+                "Date de l'acte", value=date.today(), key=f"expl_date_{type_expl}",
             )
+            heure_acte = c_heure.time_input(
+                "Heure", value=datetime.now().time().replace(second=0, microsecond=0),
+                key=f"expl_heure_{type_expl}",
+            )
+            date_heure = f"{jour_acte}T{heure_acte.strftime('%H:%M')}"
             valeurs: dict = {}
-            champs_exploration = definition["valeurs"]
+            champs_exploration = listes.champs_exploration(type_expl)
             if champs_exploration:
                 cols = st.columns(min(len(champs_exploration), 4))
-                for i, (cle, libelle_v, unite, type_v) in enumerate(champs_exploration):
-                    etiquette = f"{libelle_v} ({unite})" if unite else libelle_v
+                for i, champ in enumerate(champs_exploration):
+                    cle, type_v = champ["cle"], champ["type"]
+                    etiquette = (f"{champ['libelle']} ({champ['unite']})"
+                                 if champ["unite"] else champ["libelle"])
                     with cols[i % len(cols)]:
                         if type_v == "nombre":
                             valeurs[cle] = champs.nombre_saisi(st.text_input(
@@ -226,11 +239,19 @@ def onglet_actes(sejour: dict) -> None:
                                 etiquette, ["", "Présent", "Absent", "Non renseigné"],
                                 key=f"expl_{type_expl}_{cle}",
                             )
+                        elif type_v == "liste":
+                            # Saisie fermée : « alvéolaire », « alvéolaires » et
+                            # « sd alvéolaire » ne se comptaient pas ensemble.
+                            valeurs[cle] = st.selectbox(
+                                etiquette, list(champ["options"]),
+                                index=None, placeholder="Non renseigné",
+                                key=f"expl_{type_expl}_{cle}",
+                            )
                         else:
                             valeurs[cle] = st.text_input(etiquette, key=f"expl_{type_expl}_{cle}")
             conclusion = st.text_input("Conclusion")
             operateur = st.text_input("Opérateur (facultatif)")
-            if st.form_submit_button("Enregistrer l'exploration"):
+            if st.form_submit_button("Enregistrer"):
                 explorations_service.enregistrer(
                     contexte.base(), sejour_id=sejour["id"], date_heure=date_heure, type_=type_expl,
                     valeurs={k: v for k, v in valeurs.items() if v not in (None, "", 0, 0.0)},
@@ -240,9 +261,9 @@ def onglet_actes(sejour: dict) -> None:
                 st.rerun()
 
     historisables = [
-        (t, cle, lib)
-        for t, d in listes.TYPES_EXPLORATION.items()
-        for cle, lib, _u, tv in d["valeurs"] if tv == "nombre"
+        (t, champ["cle"], champ["libelle"])
+        for t in listes.TYPES_EXPLORATION
+        for champ in listes.champs_exploration(t) if champ["type"] == "nombre"
     ]
     types_presents = {e["type"] for e in explos}
     candidats = [(t, c, l) for t, c, l in historisables if t in types_presents]

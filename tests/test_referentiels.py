@@ -4,6 +4,7 @@ Le critère de fin du bloc 1 est vérifiable : ajouter une valeur à un fichier
 JSON doit la faire apparaître dans le programme sans qu'aucun `.py` change.
 """
 
+import ast
 import json
 import sys
 from pathlib import Path
@@ -73,11 +74,38 @@ def test_ajouter_une_valeur_sans_toucher_au_code(tmp_path, monkeypatch):
             del sys.modules[module]
 
 
+def _source_listes() -> str:
+    return (Path(referentiels.__file__).parent / "listes.py").read_text(encoding="utf-8")
+
+
 def test_le_code_ne_contient_plus_de_listes_en_dur():
     """Garde-fou : `listes.py` doit rester un module d'accès, pas de données.
-    S'il regrossit, c'est que quelqu'un a recommencé à écrire des listes dans
-    le code — la règle R2 se reperd exactement comme ça."""
-    source = (Path(referentiels.__file__).parent / "listes.py").read_text(
-        encoding="utf-8"
+
+    Le compteur de lignes ne suffisait pas : il refusait autant une liste
+    recopiée dans le code qu'une fonction d'accès parfaitement légitime, et
+    quiconque en ajoutait une était tenté de relever le seuil — c'est comme ça
+    qu'un garde-fou perd ses dents. Ce qui est vérifié ici, c'est la règle
+    elle-même : aucune donnée écrite en dur au niveau du module.
+    """
+    arbre = ast.parse(_source_listes())
+    en_dur = []
+    for noeud in arbre.body:
+        if not isinstance(noeud, (ast.Assign, ast.AnnAssign)):
+            continue
+        valeur = noeud.value
+        if isinstance(valeur, (ast.List, ast.Tuple, ast.Set)) and len(valeur.elts) > 3:
+            en_dur.append(ast.unparse(noeud.targets[0] if isinstance(noeud, ast.Assign)
+                                      else noeud.target))
+        if isinstance(valeur, ast.Dict) and len(valeur.keys) > 3:
+            en_dur.append(ast.unparse(noeud.targets[0] if isinstance(noeud, ast.Assign)
+                                      else noeud.target))
+    assert not en_dur, (
+        f"Listes écrites en dur dans listes.py : {', '.join(en_dur)}. "
+        "Elles vont dans referentiels/, versionnées et datées (règle R2)."
     )
-    assert len(source.splitlines()) < 250
+
+
+def test_listes_reste_un_module_daccas_de_taille_raisonnable():
+    """Le compteur de lignes garde son intérêt comme signal, pas comme règle :
+    s'il double, c'est qu'il se passe autre chose que l'ajout d'un accesseur."""
+    assert len(_source_listes().splitlines()) < 400

@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from rea.db import Base  # noqa: E402
 from rea.domaine import prescription as dom_prescription  # noqa: E402
 from rea.services import (  # noqa: E402
-    bilans, dispositifs, evolution, microbiologie, prescriptions, sejours, vitesses,
+    avis, bilans, dispositifs, evolution, explorations, microbiologie,
+    prescriptions, sejours, vitesses,
 )
 
 AUJ = date.today().isoformat()
@@ -116,7 +117,7 @@ def charger(base: Base) -> str:
         poids_kg=82, taille_cm=174, provenance_type="urgences",
         traumatique=True, mecanisme="avp_deux_roues",
         mecanisme_detail="motocycliste heurté par une voiture",
-        creatinine_base=88, type_admission="medicale",
+        creatinine_base=88, type_admission="medicale", glasgow_initial=7,
         maladie_chronique_igs2="aucune",
     )
     sejours.definir_regions_traumatiques(
@@ -271,6 +272,38 @@ def charger(base: Base) -> str:
     )
     evolution.ajouter_escarre(base, sejour_id=sid, localisation="Sacrum",
                               grade=2, date_constat=J1)
+
+    # Avis spécialisés — deux fois la même spécialité, pour éprouver le fait
+    # qu'un avis n'efface jamais le précédent.
+    for jour, specialite, nom, grade, texte in (
+        (J2, "neurochirurgie", "Ben Salah", "senior",
+         "Abstention chirurgicale, TDM de contrôle à 48 h"),
+        (J1, "ccvt", "Trabelsi", "resident",
+         "Pas d'indication chirurgicale, drain à laisser en place"),
+        (AUJ, "neurochirurgie", "Ben Salah", "senior",
+         "TDM stable, poursuite de la surveillance"),
+    ):
+        avis.demander(base, sejour_id=sid, specialite=specialite, date_avis=jour,
+                      nom=nom, grade=grade, texte=texte)
+
+    # Actes : une transfusion, une radio détaillée, une péridurale qui coule.
+    explorations.enregistrer(
+        base, sejour_id=sid, date_heure=f"{J1}T14:30", type_="transfusion",
+        valeurs={"produit": "CGR (culot globulaire)", "nb_poches": 2,
+                 "complication": "Absent"},
+        operateur="Garde",
+    )
+    explorations.enregistrer(
+        base, sejour_id=sid, date_heure=f"{J1}T08:00", type_="radio_thorax",
+        valeurs={"syndrome": "Syndrome alvéolaire", "localisation": "Bilatéral",
+                 "foyer": "Présent", "siege_foyer": "Bases"},
+        conclusion="Contusion pulmonaire bilatérale",
+    )
+    dispositifs.poser(
+        base, sejour_id=sid, type_="peridurale", date_pose=J1,
+        site="Thoracique haute (T4-T6)",
+        details={"molecules": "Ropivacaïne 0,2 %", "vitesse": 6},
+    )
     return sid
 
 

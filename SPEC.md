@@ -926,6 +926,167 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.13 — 9 septembre 2026 — un mode Visite, et la pancarte enfin lisible**
+
+Le reste de l'application est fait pour être lu assis, à cinquante centimètres,
+en train de saisir. La visite, c'est l'inverse : on ne tape rien, on lit un
+portable posé sur le chariot, debout, et ce qu'on cherche est toujours la même
+chose — quel traitement, à quel jour, à quelle dose, et comment la biologie a
+bougé depuis hier. D'où un onglet **Visite**, en tête parce que c'est celui
+qu'on ouvre au pied du lit.
+
+À gauche, les traitements par voie. À droite, l'état du jour (constantes, bilan
+hydrique, dernier gaz du sang — celui d'hier s'il n'y en a pas eu aujourd'hui,
+et daté pour qu'on le sache), les abords, la biologie avec sa valeur
+précédente, le bilan infectieux avec les avis, et les plans de la journée.
+
+**Cet écran n'écrit rien**, et c'est vérifié par un test qui lit son code :
+aucun appel de service dont le nom dit qu'il écrit. À la visite on lit et on
+discute, on ne prescrit pas d'une main en tenant un chariot de l'autre — un
+bouton d'arrêt de traitement à portée de manche est un traitement arrêté par
+erreur. Corollaire : `services.evolution.journee()` lit une journée sans la
+créer. `obtenir_ou_creer` semait une ligne vide pour chaque jour que quelqu'un
+avait seulement regardé, et « cette journée existe » cessait de vouloir dire
+« quelqu'un l'a remplie ».
+
+*La ligne de pancarte.* Elle était en 0,82 rem — la taille d'une légende — pour
+la ligne la plus lue du logiciel. Elle passe à 0,95 rem, et surtout se range en
+trois colonnes : le compteur J, le produit, la dose. L'œil descend la colonne
+des compteurs pour trouver un dernier jour d'antibiotique, celle des doses pour
+vérifier une posologie ; une phrase d'un seul tenant l'oblige à relire chaque
+ligne en entier.
+
+Le découpage est fait par le domaine (`prescription.parties_ligne`) et non à
+l'écran. La première version retranchait la dose de la phrase déjà composée :
+ça marche jusqu'au jour où un horaire se glisse derrière elle — et alors la
+dose s'affiche deux fois, ce qui est exactement ce qui s'est produit.
+
+Les vitesses horaires d'une seringue passent sous la ligne, en petit : en
+ligne, elles repoussaient la dose et cassaient l'alignement de la colonne qu'on
+descend pour la vérifier.
+
+**v3.12 — 9 septembre 2026 — les bilans : modes ventilatoires, ordre, catalogue ouvert**
+
+*Chaque mode ventilatoire a ses paramètres.* Tous les champs étaient proposés
+quel que soit le mode : une PEP sous air ambiant, une AI en VAC. Des cases qui
+n'existent pas cliniquement, et qu'un interne de garde finit par remplir avec le
+paramètre d'à côté — après quoi la valeur est en base, indiscernable d'une
+mesure. Chaque mode déclare maintenant ce qui a un sens pour lui, dans
+`referentiels/modes_ventilatoires.json` :
+
+| Mode | Paramètres |
+|---|---|
+| Air ambiant | aucun |
+| Lunettes, masque | débit |
+| Optiflow *(nouveau)* | débit, FiO₂ |
+| VS-AI | FiO₂, PEP, AI, Vt |
+| VAC | FiO₂, PEP, FR, Vt |
+| VACI *(nouveau)* | FiO₂, PEP, FR, Vt, AI |
+
+Le gaz du sang lui-même — pH, PaO₂, PaCO₂, HCO₃⁻, lactates, SaO₂ — ne dépend
+d'aucun mode : c'est une seringue de sang artériel, qu'on soit ventilé ou non.
+
+Les modes sont désormais des **codes** et non des libellés. Un libellé se
+réécrit, un code non, et c'est le code qui décide des paramètres. Les gaz du
+sang écrits par la version précédente sont traduits à l'ouverture de la base.
+
+*Le bicarbonate quitte l'ionogramme.* Il figure déjà avec le gaz du sang : deux
+lignes pour le même chiffre, c'était deux cinétiques à lire pour un paramètre.
+
+*L'ordre des bilans* est celui de la visite : gaz et ventilation, ionogramme,
+fonction rénale, métabolique, NFS et hémostase, puis l'inflammation — la CRP et
+la PCT se lisent avec le bilan infectieux, qui n'est pas demandé tous les jours.
+L'observation générée suit maintenant cet ordre au lieu d'une liste recopiée à
+côté, qui divergeait de l'écran à la première réorganisation.
+
+*Un catalogue qu'on peut compléter.* Le catalogue de biologie est du code : y
+ajouter la troponine demandait une nouvelle version du logiciel. Un service qui
+se met à doser quelque chose ne peut pas attendre ça — il le noterait dans un
+commentaire libre, où le résultat ne se compare pas d'un jour à l'autre, ne
+trace aucune courbe et ne sort dans aucune statistique. La table
+`analyte_local` porte les analytes du service, avec leur unité et leurs bornes ;
+ils rejoignent les bilans non systématiques et portent leur libellé partout,
+saisie comme observation générée.
+
+Ils sont dans la **base** et non dans `referentiels/` : ce sont des données du
+service, pas du logiciel. Ils sont donc sauvegardés et restaurés avec elle,
+alors qu'un fichier de référentiel réécrit à l'exécution cesserait d'être
+versionné. Retirer un analyte de la liste ne touche pas aux valeurs déjà
+mesurées : ce qui a été mesuré a été mesuré.
+
+**v3.11 — 9 septembre 2026 — les colonnes de biologie, pour de bon**
+
+Deux défauts restaient, visibles dès la première feuille imprimée.
+
+*Une colonne vide au milieu d'un jour.* Le nombre de colonnes d'un jour était
+compté sur **tous** ses prélèvements, bilans et gaz du sang confondus, alors que
+chaque tableau ne remplit que les siens. Un jour à deux bilans et deux gaz
+recevait quatre colonnes dans le récapitulatif de chimie, qui n'en remplissait
+que deux : la troisième restait vide au milieu du jour, pendant qu'un autre
+jour, faute de place, n'était pas montré du tout. Chaque tableau compte
+désormais sa propre source, et a son propre en-tête de jours (`days` pour la
+chimie, `daysGaz` pour les gaz).
+
+*Un bloc sans date entre deux jours.* Les colonnes sans emploi — séjour trop
+court pour remplir les huit — formaient un groupe anonyme entre le dernier jour
+passé et le jour en cours, ce qui se lisait comme un jour manquant. Elles
+reviennent maintenant au jour en cours, seul à avoir de vraies raisons d'avoir
+des cases libres : la garde y écrit ses bilans de la nuit. Il n'y a plus aucune
+colonne anonyme sur la feuille, et toute colonne appartient à un jour daté.
+
+**v3.10 — 8 septembre 2026 — actes de réanimation, avis spécialisés, Glasgow d'arrivée**
+
+*Correction de la v3.9.* Le tableau de biologie se remplit de gauche à droite.
+Les colonnes libres — quand le séjour est trop court pour remplir les huit — se
+placent **après** les jours datés, jamais avant : une zone vide en tête donnait
+à croire qu'un jour manquait.
+
+*Glasgow initial.* Case fixe sur la feuille, sous le transport, parce que c'est
+le même moment : ce que valait le patient en arrivant. C'est la seule valeur
+neurologique qu'on ne peut plus reconstituer — à J3 sous midazolam, personne ne
+sait plus s'il est arrivé à 15 ou à 6 — et c'est un facteur pronostique majeur
+du traumatisme crânien. Rien n'est imprimé quand elle n'a pas été saisie : une
+ligne « Glasgow initial : » vide se lirait comme un 3.
+
+*Antidater un acte.* La date et l'heure d'une exploration se choisissent, comme
+pour un bilan ou un traitement. C'était une chaîne de caractères pré-remplie à
+« maintenant » : modifiable en théorie, mais il fallait réécrire un horodatage
+ISO à la main, et personne ne le faisait. Un acte fait à 3 h et saisi à la
+relève appartient à la nuit, pas au jour de la frappe.
+
+*Transfusion, radiographie, ALR.* Trois actes qui n'existaient pas. La
+transfusion note son produit (liste fermée : un produit sanguin écrit à la main
+ne se retrouve pas dans une revue de morbidité), son nombre de poches, son heure
+et sa complication éventuelle. La radiographie thoracique note son syndrome —
+alvéolaire, interstitiel, opacité, clarté — et sa localisation. L'anesthésie
+locorégionale se sépare en deux : un bloc en une fois est un **acte** avec sa
+dose ; une péridurale ou un cathéter périnerveux sont des **dispositifs** qui
+coulent, et l'anesthésique local apparaît désormais dans le bloc P.S.E. de la
+feuille avec son débit.
+
+Ce dernier point a demandé de généraliser : la sédation était le seul dispositif
+reporté au bloc P.S.E., par une fonction qui ne connaissait qu'elle. C'est le
+fichier des types qui le déclare maintenant (`pse`), et une péridurale y arrive
+sans qu'on rouvre le rendu. Le site n'y est pas répété — il est déjà sur le
+bandeau des abords, et l'écrire deux fois cassait la grille des seringues.
+
+*Avis spécialisés.* Nouvelle table, saisie sous le plan infectieux, report à
+gauche de la feuille : « Avis CCVT (09/09) : Rsdt X : Pas d'indication
+chirurgicale ». Un avis de neurochirurgie ne se résume pas — « refaire la TDM à
+48 h » est une consigne datée et signée, et c'est sur elle qu'on décide trois
+jours plus tard. Écrits dans le texte libre du plan infectieux, ces avis
+disparaissaient à sa première réécriture. Un avis n'annule jamais le précédent,
+même de la même spécialité : c'est la suite des avis qui raconte l'évolution
+d'une décision chirurgicale, et le second ne se comprend souvent qu'à la lumière
+du premier. Le grade est imprimé parce qu'un avis de senior et un avis de
+résident n'engagent pas la même chose.
+
+*Garde-fou R2 renforcé.* Le test qui protège `listes.py` comptait ses lignes :
+il refusait autant une liste recopiée dans le code qu'une fonction d'accès
+légitime, et quiconque en ajoutait une était tenté de relever le seuil — c'est
+comme ça qu'un garde-fou perd ses dents. Il vérifie maintenant la règle
+elle-même, par l'AST : aucune donnée écrite en dur au niveau du module.
+
 **v3.9 — 8 septembre 2026 — six retours du service sur le prescrit et la feuille**
 
 *Additifs.* Le champ était libre : « KCl 2 », « 2 amp KCl » et « +2K »

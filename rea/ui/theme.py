@@ -159,6 +159,65 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 .rea-j {{ font-weight: 700; color: {BLEU}; }}
 .rea-fin {{ color: {ROUGE}; font-weight: 700; }}
 
+/* ---- Mode visite : lu debout, à un mètre de l'écran ------------------
+   Le reste de l'application est lu assis, à cinquante centimètres, en train
+   de saisir. La visite, c'est l'inverse : on ne tape rien, on lit un
+   portable posé sur le chariot, et ce qu'on cherche est toujours la même
+   chose — quel traitement, à quel jour, à quelle dose. D'où une échelle
+   nettement plus grande et une seule colonne de valeurs alignées : l'œil
+   descend, il ne balaie pas (demande du service, 9 septembre). */
+.rea-v-bloc {{
+    border: 1px solid {BORDURE}; border-left: 4px solid {GRIS};
+    border-radius: 10px; background: #fff; margin-bottom: 9px; overflow: hidden;
+}}
+.rea-v-titre {{
+    font-size: .7rem; font-weight: 800; letter-spacing: .09em;
+    text-transform: uppercase; padding: 6px 12px 5px 12px;
+    border-bottom: 1px solid {BORDURE};
+}}
+.rea-v-ligne {{
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 6px 12px; border-bottom: 1px solid #EEF1F6; font-size: 1.02rem;
+}}
+.rea-v-ligne:last-child {{ border-bottom: none; }}
+.rea-v-ligne:nth-child(even) {{ background: #FAFBFD; }}
+/* Le compteur de jours, en tête et de largeur fixe : c'est la colonne que
+   l'œil suit pour trouver « J7/7 » sans lire les lignes une à une. */
+.rea-v-j {{
+    flex: none; min-width: 3.5rem; font-weight: 700; font-size: .84rem;
+    color: {BLEU}; text-align: right;
+}}
+.rea-v-j.fin {{ color: {ROUGE}; }}
+.rea-v-produit {{ flex: 1 1 auto; font-weight: 600; }}
+.rea-v-dose {{
+    flex: none; font-variant-numeric: tabular-nums; font-weight: 700;
+    color: #1A2430; white-space: nowrap;
+}}
+.rea-v-detail {{ font-size: .8rem; color: {GRIS}; font-weight: 400; }}
+.rea-v-ligne.arretee .rea-v-produit {{ text-decoration: line-through; color: {GRIS}; }}
+.rea-v-vide {{ padding: 8px 12px; font-size: .86rem; color: {GRIS}; }}
+
+/* Une valeur de biologie et sa précédente : le chiffre gros, la cinétique
+   petite à côté. Une valeur seule ne dit pas si le rein décroche. */
+.rea-v-mesure {{
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 5px 12px; border-bottom: 1px solid #EEF1F6; font-size: .95rem;
+}}
+.rea-v-mesure:last-child {{ border-bottom: none; }}
+.rea-v-nom {{ flex: 1 1 auto; color: {GRIS}; }}
+.rea-v-val {{ font-weight: 700; font-size: 1.08rem; font-variant-numeric: tabular-nums; }}
+.rea-v-val.haut {{ color: {ROUGE}; }}
+.rea-v-val.bas {{ color: {BLEU}; }}
+.rea-v-avant {{ font-size: .78rem; color: {GRIS}; font-variant-numeric: tabular-nums; }}
+.rea-v-texte {{ padding: 7px 12px; font-size: .95rem; line-height: 1.55; }}
+
+/* ---- Prescrit : la ligne de pancarte, lisible sans se pencher --------
+   Elle était en .82rem, la taille d'une légende. C'est pourtant la ligne la
+   plus lue du logiciel. */
+.rea-p-ligne {{ display: flex; align-items: baseline; gap: 8px; font-size: .95rem; }}
+.rea-p-produit {{ flex: 1 1 auto; }}
+.rea-p-dose {{ flex: none; font-variant-numeric: tabular-nums; font-weight: 700; }}
+
 /* ---- Tableaux plus denses ------------------------------------------- */
 div[data-testid="stDataFrame"] {{ font-size: .8rem; }}
 

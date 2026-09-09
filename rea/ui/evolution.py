@@ -9,9 +9,11 @@ import streamlit as st
 
 from .. import listes
 from ..db import ConflitDeVersion
+from ..domaine import avis as dom_avis
 from ..domaine import prescription as dom
-from ..domaine.dates import format_date_fr
+from ..domaine.dates import format_date_fr, parse_date
 from ..services import aides as aides_service
+from ..services import avis as avis_service
 from ..services import definitions_cliniques
 from ..services import evolution as evolution_service
 from ..services import prescriptions as prescriptions_service
@@ -343,6 +345,62 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     )
 
 
+def _bloc_avis(sejour: dict, date_jour_str: str) -> None:
+    """Les avis demandés aux autres spécialités.
+
+    Ils vivent avec le plan infectieux parce que c'est là qu'on décide de
+    rappeler un chirurgien — mais ce sont des consignes datées et signées, pas
+    du commentaire. Écrits dans le texte libre du plan, ils disparaissaient à
+    sa première réécriture, et personne ne savait plus qui avait dit quoi ni
+    quand (demande du service, 8 septembre).
+    """
+    st.caption("Avis spécialisés")
+    for a in avis_service.du_sejour(contexte.base(), sejour["id"]):
+        col1, col2 = st.columns([6, 1])
+        col1.markdown(
+            f"<div style='font-size:.82rem'>{dom_avis.ligne_avis(a)}</div>",
+            unsafe_allow_html=True,
+        )
+        if col2.button("X", key=f"avis_suppr_{a['id']}",
+                       help="Retirer cet avis (saisi par erreur)"):
+            avis_service.supprimer(contexte.base(), a["id"],
+                                   utilisateur_id=contexte.utilisateur_id())
+            st.rerun()
+
+    with st.form(f"ajout_avis_{date_jour_str}"):
+        c1, c2, c3 = st.columns([2, 2, 1])
+        specialite = c1.selectbox(
+            "Spécialité", listes.codes(listes.SPECIALITES_AVIS),
+            format_func=lambda c: listes.SPECIALITES_AVIS[
+                listes.codes(listes.SPECIALITES_AVIS).index(c)][2],
+            index=None, placeholder="Choisir une spécialité",
+        )
+        nom = c2.text_input("Nom", value="", placeholder="ex. Ben Salah")
+        grades = listes.codes(listes.GRADES_AVIS)
+        grade = c3.selectbox(
+            "Grade", grades,
+            format_func=lambda g: listes.GRADES_AVIS[grades.index(g)][2],
+        )
+        # L'avis peut avoir été donné hier soir et n'être saisi que ce matin :
+        # c'est sa date qui compte, pas celle de la frappe.
+        date_avis = st.date_input("Date de l'avis", value=parse_date(date_jour_str))
+        texte = st.text_area(
+            "Avis", value="", height=70,
+            placeholder="ex. Pas d'indication chirurgicale, adresser en consultation externe",
+        )
+        if st.form_submit_button("Ajouter l'avis"):
+            if not specialite or not texte.strip():
+                st.error("La spécialité et le texte de l'avis sont nécessaires.")
+            else:
+                avis_service.demander(
+                    contexte.base(), sejour_id=sejour["id"], specialite=specialite,
+                    texte=texte.strip(), date_avis=str(date_avis),
+                    nom=nom.strip() or None, grade=grade,
+                    utilisateur_id=contexte.utilisateur_id(),
+                )
+                st.rerun()
+
+
 def _bloc_escarres(sejour: dict, date_jour_str: str) -> None:
     """Une escarre est un risque infectieux — elle vit avec le plan
     infectieux, pas dans un tiroir séparé sans rapport (remarque du
@@ -425,6 +483,7 @@ def onglet_evolution(sejour: dict) -> None:
                             )
                         if cle_plan == "plan_infectieux":
                             _bloc_escarres(sejour, date_jour_str)
+                            _bloc_avis(sejour, date_jour_str)
                         texte_libre = st.text_area(
                             "Commentaire", value=entree.get(cle_plan) or "", height=80,
                             key=f"evo_libre_{date_jour_str}_{cle_plan}",

@@ -67,6 +67,16 @@ def _dict_factory(cursor: sqlite3.Cursor, row: tuple) -> dict:
     return dict(zip(champs, row))
 
 
+#: Les modes ventilatoires étaient enregistrés sous leur libellé. Ils portent
+#: maintenant un code (referentiels/modes_ventilatoires.json) : un libellé peut
+#: être réécrit, un code non — et c'est le code qui décide quels paramètres ont
+#: un sens pour ce mode.
+_ANCIENS_MODES_VENTILATOIRES = {
+    "VAC": "vac", "VS AI": "vs_ai", "VS-AI": "vs_ai",
+    "Masque": "masque", "Lunette": "lunette", "Air ambiant": "air_ambiant",
+}
+
+
 class Base:
     """Enveloppe autour d'une connexion SQLite vers le fichier du service."""
 
@@ -116,6 +126,23 @@ class Base:
                     (config.__dict__.get("VERSION_SCHEMA", "1"),),
                 )
         self._rattraper_posologies_initiales()
+        self._rattraper_modes_ventilatoires()
+
+    def _rattraper_modes_ventilatoires(self) -> None:
+        """Traduit en codes les modes enregistrés sous leur libellé (v3.12).
+
+        Sans ce rattrapage, un gaz du sang écrit par la version précédente
+        garderait « VAC » là où le programme attend « vac » : ses paramètres
+        ventilatoires ne seraient plus reconnus, et la ligne d'observation
+        cesserait de les afficher sans rien dire.
+        """
+        with self._verrou:
+            for ancien, code in _ANCIENS_MODES_VENTILATOIRES.items():
+                self.connexion.execute(
+                    "UPDATE gaz_du_sang SET mode_ventilatoire = ? "
+                    "WHERE mode_ventilatoire = ?",
+                    (code, ancien),
+                )
 
     def _rattraper_posologies_initiales(self) -> None:
         """Donne sa première version de posologie à chaque ligne écrite avant

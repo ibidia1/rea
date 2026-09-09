@@ -64,7 +64,7 @@ def test_texte_genere_gaz_du_sang_et_ventilation_separes(base):
     sid = _sejour(base)
     bilans.enregistrer_gaz_du_sang(
         base, sid, "2026-09-01T08:00", ph=7.32, pao2=80, fio2=50,
-        mode_ventilatoire="VAC", pep=6, fr=18,
+        mode_ventilatoire="vac", pep=6, fr=18,
     )
     texte = bilans.texte_genere(base, sid, "2026-09-01")
     lignes = texte.split("\n")
@@ -77,10 +77,13 @@ def test_texte_genere_gaz_du_sang_et_ventilation_separes(base):
 def test_texte_genere_masque_avec_debit(base):
     sid = _sejour(base)
     bilans.enregistrer_gaz_du_sang(
-        base, sid, "2026-09-01T08:00", mode_ventilatoire="Masque", debit_o2=6, fio2=40,
+        base, sid, "2026-09-01T08:00", mode_ventilatoire="masque", debit_o2=6, fio2=40,
     )
     texte = bilans.texte_genere(base, sid, "2026-09-01")
-    assert "Mode = Masque 6L" in texte
+    # Le sigle court sur la ligne d'observation, et le débit avec lui.
+    assert "Mode = Masque à oxygène 6L" in texte
+    # Un masque n'a ni PEP ni AI : ces cases n'existent pas pour ce mode.
+    assert "PEP" not in texte and "AI =" not in texte
 
 
 def test_texte_genere_vide_sans_donnees(base):

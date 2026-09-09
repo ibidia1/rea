@@ -35,8 +35,7 @@ def enregistrer(
             },
             utilisateur_id=utilisateur_id,
         )
-        definition = listes.TYPES_EXPLORATION.get(type_, {})
-        unites = {cle: unite for cle, _lib, unite, _type in definition.get("valeurs", ())}
+        unites = {c["cle"]: c["unite"] for c in listes.champs_exploration(type_)}
         for cle, valeur in (valeurs or {}).items():
             if valeur in (None, ""):
                 continue
@@ -86,9 +85,9 @@ def historique_valeur(base: Base, sejour_id: str, type_: str, cle: str) -> list[
 
 
 def _libelle_valeur(type_: str, cle: str) -> str:
-    for c, libelle, _unite, _t in listes.TYPES_EXPLORATION.get(type_, {}).get("valeurs", ()):
-        if c == cle:
-            return libelle
+    for champ in listes.champs_exploration(type_):
+        if champ["cle"] == cle:
+            return champ["libelle"]
     return cle
 
 

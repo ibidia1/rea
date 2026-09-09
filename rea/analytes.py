@@ -76,11 +76,6 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
         Analyte("mg", "Mg²⁺", "mmol/L", borne_basse=0.7, borne_haute=1.0, code_loinc="19123-9", unite_ucum="mmol/L"),
         Analyte("phosphore", "Phosphore", "mmol/L", borne_basse=0.8, borne_haute=1.5,
                 code_loinc="2777-1", unite_ucum="mmol/L"),
-        # Bicarbonate veineux (ionogramme) — distinct du HCO₃⁻ artériel posé
-        # avec chaque gaz du sang (table gaz_du_sang) : deux prélèvements
-        # différents, jamais la même valeur recopiée.
-        Analyte("hco3_iono", "HCO₃⁻", "mmol/L", borne_basse=22, borne_haute=28,
-                code_loinc="1963-8", unite_ucum="mmol/L"),
     )),
     GroupeAnalytes("metabolique", "Métabolique", (
         # Exigées par l'alignement ANZICS (SPEC §9.5) et indispensables aux
@@ -129,9 +124,16 @@ GROUPES: tuple[GroupeAnalytes, ...] = (
 #
 # Cet ordre ne vaut que pour la saisie : `GROUPES` garde l'ordre du catalogue,
 # celui de la cinétique et des exports.
+#: L'ordre dans lequel le service saisit ses bilans, et celui de l'écran
+#: (demande du 9 septembre). Le gaz du sang vient avant tout le reste, mais il
+#: n'est pas un groupe d'analytes : il a sa propre table et son propre bloc en
+#: tête de l'écran. Ensuite la chimie du jour, puis l'hémato, et l'inflammation
+#: à la fin — la CRP et la PCT se lisent avec le bilan infectieux, qui n'est pas
+#: demandé tous les jours.
 ORDRE_SAISIE: tuple[str, ...] = (
-    "ionogramme", "metabolique", "renale", "inflammation",   # chimie
-    "nfs", "hemostase",                                      # hémato
+    "ionogramme", "renale", "metabolique",   # chimie
+    "nfs", "hemostase",                      # hémato
+    "inflammation",                          # avec le bilan infectieux
 )
 GROUPES_OCCASIONNELS: tuple[str, ...] = ("hepatique", "lipidique")
 
@@ -147,7 +149,11 @@ def groupes_de_saisie() -> tuple[tuple[GroupeAnalytes, ...], tuple[GroupeAnalyte
     courants = tuple(par_code[c] for c in ORDRE_SAISIE if c in par_code)
     occasionnels = tuple(par_code[c] for c in GROUPES_OCCASIONNELS if c in par_code)
     connus = {g.code for g in courants + occasionnels}
-    return courants, occasionnels + tuple(g for g in GROUPES if g.code not in connus)
+    autres = tuple(g for g in GROUPES if g.code not in connus)
+    # Les analytes du service ferment la marche : ils sont par construction
+    # les moins souvent demandés, sans quoi ils seraient au catalogue.
+    local = groupe_local()
+    return courants, occasionnels + autres + ((local,) if local else ())
 
 
 # Les correspondances LOINC ci-dessus n'ont pas encore été vérifiées contre le
@@ -159,6 +165,35 @@ VERSION_CATALOGUE = "2026-09-03-provisoire"
 # Facteurs de conversion mmol/L -> g/L (identiques au fichier HTML fourni).
 FACTEURS_LIPIDES: dict[str, float] = {"ct": 0.387, "hdl": 0.387, "ldl": 0.387, "tg": 0.886}
 
+#: Les analytes ajoutés par le service, chargés depuis la base à l'ouverture
+#: de l'écran des bilans. Ils ne sont pas dans ce fichier parce qu'ils
+#: n'appartiennent pas au logiciel : un service qui se met à doser la
+#: troponine ne doit pas attendre une nouvelle version pour la saisir. Ils
+#: vivent dans la base, donc ils sont sauvegardés et restaurés avec elle.
+_LOCAUX: dict[str, Analyte] = {}
+CODE_GROUPE_LOCAL = "local"
+
+
+def enregistrer_locaux(definitions) -> None:
+    """Remplace la liste des analytes du service. `definitions` : suite de
+    dicts (code, libelle, unite, borne_basse, borne_haute)."""
+    _LOCAUX.clear()
+    for d in definitions:
+        _LOCAUX[d["code"]] = Analyte(
+            d["code"], d["libelle"], d.get("unite") or "",
+            borne_basse=d.get("borne_basse"), borne_haute=d.get("borne_haute"),
+        )
+
+
+def groupe_local() -> GroupeAnalytes | None:
+    """Le groupe « Autres bilans », s'il y en a. Rien sinon : un titre de
+    groupe vide occupe une place sans rien apprendre."""
+    if not _LOCAUX:
+        return None
+    return GroupeAnalytes(CODE_GROUPE_LOCAL, "Autres bilans",
+                          tuple(_LOCAUX.values()))
+
+
 # Regroupement utilitaire : id d'analyte -> (groupe, Analyte)
 _INDEX: dict[str, tuple[GroupeAnalytes, Analyte]] = {
     analyte.id: (groupe, analyte) for groupe in GROUPES for analyte in groupe.analytes
@@ -166,7 +201,22 @@ _INDEX: dict[str, tuple[GroupeAnalytes, Analyte]] = {
 
 
 def analyte(id_: str) -> Analyte:
-    return _INDEX[id_][1]
+    """L'analyte, qu'il vienne du catalogue ou de ceux ajoutés par le service.
+
+    Rend un analyte porteur de son seul code plutôt que de lever, pour un id
+    inconnu : une valeur enregistrée sous un code qui n'existe plus — analyte
+    du service effacé, base plus ancienne — doit rester lisible. Une lecture
+    qui plante fait disparaître tout l'écran, pas seulement la ligne fautive.
+    """
+    if id_ in _INDEX:
+        return _INDEX[id_][1]
+    if id_ in _LOCAUX:
+        return _LOCAUX[id_]
+    return Analyte(id_, id_, "")
+
+
+def connu(id_: str) -> bool:
+    return id_ in _INDEX or id_ in _LOCAUX
 
 
 def groupe_de(id_: str) -> GroupeAnalytes:
@@ -174,10 +224,14 @@ def groupe_de(id_: str) -> GroupeAnalytes:
 
 
 def tous_les_ids(inclure_calcules: bool = True) -> tuple[str, ...]:
-    return tuple(
+    ids = tuple(
         a.id for g in GROUPES for a in g.analytes if inclure_calcules or not a.calcule
     )
+    return ids + tuple(_LOCAUX)
 
 
-MODES_VENTILATOIRES = ("VAC", "VS AI", "Masque", "Lunette", "Air ambiant")
-MODES_AVEC_DEBIT = ("Masque", "Lunette")
+# Les modes ventilatoires et leurs paramètres vivent dans
+# `referentiels/modes_ventilatoires.json` (règle R2) : chaque mode y déclare
+# ce qui a un sens pour lui. Les deux tuples qui étaient écrits ici ne
+# distinguaient que « avec débit » ou non, et laissaient afficher une PEP sous
+# air ambiant.

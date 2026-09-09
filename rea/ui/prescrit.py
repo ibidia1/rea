@@ -311,28 +311,33 @@ def _afficher_pancarte(
                         unsafe_allow_html=True,
                     )
                 for ligne in lignes:
-                    texte = dom.libelle_ligne(ligne, date_jour_str)
-                    etiquette = dom.etiquette_jour(ligne, date_jour_str)
-                    # Le compteur de jours en bleu, le dernier jour en rouge :
-                    # ce sont les deux choses qu'on cherche du regard.
+                    # Trois colonnes plutôt qu'une phrase : le compteur, le
+                    # produit, la dose. C'est le découpage du domaine, pour que
+                    # la dose ne soit pas retranchée d'un texte déjà composé —
+                    # elle finissait par s'afficher deux fois.
+                    etiquette, produit, dose = dom.parties_ligne(ligne, date_jour_str)
+                    classe_j = "rea-j" + (" rea-fin" if etiquette.dernier_jour else "")
+                    marque = "" if etiquette.introduction else etiquette.texte
+                    texte = (f'<span class="{classe_j}">{marque}</span> ' if marque else "") + produit
                     if etiquette.dernier_jour:
-                        texte = texte.replace(
-                            "  ← dernier jour", ' <span class="rea-fin">← dernier jour</span>'
-                        )
-                    texte = texte.replace(
-                        etiquette.texte, f'<span class="rea-j">{etiquette.texte}</span>', 1
-                    )
+                        texte += ' <span class="rea-fin">← dernier jour</span>'
+                    if etiquette.introduction:
+                        texte = f'<span class="rea-j">Introduction</span> {produit}'
+
                     # Une vitesse réglée plusieurs fois dans la journée se lit
                     # heure par heure ; une seule valeur est déjà dans le
                     # libellé de la ligne.
+                    # La suite des vitesses va sous la ligne, pas dedans : en
+                    # ligne, elle repoussait la dose et cassait l'alignement
+                    # de la colonne qu'on descend pour vérifier une posologie.
                     par_heure = (vitesses_jour or {}).get(ligne["id"]) or {}
-                    if len(par_heure) > 1:
-                        texte += (
-                            f" <span style='color:{theme.GRIS}'>"
-                            f"[{_texte_vitesses(par_heure)}]</span>"
-                        )
+                    sous_ligne = (
+                        f'<div style="font-size:.78rem;color:{theme.GRIS};'
+                        f'margin:-2px 0 2px 0">{_texte_vitesses(par_heure)}</div>'
+                        if len(par_heure) > 1 else ""
+                    )
                     active = ligne["statut"] == "active"
-                    classe = "" if active else ' class="arretee"'
+                    classe = "rea-p-ligne" + ("" if active else " arretee")
                     col_croix, col_texte = st.columns([1, 7])
                     with col_croix:
                         if active and st.button(
@@ -345,8 +350,14 @@ def _afficher_pancarte(
                             )
                             st.rerun()
                     with col_texte:
+                        # La dose part à droite, alignée d'une ligne à
+                        # l'autre : c'est la colonne que l'œil descend pour
+                        # vérifier une posologie.
                         st.markdown(
-                            f'<span style="font-size:.82rem"{classe}>{texte}</span>',
+                            f'<div class="{classe}">'
+                            f'<span class="rea-p-produit">{texte}</span>'
+                            + (f'<span class="rea-p-dose">{dose}</span>' if dose else "")
+                            + "</div>" + sous_ligne,
                             unsafe_allow_html=True,
                         )
 

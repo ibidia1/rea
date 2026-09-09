@@ -17,11 +17,12 @@ import pathlib
 
 import pytest
 
+from rea import referentiels
 from rea.ui import champs
 
 ECRANS = [
     "champs", "contexte", "lits", "admission", "identite", "prescrit",
-    "bilans", "evolution", "actes", "sortie", "fiche",
+    "bilans", "evolution", "actes", "sortie", "visite", "fiche",
 ]
 
 
@@ -72,3 +73,31 @@ def test_nombre_saisi_rend_non_renseigne_plutot_que_zero(saisi):
 ])
 def test_format_valeur_affiche_sans_decimale_inutile(valeur, attendu):
     assert champs.format_valeur(valeur) == attendu
+
+
+# -- mode visite : il lit, il n'écrit pas -----------------------------------
+
+def test_lecran_de_visite_nappelle_aucune_ecriture():
+    """À la visite on lit et on discute, on ne prescrit pas d'une main en
+    tenant un chariot de l'autre. Un bouton d'arrêt de traitement à portée de
+    manche est un traitement arrêté par erreur.
+
+    Vérifié sur le code : aucun appel de service dont le nom dit qu'il écrit.
+    """
+    source = (pathlib.Path(referentiels.__file__).parent / "ui" / "visite.py").read_text(
+        encoding="utf-8"
+    )
+    arbre = ast.parse(source)
+    ecritures = []
+    prefixes = ("enregistrer", "ajouter", "modifier", "arreter", "supprimer",
+                "poser", "retirer", "creer", "definir", "demander", "changer",
+                "regler", "imprimer", "obtenir_ou_creer")
+    for noeud in ast.walk(arbre):
+        if not isinstance(noeud, ast.Call) or not isinstance(noeud.func, ast.Attribute):
+            continue
+        if noeud.func.attr.startswith(prefixes):
+            ecritures.append(ast.unparse(noeud.func))
+    assert not ecritures, (
+        f"L'écran de visite appelle {', '.join(sorted(set(ecritures)))} : "
+        "il doit rester en lecture seule."
+    )
