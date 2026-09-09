@@ -343,3 +343,68 @@ def test_la_pancarte_compte_les_entrees_comme_le_bilan(base):
     pancarte = prescriptions.pancarte_du_jour(base, sid, "2026-09-08")
     bilan = evolution.bilan_hydrique(base, sid, "2026-09-08")
     assert pancarte["bilan_entrees"].total_ml == bilan.entrees_ml == 4 * 25 + 20 * 10
+
+
+# --- une journée en cours n'a pas de bilan des 24 h ------------------------
+#
+# Le bilan et l'évolution se documentent après coup : on ne relève pas une
+# diurèse des 24 h à 9 h du matin, et les entrées se compteraient sur la
+# fenêtre entière d'une journée qui n'a que deux heures. On obtiendrait un
+# chiffre qui n'est ni celui d'aujourd'hui ni celui d'hier, dans la case qui
+# décide d'une déplétion ou d'un remplissage (remarque du service,
+# 9 septembre).
+
+from datetime import date as _date, datetime as _datetime
+
+
+def test_la_journee_de_service_ouverte_a_6h_est_celle_de_la_veille():
+    """La journée court de 8 h à 8 h : à 6 h le 9, on remplit encore la
+    feuille ouverte le 8."""
+    assert dom.jour_de_service(_datetime(2026, 9, 9, 6, 0)) == _date(2026, 9, 8)
+    assert dom.jour_de_service(_datetime(2026, 9, 9, 9, 0)) == _date(2026, 9, 9)
+
+
+def test_la_derniere_journee_close_est_celle_qu_on_documente_a_la_visite():
+    """À 9 h le 9 septembre, la journée qui vient de finir est celle du 8."""
+    assert dom.dernier_jour_clos(_datetime(2026, 9, 9, 9, 0)) == _date(2026, 9, 8)
+    assert dom.dernier_jour_clos(_datetime(2026, 9, 9, 6, 0)) == _date(2026, 9, 7)
+
+
+def test_une_journee_en_cours_n_est_pas_close():
+    matin = _datetime(2026, 9, 9, 10, 0)
+    assert not dom.journee_close("2026-09-09", matin)
+    assert dom.journee_close("2026-09-08", matin)
+
+
+def test_le_bilan_d_une_journee_en_cours_ne_rend_pas_de_net(base):
+    """Même avec diurèse, poids et température saisis : les 24 h ne sont pas
+    écoulées, il n'y a pas de bilan des 24 h."""
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=1200, poids_kg=70, temperature_c=37,
+        date_jour="2026-09-09", instant=_datetime(2026, 9, 9, 10, 0),
+    )
+    assert bilan.net_ml is None
+    assert not bilan.journee_close
+    assert "Journée en cours" in bilan.motif_indisponible
+
+
+def test_le_bilan_d_une_journee_close_se_calcule(base):
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=1200, poids_kg=70, temperature_c=37,
+        date_jour="2026-09-08", instant=_datetime(2026, 9, 9, 10, 0),
+    )
+    assert bilan.journee_close
+    assert bilan.net_ml is not None
+    assert bilan.motif_indisponible is None
+
+
+def test_le_motif_dit_ce_qui_manque_quand_la_journee_est_close(base):
+    """Une journée close mais incomplète, ce n'est pas la même chose qu'une
+    journée en cours : le message doit le distinguer."""
+    bilan = dom.bilan_hydrique(
+        _lignes(), diurese_ml=None, poids_kg=70, temperature_c=37,
+        date_jour="2026-09-08", instant=_datetime(2026, 9, 9, 10, 0),
+    )
+    assert bilan.net_ml is None
+    assert "Il manque" in bilan.motif_indisponible
+    assert "Journée en cours" not in bilan.motif_indisponible

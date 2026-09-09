@@ -16,6 +16,14 @@ Les quatre règles de sécurité du §4.5 tiennent ici :
    et supprimable comme les autres.
 4. Elle porte le code et la version du protocole : six mois plus tard, on sait
    de quelle version du protocole vient ce qui a été prescrit.
+
+**Un protocole signé a le droit de porter une dose** (décision du service,
+9 septembre). Le §3.1 dit que *le logiciel* ne calcule ni ne propose de
+posologie, et cela ne change pas : ce qui arrive dans la ligne n'est pas un
+calcul, c'est le texte qu'un senior a écrit et signé. Un protocole de
+correction de kaliémie sans dose ne sert à rien — c'est la dose qui est le
+protocole. La ligne posée reste modifiable, et c'est le prescripteur qui
+signe.
 """
 
 from __future__ import annotations
@@ -34,10 +42,11 @@ def appliquer(
 ) -> int:
     """Pose les lignes des protocoles choisis. Rend le nombre de lignes posées.
 
-    Chaque ligne part **sans dose** (SPEC §3.1 — le logiciel ne calcule ni ne
-    propose de posologie) : le protocole ne préremplit que voie, produit,
-    rythme, et sa note. C'est une contrainte du projet, pas une limite
-    technique : elle laisse la dose à celui qui signe la prescription.
+    La posologie écrite dans le protocole est reprise telle quelle — dose,
+    unité, rythme, vitesse. Elle vient du senior qui a signé le fichier, pas
+    d'un calcul du logiciel : c'est ce qui la distingue de ce que le §3.1
+    interdit. Un champ absent du protocole reste vide dans la ligne, il n'est
+    pas deviné.
     """
     posees = 0
     for protocole in protocoles_choisis:
@@ -48,9 +57,27 @@ def appliquer(
                 base, sejour_id=sejour_id, voie=ligne["voie"],
                 produit=ligne["produit"], date_debut=date_debut,
                 rythme=ligne.get("rythme") or None,
+                dose=_nombre(ligne.get("dose")),
+                unite=ligne.get("unite") or None,
+                vitesse=_nombre(ligne.get("vitesse")),
+                dilution=ligne.get("dilution") or None,
                 condition_texte=ligne.get("note") or None,
                 protocole_code=protocole.code, protocole_version=protocole.version,
                 utilisateur_id=utilisateur_id,
             )
             posees += 1
     return posees
+
+
+def _nombre(valeur) -> float | None:
+    """Une dose écrite « 1,5 » dans un fichier relu à la main doit passer.
+
+    Ce qui n'est pas un nombre ne devient pas zéro : il devient absent. Une
+    dose à zéro dans une prescription se lit comme une décision.
+    """
+    if valeur is None or valeur == "":
+        return None
+    try:
+        return float(str(valeur).replace(",", "."))
+    except (TypeError, ValueError):
+        return None

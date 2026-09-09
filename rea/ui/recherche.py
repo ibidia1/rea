@@ -35,6 +35,7 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
         "Tableau descriptif": lambda: _table_1(base, selection),
         "Indicateurs de service": lambda: _indicateurs(base, selection),
         "Croisements": lambda: _croisements(base, selection),
+        "Délai d'apyrexie": lambda: _apyrexie(base, selection),
         "Antibiotiques": lambda: _antibiotiques(base, selection),
         "Export": lambda: _export(base, selection, filtres, utilisateur_id),
     }
@@ -139,6 +140,63 @@ def _croisements(base: Base, selection: list[dict]) -> None:
         code_resultat=resultat.code, seuils=seuils,
     )
     _afficher_croisement(croisement)
+
+
+def _apyrexie(base: Base, selection: list[dict]) -> None:
+    """« À partir de combien de jours un patient décroche sous telle
+    molécule ? » — décrocher, c'est ne plus être fébrile.
+
+    C'est un délai jusqu'à un événement, pas un croisement en tranches : il a
+    son propre écran. Ce qu'il affiche à côté de la médiane est aussi
+    important qu'elle — le nombre de patients qui n'ont **pas** décroché.
+    """
+    st.caption(
+        "Pour chaque traitement commencé **chez un patient fébrile**, le "
+        "nombre de jours jusqu'au premier jour apyrétique. Un patient "
+        "subfébrile n'a pas décroché ; une température non mesurée n'est "
+        "jamais lue comme une apyrexie."
+    )
+    produits = [
+        v.code.split(":", 1)[1]
+        for v in croisements_service.facteurs_disponibles(base)
+        if v.code.startswith("produit:")
+    ]
+    if not produits:
+        st.info("Aucune molécule prescrite à au moins deux patients.")
+        return
+    produit = st.selectbox("Molécule", produits, index=None,
+                           placeholder="Choisir une molécule")
+    if not produit:
+        return
+
+    r = croisements_service.delai_apyrexie(base, selection, produit)
+    if not r.episodes:
+        st.info(
+            f"Aucun traitement par {produit} n'a commencé chez un patient "
+            "fébrile dans cette cohorte — il n'y a rien à mesurer."
+        )
+        for note in r.avertissements:
+            st.caption(note)
+        return
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Traitements commencés chez un fébrile", r.episodes)
+    c2.metric(
+        "Devenus apyrétiques",
+        f"{r.decroches}/{r.episodes}"
+        + (f" ({r.part_decroches * 100:.0f} %)" if r.part_decroches is not None else ""),
+    )
+    c3.metric(
+        "Délai médian",
+        f"{r.delai_median:.0f} j" if r.delai_median is not None else "—",
+        help="parmi ceux qui ont décroché uniquement",
+    )
+    if r.delais:
+        st.caption("Délais observés (jours) : " + ", ".join(
+            str(d) for d in sorted(r.delais)
+        ))
+    for note in r.avertissements:
+        st.caption(note)
 
 
 def _lire_seuils(saisie: str) -> tuple[float, ...] | None:

@@ -29,8 +29,9 @@ def protocole_signe(tmp_path, monkeypatch):
         "valide": True, "signe_par": "Pr Chef",
         "declencheur": {"type": "regle", "valeur": "hypokaliemie"},
         "lignes_prescription": [
-            {"voie": "IV", "produit": "Chlorure de potassium",
-             "rythme": "conditionnel", "note": "sur voie centrale"},
+            {"voie": "IV", "produit": "Chlorure de potassium", "dose": 1,
+             "unite": "g", "rythme": "conditionnel", "vitesse": "0,5",
+             "note": "sur voie centrale"},
             {"voie": "SOINS", "produit": "Scope", "rythme": "continu"},
         ],
         "explorations_proposees": [],
@@ -81,10 +82,12 @@ def test_le_protocole_du_depot_reste_un_brouillon():
     assert protocoles.protocoles_pour_regle("hypokaliemie") == ()
 
 
-def test_appliquer_pose_des_lignes_sans_dose(base, protocole_signe):
-    """SPEC §3.1 : le logiciel ne propose aucune posologie. Le protocole
-    préremplit la voie, le produit et le rythme — la dose reste à celui qui
-    signe la prescription."""
+def test_appliquer_reprend_la_posologie_du_protocole(base, protocole_signe):
+    """Un protocole signé a le droit de porter une dose (décision du service,
+    9 septembre). Le §3.1 tient toujours : ce n'est pas le logiciel qui la
+    calcule, c'est le senior qui l'a écrite et signée. Un protocole de
+    correction de kaliémie sans dose ne sert à rien — la dose *est* le
+    protocole."""
     pid = sejours.creer_patient(base, matricule="M1", nom_affichage="T",
                                 date_naissance=None)
     sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-06",
@@ -99,9 +102,47 @@ def test_appliquer_pose_des_lignes_sans_dose(base, protocole_signe):
     lignes = {l["produit"]: l for l in prescriptions.toutes_les_lignes(base, sid)}
     assert set(lignes) == {"Chlorure de potassium", "Scope"}
     kcl = lignes["Chlorure de potassium"]
-    assert kcl["dose"] is None          # aucune posologie proposée
     assert kcl["voie"] == "IV"
+    assert kcl["dose"] == 1
+    assert kcl["unite"] == "g"
     assert kcl["rythme"] == "conditionnel"
+    # « 0,5 » relu à la main dans un fichier doit passer.
+    assert kcl["vitesse"] == 0.5
+    # Ce que le protocole ne dit pas reste vide, il n'est pas deviné.
+    assert lignes["Scope"]["dose"] is None
     # Six mois plus tard, on doit savoir de quelle version vient cette ligne.
     assert kcl["protocole_code"] == "kaliemie"
     assert kcl["protocole_version"] == "2026-09-09-v1"
+
+
+def test_une_dose_illisible_reste_vide_au_lieu_de_valoir_zero(tmp_path,
+                                                              monkeypatch, base):
+    """Une dose à zéro dans une prescription se lit comme une décision.
+    Ce qui n'est pas un nombre doit rester absent."""
+    from rea.services import prescriptions as presc
+
+    dossier = tmp_path / "protocoles"
+    dossier.mkdir()
+    (dossier / "flou.json").write_text(json.dumps({
+        "code": "flou", "titre": "Essai", "version": "v1",
+        "date_version": "2026-09-09", "valide": True, "signe_par": "Pr Chef",
+        "declencheur": {"type": "regle", "valeur": "hypokaliemie"},
+        "lignes_prescription": [
+            {"voie": "IV", "produit": "KCl", "dose": "selon kaliémie"},
+        ],
+        "explorations_proposees": [], "consignes": [],
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "DOSSIER_PROTOCOLES", dossier)
+    protocoles._tous.cache_clear()
+    try:
+        pid = sejours.creer_patient(base, matricule="M9", nom_affichage="T",
+                                    date_naissance=None)
+        sid = sejours.creer_sejour(base, patient_id=pid,
+                                   date_admission="2026-09-06", lit_admission=1)
+        protocole = protocoles.protocoles_pour_regle("hypokaliemie")[0]
+        protocoles_service.appliquer(base, sid, [protocole],
+                                     date_debut="2026-09-09")
+        ligne = presc.toutes_les_lignes(base, sid)[0]
+        assert ligne["dose"] is None
+    finally:
+        protocoles._tous.cache_clear()

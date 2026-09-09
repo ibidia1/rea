@@ -926,6 +926,58 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.18 — 9 septembre 2026 — l'évolution se documente après coup, une posologie dans les protocoles, décrocher c'est ne plus être fébrile**
+
+*Le bilan des 24 h se calculait sur une journée qui n'avait que deux heures.*
+L'écran Évolution s'ouvrait sur aujourd'hui ; l'intégration exacte des vitesses
+(v3.17) additionnait alors la fenêtre entière — 8 h → 8 h le lendemain —
+d'une journée à peine commencée. Le chiffre n'était ni celui d'aujourd'hui ni
+celui d'hier, dans la case qui décide d'une déplétion ou d'un remplissage.
+
+Une évolution se documente **après coup**, et c'est vrai de tout ce qui est
+« /24 h » : diurèse, drains, pertes insensibles se relèvent sur une journée
+révolue. L'écran s'ouvre donc sur la **dernière journée close** — le 8 quand
+on est le 9 au matin, puisque la journée du 8 s'est terminée à 8 h. Sur une
+journée en cours, le bilan ne s'affiche pas et dit pourquoi, en distinguant
+deux situations qui n'ont rien à voir : « journée en cours, le bilan se
+calcule dans 17 h » n'est pas « il manque la diurèse ».
+
+Trois fonctions du domaine portent la notion : `jour_de_service`,
+`dernier_jour_clos`, `journee_close`.
+
+*Un protocole signé a le droit de porter une posologie* (décision du service).
+Le §3.1 ne bouge pas — *le logiciel* ne calcule ni ne propose de dose — mais
+ce qui arrive dans la ligne n'est pas un calcul : c'est le texte qu'un senior
+a écrit et signé. Un protocole de correction de kaliémie sans dose ne sert à
+rien : la dose *est* le protocole. L'éditeur gagne donc les colonnes dose,
+unité et vitesse ; un champ laissé vide reste vide, et une dose illisible
+(« selon kaliémie ») devient absente plutôt que zéro — un zéro dans une
+prescription se lit comme une décision.
+
+*Apyrétique, subfébrile, fébrile.* « Fébrile » n'est pas « a de la
+température » : en réanimation on distingue trois états, et la différence
+décide d'une conduite. Les seuils sont dans `referentiels/temperature.json`
+(37,5 et 38,3 °C, à confirmer par un senior), le domaine dans
+`domaine/temperature.py`, et la catégorie s'affiche à côté de la température
+dans l'écran Visite — « 38,4 °C » demande un instant de conversion, « fébrile »
+se lit d'un coup d'œil.
+
+*Le délai d'apyrexie.* « À partir de combien de jours un patient décroche sous
+telle molécule ? » — décrocher, c'est ne plus être fébrile. Pour chaque
+traitement commencé **chez un patient fébrile**, le nombre de jours jusqu'au
+premier jour apyrétique, le jour de début comptant pour J1.
+
+Trois refus, un test chacun, parce que chacun ferait paraître une molécule
+plus efficace qu'elle n'est :
+
+* un patient **subfébrile** n'a pas décroché ;
+* une température **non mesurée** n'est jamais lue comme une apyrexie — sinon
+  tout patient qu'on cesse de mesurer décroche ;
+* ceux qui **ne décrochent jamais** sont comptés et affichés à côté de la
+  médiane. Ne rapporter que ceux qui ont décroché est le piège classique de ce
+  calcul, et il fait paraître efficace une molécule sous laquelle personne ne
+  décroche.
+
 **v3.17 — 9 septembre 2026 — les entrées comptées pour de vrai, l'administration lisible, les protocoles déclenchés, les croisements**
 
 *Le bilan hydrique comptait les seringues à leur vitesse de départ.* Une
