@@ -1,8 +1,10 @@
-"""Onglet Évolution — check-list quotidienne, rappels, scores, quatre plans.
+"""Onglet Évolution — check-list quotidienne, rappels, scores, quatre plans,
+avis spécialisés.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import streamlit as st
@@ -346,28 +348,36 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
 
 
 def _bloc_avis(sejour: dict, date_jour_str: str) -> None:
-    """Les avis demandés aux autres spécialités.
+    """Les avis demandés aux autres spécialités — un bloc à part.
 
-    Ils vivent avec le plan infectieux parce que c'est là qu'on décide de
-    rappeler un chirurgien — mais ce sont des consignes datées et signées, pas
-    du commentaire. Écrits dans le texte libre du plan, ils disparaissaient à
-    sa première réécriture, et personne ne savait plus qui avait dit quoi ni
-    quand (demande du service, 8 septembre).
+    Ce sont des consignes datées et signées, pas du commentaire : écrits dans
+    le texte libre d'un plan, ils disparaissaient à sa première réécriture et
+    personne ne savait plus qui avait dit quoi ni quand (demande du service,
+    8 septembre).
+
+    Ils ont d'abord été rangés sous le plan infectieux, parce que c'est là
+    qu'on décide de rappeler un chirurgien. À l'usage c'était faux : on demande
+    un avis de cardiologie sur un trouble du rythme, de néphrologie sur une
+    épuration — la moitié des avis n'a rien d'infectieux. Ils sortent donc des
+    quatre plans et forment leur propre section (demande du service,
+    9 septembre).
     """
-    st.caption("Avis spécialisés")
-    for a in avis_service.du_sejour(contexte.base(), sejour["id"]):
-        col1, col2 = st.columns([6, 1])
-        col1.markdown(
-            f"<div style='font-size:.82rem'>{dom_avis.ligne_avis(a)}</div>",
-            unsafe_allow_html=True,
-        )
-        if col2.button("X", key=f"avis_suppr_{a['id']}",
-                       help="Retirer cet avis (saisi par erreur)"):
-            avis_service.supprimer(contexte.base(), a["id"],
-                                   utilisateur_id=contexte.utilisateur_id())
-            st.rerun()
+    liste, ajout = st.columns([3, 2])
 
-    with st.form(f"ajout_avis_{date_jour_str}"):
+    with liste:
+        for a in avis_service.du_sejour(contexte.base(), sejour["id"]):
+            col1, col2 = st.columns([8, 1])
+            col1.markdown(
+                f"<div style='font-size:.82rem'>{dom_avis.ligne_avis(a)}</div>",
+                unsafe_allow_html=True,
+            )
+            if col2.button("X", key=f"avis_suppr_{a['id']}",
+                           help="Retirer cet avis (saisi par erreur)"):
+                avis_service.supprimer(contexte.base(), a["id"],
+                                       utilisateur_id=contexte.utilisateur_id())
+                st.rerun()
+
+    with ajout, st.form(f"ajout_avis_{date_jour_str}"):
         c1, c2, c3 = st.columns([2, 2, 1])
         specialite = c1.selectbox(
             "Spécialité", listes.codes(listes.SPECIALITES_AVIS),
@@ -438,6 +448,71 @@ def _bloc_escarres(sejour: dict, date_jour_str: str) -> None:
             st.rerun()
 
 
+def _bouton_copier(texte: str) -> None:
+    """Le compte rendu part au presse-papiers sans s'afficher.
+
+    Il occupait la moitié droite de l'écran — 640 pixels de haut — pour n'être
+    lu par personne : on le relit dans le DMI après l'avoir collé, pas ici. Les
+    quatre plans, eux, se saisissaient dans ce qu'il restait. Le texte s'en va,
+    la page entière revient à la saisie, et il ne reste qu'un bouton, en bas.
+
+    Deux chemins vers le presse-papiers, parce qu'un seul ne suffit pas :
+    `navigator.clipboard` quand le navigateur l'accorde, `execCommand('copy')`
+    sinon — l'iframe d'un composant Streamlit n'a pas toujours la permission
+    `clipboard-write`. Et si les deux échouent, le bouton le dit : un bouton
+    qui ne copie rien en silence est pire que pas de bouton, puisqu'on colle
+    dans le DMI sans regarder.
+    """
+    if not texte.strip():
+        # Un bouton qui copie le vide se remarque au moment où on colle, dans
+        # le DMI, c'est-à-dire trop tard.
+        st.caption("Rien à copier : la journée n'est pas encore renseignée.")
+        return
+
+    # `json.dumps` échappe les guillemets, pas `</script>` : un commentaire qui
+    # contiendrait cette suite fermerait la balise et casserait le bouton.
+    charge = json.dumps(texte).replace("</", "<\\/")
+    st.iframe(
+        f"""
+        <style>
+          body {{ margin: 0; }}
+          button {{
+            width: 100%; padding: .55rem; cursor: pointer;
+            font: 600 .95rem/1.2 "Source Sans Pro", system-ui, sans-serif;
+            color: {theme.BLEU}; background: #fff;
+            border: 1px solid {theme.BORDURE}; border-radius: .5rem;
+          }}
+          button:hover {{ border-color: {theme.BLEU}; }}
+        </style>
+        <button id="copier">Copier le compte rendu du jour</button>
+        <script>
+          const texte = {charge};
+          const bouton = document.getElementById("copier");
+          const dire = (m) => {{
+            bouton.textContent = m;
+            setTimeout(() => bouton.textContent =
+              "Copier le compte rendu du jour", 2000);
+          }};
+          bouton.onclick = async () => {{
+            try {{
+              await navigator.clipboard.writeText(texte);
+              dire("Copié");
+            }} catch (e) {{
+              const zone = document.createElement("textarea");
+              zone.value = texte;
+              document.body.appendChild(zone);
+              zone.select();
+              const ok = document.execCommand("copy");
+              zone.remove();
+              dire(ok ? "Copié" : "Copie impossible — voir la feuille imprimée");
+            }}
+          }};
+        </script>
+        """,
+        height=46,
+    )
+
+
 def onglet_evolution(sejour: dict) -> None:
     date_jour = st.date_input("Jour", value=date.today(), key="date_evolution")
     date_jour_str = str(date_jour)
@@ -449,87 +524,91 @@ def onglet_evolution(sejour: dict) -> None:
         contexte.base(), sejour["id"], date_jour_str
     )
 
-    saisie, rendu = st.columns([1.25, 1])
+    elements: dict = {}
+    plans = list(evolution_service.PLANS)
+    for rangee in (plans[:2], plans[2:]):
+        colonnes = st.columns(2)
+        for colonne, cle_plan in zip(colonnes, rangee):
+            plan = cle_plan.replace("plan_", "")
+            with colonne:
+                with st.container(border=True):
+                    st.markdown(
+                        f'<div class="rea-bloc-titre" style="color:{theme.BLEU}">'
+                        f"{evolution_service.LIBELLES_PLANS[cle_plan]}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    # Ce que le logiciel sait déjà : affiché, jamais retapé.
+                    auto = evolution_service._elements_automatiques(
+                        contexte.base(), sejour["id"], plan, date_jour_str
+                    )
+                    if auto:
+                        st.caption(auto)
+                    for champ in listes.ELEMENTS_PLAN.get(plan, ()):
+                        cle, libelle, unite, type_, plage = champ
+                        elements[cle] = _champ_element(
+                            cle, libelle, unite, type_, plage,
+                            elements_existants.get(cle), f"evo_{date_jour_str}",
+                        )
+                    if cle_plan == "plan_hemodynamique":
+                        _champs_drains(
+                            sejour, date_jour_str, elements, f"evo_{date_jour_str}"
+                        )
+                    if cle_plan == "plan_infectieux":
+                        _bloc_escarres(sejour, date_jour_str)
+                    texte_libre = st.text_area(
+                        "Commentaire", value=entree.get(cle_plan) or "", height=80,
+                        key=f"evo_libre_{date_jour_str}_{cle_plan}",
+                        label_visibility="collapsed", placeholder="Commentaire libre…",
+                    )
+                    elements[f"__libre__{cle_plan}"] = texte_libre
+                    if cle_plan == "plan_hemodynamique":
+                        # Sous la carte, pas dedans : le bilan est une
+                        # synthèse, il se lit après ce qui le compose.
+                        _bloc_bilan_hydrique(
+                            sejour, date_jour_str, elements,
+                            f"evo_{date_jour_str}", elements_existants,
+                        )
 
-    with saisie:
-        elements: dict = {}
-        plans = list(evolution_service.PLANS)
-        for rangee in (plans[:2], plans[2:]):
-            colonnes = st.columns(2)
-            for colonne, cle_plan in zip(colonnes, rangee):
-                plan = cle_plan.replace("plan_", "")
-                with colonne:
-                    with st.container(border=True):
-                        st.markdown(
-                            f'<div class="rea-bloc-titre" style="color:{theme.BLEU}">'
-                            f"{evolution_service.LIBELLES_PLANS[cle_plan]}</div>",
-                            unsafe_allow_html=True,
-                        )
-                        # Ce que le logiciel sait déjà : affiché, jamais retapé.
-                        auto = evolution_service._elements_automatiques(
-                            contexte.base(), sejour["id"], plan, date_jour_str
-                        )
-                        if auto:
-                            st.caption(auto)
-                        for champ in listes.ELEMENTS_PLAN.get(plan, ()):
-                            cle, libelle, unite, type_, plage = champ
-                            elements[cle] = _champ_element(
-                                cle, libelle, unite, type_, plage,
-                                elements_existants.get(cle), f"evo_{date_jour_str}",
-                            )
-                        if cle_plan == "plan_hemodynamique":
-                            _champs_drains(
-                                sejour, date_jour_str, elements, f"evo_{date_jour_str}"
-                            )
-                        if cle_plan == "plan_infectieux":
-                            _bloc_escarres(sejour, date_jour_str)
-                            _bloc_avis(sejour, date_jour_str)
-                        texte_libre = st.text_area(
-                            "Commentaire", value=entree.get(cle_plan) or "", height=80,
-                            key=f"evo_libre_{date_jour_str}_{cle_plan}",
-                            label_visibility="collapsed", placeholder="Commentaire libre…",
-                        )
-                        elements[f"__libre__{cle_plan}"] = texte_libre
-                        if cle_plan == "plan_hemodynamique":
-                            # Sous la carte, pas dedans : le bilan est une
-                            # synthèse, il se lit après ce qui le compose.
-                            _bloc_bilan_hydrique(
-                                sejour, date_jour_str, elements,
-                                f"evo_{date_jour_str}", elements_existants,
-                            )
-
-        conduite = st.text_area(
-            "Conduite", value=entree.get("conduite") or "", height=90,
-            key=f"evo_conduite_{date_jour_str}",
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="rea-bloc-titre" style="color:{theme.BLEU}">'
+            "Avis spécialisés</div>",
+            unsafe_allow_html=True,
         )
+        _bloc_avis(sejour, date_jour_str)
 
-        if st.button("Enregistrer l'évolution", type="primary", use_container_width=True):
-            mesures = {k: v for k, v in elements.items() if not k.startswith("__libre__")}
-            try:
-                evolution_service.enregistrer_journee(
-                    contexte.base(), sejour["id"], date_jour_str,
-                    elements=mesures,
-                    textes={
-                        **{p: elements.get(f"__libre__{p}", "") for p in plans},
-                        "conduite": conduite,
-                    },
-                    # La version lue à l'ouverture de l'écran : si elle a bougé,
-                    # quelqu'un d'autre a enregistré entre-temps.
-                    version_attendue=entree["version"],
-                    utilisateur_id=contexte.utilisateur_id(),
-                )
-            except ConflitDeVersion:
-                # Refuser, dire pourquoi, ne rien écraser. Pas de fusion : ce
-                # qui est à l'écran reste à l'écran, le temps de relire.
-                st.error(
-                    "Quelqu'un d'autre a enregistré cette évolution pendant que "
-                    "vous la remplissiez. Rien n'a été écrasé. Rouvrez le jour "
-                    "pour lire ce qui est enregistré, puis reportez vos ajouts."
-                )
-            else:
-                st.success("Évolution enregistrée.")
-                st.rerun()
+    conduite = st.text_area(
+        "Conduite", value=entree.get("conduite") or "", height=90,
+        key=f"evo_conduite_{date_jour_str}",
+    )
 
-    with rendu:
-        texte = evolution_service.texte_genere(contexte.base(), sejour["id"], date_jour_str)
-        st.text_area("Prêt à copier dans le DMI", value=texte, height=640)
+    if st.button("Enregistrer l'évolution", type="primary", use_container_width=True):
+        mesures = {k: v for k, v in elements.items() if not k.startswith("__libre__")}
+        try:
+            evolution_service.enregistrer_journee(
+                contexte.base(), sejour["id"], date_jour_str,
+                elements=mesures,
+                textes={
+                    **{p: elements.get(f"__libre__{p}", "") for p in plans},
+                    "conduite": conduite,
+                },
+                # La version lue à l'ouverture de l'écran : si elle a bougé,
+                # quelqu'un d'autre a enregistré entre-temps.
+                version_attendue=entree["version"],
+                utilisateur_id=contexte.utilisateur_id(),
+            )
+        except ConflitDeVersion:
+            # Refuser, dire pourquoi, ne rien écraser. Pas de fusion : ce
+            # qui est à l'écran reste à l'écran, le temps de relire.
+            st.error(
+                "Quelqu'un d'autre a enregistré cette évolution pendant que "
+                "vous la remplissiez. Rien n'a été écrasé. Rouvrez le jour "
+                "pour lire ce qui est enregistré, puis reportez vos ajouts."
+            )
+        else:
+            st.success("Évolution enregistrée.")
+            st.rerun()
+
+    _bouton_copier(
+        evolution_service.texte_genere(contexte.base(), sejour["id"], date_jour_str)
+    )
