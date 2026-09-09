@@ -15,6 +15,7 @@ from .evolution import onglet_evolution
 from .identite import onglet_identite
 from .prescrit import onglet_prescrit
 from .sortie import onglet_sortie
+from .visite import onglet_visite
 
 
 def bandeau_etat(sejour: dict) -> None:
@@ -45,18 +46,24 @@ def ecran_fiche(sejour_id: str) -> None:
 
     st.title(f"Lit {sejour['lit_admission']} — {sejour['nom_affichage']}")
     bandeau_etat(sejour)
+    # « Visite » en tête : c'est l'onglet qu'on ouvre au pied du lit, et le
+    # seul qui n'écrit rien. Les autres suivent l'ordre du travail de la
+    # journée (demande du service, 9 septembre).
     onglets = st.tabs(
-        ["Identité", "Prescrit", "Explorations et actes", "Bilans", "Évolution", "Sortie"]
+        ["Visite", "Identité", "Prescrit", "Explorations et actes", "Bilans",
+         "Évolution", "Sortie"]
     )
     with onglets[0]:
-        onglet_identite(sejour)
+        onglet_visite(sejour)
     with onglets[1]:
-        onglet_prescrit(sejour)
+        onglet_identite(sejour)
     with onglets[2]:
-        onglet_actes(sejour)
+        onglet_prescrit(sejour)
     with onglets[3]:
-        onglet_bilans(sejour)
+        onglet_actes(sejour)
     with onglets[4]:
-        onglet_evolution(sejour)
+        onglet_bilans(sejour)
     with onglets[5]:
+        onglet_evolution(sejour)
+    with onglets[6]:
         onglet_sortie(sejour)

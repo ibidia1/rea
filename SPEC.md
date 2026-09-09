@@ -926,6 +926,45 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.13 — 9 septembre 2026 — un mode Visite, et la pancarte enfin lisible**
+
+Le reste de l'application est fait pour être lu assis, à cinquante centimètres,
+en train de saisir. La visite, c'est l'inverse : on ne tape rien, on lit un
+portable posé sur le chariot, debout, et ce qu'on cherche est toujours la même
+chose — quel traitement, à quel jour, à quelle dose, et comment la biologie a
+bougé depuis hier. D'où un onglet **Visite**, en tête parce que c'est celui
+qu'on ouvre au pied du lit.
+
+À gauche, les traitements par voie. À droite, l'état du jour (constantes, bilan
+hydrique, dernier gaz du sang — celui d'hier s'il n'y en a pas eu aujourd'hui,
+et daté pour qu'on le sache), les abords, la biologie avec sa valeur
+précédente, le bilan infectieux avec les avis, et les plans de la journée.
+
+**Cet écran n'écrit rien**, et c'est vérifié par un test qui lit son code :
+aucun appel de service dont le nom dit qu'il écrit. À la visite on lit et on
+discute, on ne prescrit pas d'une main en tenant un chariot de l'autre — un
+bouton d'arrêt de traitement à portée de manche est un traitement arrêté par
+erreur. Corollaire : `services.evolution.journee()` lit une journée sans la
+créer. `obtenir_ou_creer` semait une ligne vide pour chaque jour que quelqu'un
+avait seulement regardé, et « cette journée existe » cessait de vouloir dire
+« quelqu'un l'a remplie ».
+
+*La ligne de pancarte.* Elle était en 0,82 rem — la taille d'une légende — pour
+la ligne la plus lue du logiciel. Elle passe à 0,95 rem, et surtout se range en
+trois colonnes : le compteur J, le produit, la dose. L'œil descend la colonne
+des compteurs pour trouver un dernier jour d'antibiotique, celle des doses pour
+vérifier une posologie ; une phrase d'un seul tenant l'oblige à relire chaque
+ligne en entier.
+
+Le découpage est fait par le domaine (`prescription.parties_ligne`) et non à
+l'écran. La première version retranchait la dose de la phrase déjà composée :
+ça marche jusqu'au jour où un horaire se glisse derrière elle — et alors la
+dose s'affiche deux fois, ce qui est exactement ce qui s'est produit.
+
+Les vitesses horaires d'une seringue passent sous la ligne, en petit : en
+ligne, elles repoussaient la dose et cassaient l'alignement de la colonne qu'on
+descend pour la vérifier.
+
 **v3.12 — 9 septembre 2026 — les bilans : modes ventilatoires, ordre, catalogue ouvert**
 
 *Chaque mode ventilatoire a ses paramètres.* Tous les champs étaient proposés

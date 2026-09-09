@@ -393,6 +393,37 @@ def dose_affichee(posologie: dict) -> str:
     return " ".join(morceaux)
 
 
+def parties_ligne(ligne: dict, a_la_date: str | date) -> tuple[EtiquetteJour, str, str]:
+    """Les trois colonnes d'une ligne de pancarte : le compteur, ce qu'on
+    donne, et combien.
+
+    `libelle_ligne` en donne la version en une phrase, pour les endroits qui
+    n'ont qu'une colonne — l'observation générée, l'export. Les écrans, eux,
+    alignent : l'œil descend la colonne des doses pour vérifier une posologie,
+    et une phrase d'un seul tenant l'oblige à relire chaque ligne en entier.
+
+    Découpé ici et non à l'écran : reconstituer les colonnes en retranchant la
+    dose de la phrase déjà composée marche jusqu'au jour où un horaire se
+    glisse derrière elle — et alors la dose s'affiche deux fois.
+    """
+    etiquette = etiquette_jour(ligne, a_la_date)
+    morceaux = [str(ligne.get("produit") or "")]
+    voie = ligne.get("voie")
+    if ligne.get("additifs"):
+        morceaux.append(str(ligne["additifs"]))
+    if ligne.get("nb_ampoules"):
+        mot = "cp" if voie == "PO" else "amp"
+        morceaux.append(f"({_nombre(ligne['nb_ampoules'])} {mot})")
+    rythme = ligne.get("rythme")
+    if rythme == "conditionnel" and ligne.get("condition_texte"):
+        morceaux.append(f"si {ligne['condition_texte']}")
+    elif rythme and rythme != "continu":
+        horaires = horaires_affiches(rythme, ligne.get("horaires_override"))
+        if horaires:
+            morceaux.append(f"({horaires})")
+    return etiquette, " ".join(m for m in morceaux if m), dose_affichee(ligne)
+
+
 def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
     """Texte complet d'une ligne tel qu'affiché sur la pancarte, ex.
     « J2 Targocid 400mg x2/j » ou « Introduction de Targocid 400mg x2/j ».

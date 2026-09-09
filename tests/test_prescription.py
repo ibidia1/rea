@@ -206,3 +206,44 @@ def test_analyser_horaires_ignore_une_saisie_illisible():
 
 def test_un_horaire_choisi_prime_sur_le_rythme():
     assert p.horaires_pour_rythme("x1/j", "20") == (20,)
+
+
+# -- les trois colonnes d'une ligne de pancarte ------------------------------
+
+def test_les_parties_dune_ligne_separent_le_produit_de_la_dose():
+    """Reconstituer les colonnes en retranchant la dose d'une phrase déjà
+    composée marche jusqu'au jour où un horaire se glisse derrière elle — et
+    alors la dose s'affiche deux fois."""
+    ligne = {"produit": "Kardégic", "voie": "PO", "dose": 75, "unite": "mg",
+             "rythme": "x1/j", "horaires_override": "8", "date_debut": "2026-09-08"}
+    etiquette, produit, dose = p.parties_ligne(ligne, "2026-09-09")
+    assert etiquette.texte == "J2"
+    assert produit == "Kardégic (8h)"
+    assert dose == "75mg x1/j"
+    assert dose not in produit
+
+
+def test_les_additifs_restent_du_cote_du_produit():
+    """C'est ce qu'il y a dans le flacon, pas la posologie."""
+    ligne = {"produit": "Ringer Lactate", "voie": "ENTREES", "vitesse": 60,
+             "additifs": "+ (3 KCl)", "rythme": "continu", "date_debut": "2026-09-08"}
+    _e, produit, dose = p.parties_ligne(ligne, "2026-09-09")
+    assert produit == "Ringer Lactate + (3 KCl)"
+    assert dose == "60 cc/h"
+
+
+def test_une_seringue_porte_sa_dilution_du_cote_de_la_dose():
+    """C'est le nombre que l'infirmier règle sur la pompe."""
+    ligne = {"produit": "Noradrénaline", "voie": "PSE", "dilution": "0,5 mg/cc",
+             "vitesse": 25, "rythme": "continu", "date_debut": "2026-09-08"}
+    _e, produit, dose = p.parties_ligne(ligne, "2026-09-09")
+    assert produit == "Noradrénaline"
+    assert dose == "0,5 mg/cc 25 cc/h"
+
+
+def test_un_traitement_conditionnel_montre_sa_condition():
+    ligne = {"produit": "Paracétamol", "voie": "IV", "dose": 1, "unite": "g",
+             "rythme": "conditionnel", "condition_texte": "T ≥ 38,5 °C",
+             "date_debut": "2026-09-08"}
+    _e, produit, _dose = p.parties_ligne(ligne, "2026-09-09")
+    assert produit == "Paracétamol si T ≥ 38,5 °C"
