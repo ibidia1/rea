@@ -3,4 +3,5 @@
 #
 #   python -m pip install -r requirements.txt
 #
-streamlit>=1.36
+# st.segmented_control (écrans Prescrit et fiche) est arrivé en 1.40.
+streamlit>=1.40

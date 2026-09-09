@@ -14,6 +14,7 @@ sont dans `test_architecture.py`.
 import ast
 import importlib
 import pathlib
+import re
 
 import pytest
 
@@ -100,4 +101,43 @@ def test_lecran_de_visite_nappelle_aucune_ecriture():
     assert not ecritures, (
         f"L'écran de visite appelle {', '.join(sorted(set(ecritures)))} : "
         "il doit rester en lecture seule."
+    )
+
+
+# -- versions de Streamlit -------------------------------------------------
+
+def test_le_composant_html_marche_sans_st_iframe(monkeypatch):
+    """`st.components.v1.html` est déprécié depuis la 1.63 au profit de
+    `st.iframe`. Avoir suivi l'avertissement a cassé l'écran Évolution sur le
+    poste du service, qui tourne une version antérieure : `AttributeError`, et
+    l'écran ne s'affichait plus du tout.
+
+    Le poste n'est pas mis à jour d'un clic — il est hors ligne, et on ne
+    touche pas à son environnement pendant qu'il porte les patients. Les deux
+    noms doivent donc marcher.
+    """
+    import streamlit as st
+
+    evolution = importlib.import_module("rea.ui.evolution")
+
+    monkeypatch.delattr(st, "iframe", raising=False)
+    assert evolution._composant_html() is st.components.v1.html
+
+    sentinelle = object()
+    monkeypatch.setattr(st, "iframe", sentinelle, raising=False)
+    assert evolution._composant_html() is sentinelle
+
+
+def test_le_socle_streamlit_couvre_les_appels_utilises():
+    """`requirements.txt` annonçait 1.36 alors que les écrans appellent
+    `st.segmented_control`, arrivé en 1.40. Un plancher faux ne se voit qu'à
+    l'installation sur un poste neuf, écran blanc à l'appui."""
+    racine = pathlib.Path(__file__).resolve().parent.parent
+    exigences = (racine / "requirements.txt").read_text(encoding="utf-8")
+    plancher = re.search(r"streamlit\s*>=\s*(\d+)\.(\d+)", exigences)
+    assert plancher, "requirements.txt doit fixer une version minimale de Streamlit"
+    majeure, mineure = int(plancher[1]), int(plancher[2])
+    assert (majeure, mineure) >= (1, 40), (
+        "st.segmented_control (rea/ui/fiche.py, rea/ui/prescrit.py) demande "
+        "Streamlit 1.40 au minimum"
     )

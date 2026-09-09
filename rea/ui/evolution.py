@@ -448,6 +448,22 @@ def _bloc_escarres(sejour: dict, date_jour_str: str) -> None:
             st.rerun()
 
 
+def _composant_html():
+    """Le composant HTML de Streamlit, quel que soit son nom dans la version
+    installée.
+
+    `st.components.v1.html` est déprécié depuis la 1.63 au profit de
+    `st.iframe`. Avoir suivi l'avertissement a cassé l'écran sur le poste du
+    service, qui tourne une version antérieure où `st.iframe` n'existe pas
+    encore : `AttributeError`, et l'Évolution ne s'affichait plus du tout.
+
+    Le poste du service n'est pas mis à jour d'un clic — il est hors ligne, et
+    on ne touche pas à son environnement pendant qu'il porte les patients. Le
+    logiciel prend donc ce qui est là : le nom récent d'abord, l'ancien sinon.
+    """
+    return getattr(st, "iframe", None) or st.components.v1.html
+
+
 def _bouton_copier(texte: str) -> None:
     """Le compte rendu part au presse-papiers sans s'afficher.
 
@@ -472,7 +488,7 @@ def _bouton_copier(texte: str) -> None:
     # `json.dumps` échappe les guillemets, pas `</script>` : un commentaire qui
     # contiendrait cette suite fermerait la balise et casserait le bouton.
     charge = json.dumps(texte).replace("</", "<\\/")
-    st.iframe(
+    _composant_html()(
         f"""
         <style>
           body {{ margin: 0; }}
