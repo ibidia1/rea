@@ -46,24 +46,42 @@ def ecran_fiche(sejour_id: str) -> None:
 
     st.title(f"Lit {sejour['lit_admission']} — {sejour['nom_affichage']}")
     bandeau_etat(sejour)
-    # « Visite » en tête : c'est l'onglet qu'on ouvre au pied du lit, et le
-    # seul qui n'écrit rien. Les autres suivent l'ordre du travail de la
-    # journée (demande du service, 9 septembre).
-    onglets = st.tabs(
-        ["Visite", "Identité", "Prescrit", "Explorations et actes", "Bilans",
-         "Évolution", "Sortie"]
-    )
-    with onglets[0]:
-        onglet_visite(sejour)
-    with onglets[1]:
-        onglet_identite(sejour)
-    with onglets[2]:
-        onglet_prescrit(sejour)
-    with onglets[3]:
-        onglet_actes(sejour)
-    with onglets[4]:
-        onglet_bilans(sejour)
-    with onglets[5]:
-        onglet_evolution(sejour)
-    with onglets[6]:
-        onglet_sortie(sejour)
+    _ecran_choisi(sejour)
+
+
+#: Les écrans de la fiche, dans l'ordre du travail de la journée. « Visite » en
+#: tête : c'est celui qu'on ouvre au pied du lit, et le seul qui n'écrit rien.
+ECRANS = (
+    ("Visite", onglet_visite),
+    ("Identité", onglet_identite),
+    ("Prescrit", onglet_prescrit),
+    ("Explorations et actes", onglet_actes),
+    ("Bilans", onglet_bilans),
+    ("Évolution", onglet_evolution),
+    ("Sortie", onglet_sortie),
+)
+
+
+def _ecran_choisi(sejour: dict) -> None:
+    """N'affiche que l'écran regardé — et c'est une question de vitesse.
+
+    Avec `st.tabs`, Streamlit construit le contenu des sept onglets à chaque
+    exécution, qu'on les regarde ou non : 2 785 widgets et 5 400 éléments de
+    page pour un patient chargé. Le moindre clic dans le prescrit — changer de
+    voie, choisir une date — refaisait tout, et coûtait de 0,7 à 1,1 seconde ;
+    ouvrir un patient en demandait neuf. Ce n'est pas la base de données : les
+    110 requêtes d'une exécution complète prennent 20 ms.
+
+    Avec un sélecteur, un seul écran est construit. Changer d'écran coûte
+    désormais un aller-retour au serveur au lieu d'être instantané — c'est
+    l'échange, et il est largement favorable : on change d'écran quelques fois
+    par patient, on clique dedans des dizaines de fois.
+    """
+    cle = f"ecran_{sejour['id']}"
+    noms = [nom for nom, _ in ECRANS]
+    choix = st.segmented_control(
+        "Écran", noms, default=st.session_state.get(cle, noms[0]),
+        key=f"segments_{cle}", label_visibility="collapsed",
+    ) or st.session_state.get(cle, noms[0])
+    st.session_state[cle] = choix
+    dict(ECRANS)[choix](sejour)
