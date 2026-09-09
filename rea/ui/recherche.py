@@ -14,6 +14,7 @@ import streamlit as st
 from .. import listes
 from ..db import Base
 from ..services import export as export_service
+from ..services import croisements as croisements_service
 from ..services import statistiques as stats
 from . import theme
 
@@ -28,17 +29,22 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
         st.info("Aucun séjour ne correspond à ces filtres.")
         return
 
-    onglets = st.tabs(
-        ["Tableau descriptif", "Indicateurs de service", "Antibiotiques", "Export"]
-    )
-    with onglets[0]:
-        _table_1(base, selection)
-    with onglets[1]:
-        _indicateurs(base, selection)
-    with onglets[2]:
-        _antibiotiques(base, selection)
-    with onglets[3]:
-        _export(base, selection, filtres, utilisateur_id)
+    # Un sélecteur, pas des onglets : chaque vue interroge la cohorte entière,
+    # et `st.tabs` les calculerait toutes à chaque clic (voir `ui/fiche.py`).
+    vues = {
+        "Tableau descriptif": lambda: _table_1(base, selection),
+        "Indicateurs de service": lambda: _indicateurs(base, selection),
+        "Croisements": lambda: _croisements(base, selection),
+        "Antibiotiques": lambda: _antibiotiques(base, selection),
+        "Export": lambda: _export(base, selection, filtres, utilisateur_id),
+    }
+    noms = list(vues)
+    choix = st.segmented_control(
+        "Vue", noms, default=st.session_state.get("vue_recherche", noms[0]),
+        key="segments_recherche", label_visibility="collapsed",
+    ) or st.session_state.get("vue_recherche", noms[0])
+    st.session_state["vue_recherche"] = choix
+    vues[choix]()
 
 
 def _filtres() -> stats.Filtres:
@@ -75,6 +81,110 @@ def _filtres() -> stats.Filtres:
         decedes={"Tous": None, "Clos seulement": None, "Décédés": True, "Survivants": False}[statut],
         sejours_clos_seulement=statut != "Tous",
     )
+
+
+def _croisements(base: Base, selection: list[dict]) -> None:
+    """Deux listes déroulantes, un tableau : « ce résultat, selon ce facteur ».
+
+    C'est la forme des questions qu'on se pose en staff — la mortalité
+    change-t-elle avec le PaO₂/FiO₂, avec le E/e', sous telle molécule — et
+    elle se pose en deux choix parce qu'elle n'a pas besoin de plus. Le reste
+    de l'écran sert à dire ce que le tableau ne prouve pas.
+    """
+    st.caption(
+        "Choisir un **résultat** et un **facteur** : la cohorte est découpée "
+        "en tranches selon le facteur, et le résultat est affiché tranche par "
+        "tranche, avec son effectif."
+    )
+
+    facteurs = croisements_service.facteurs_disponibles(base)
+    resultats = list(croisements_service.RESULTATS)
+
+    c1, c2 = st.columns(2)
+    resultat = c1.selectbox(
+        "Résultat à expliquer", resultats, format_func=lambda v: v.libelle,
+    )
+    facteur = c2.selectbox(
+        "Croisé avec", facteurs, format_func=lambda v: v.libelle,
+        index=None, placeholder="Choisir un facteur",
+    )
+    if facteur is None:
+        st.info(
+            "Exemples : mortalité selon le PaO₂/FiO₂ le plus bas · durée de "
+            "ventilation selon le SOFA maximal · mortalité selon la dernière "
+            "valeur d'un analyte que le service a ajouté lui-même (E/e', par "
+            "exemple, saisi dans l'écran Bilans)."
+        )
+        return
+
+    seuils = None
+    if facteur.genre == "continu":
+        defaut = croisements_service.SEUILS_CLINIQUES.get(facteur.code)
+        saisie = st.text_input(
+            "Seuils des tranches (séparés par des virgules)",
+            value=", ".join(str(s) for s in defaut) if defaut else "",
+            placeholder="laisser vide pour découper en quartiles de la cohorte",
+            help="Des seuils cliniques valent mieux que des quartiles quand ils "
+                 "existent : 100, 200, 300 pour le PaO₂/FiO₂ sont ceux de "
+                 "Berlin. Décimales avec un point (1.5), la virgule sépare "
+                 "les seuils.",
+        )
+        seuils = _lire_seuils(saisie)
+        if saisie.strip() and seuils is None:
+            st.error("Seuils illisibles — des nombres séparés par des virgules.")
+            return
+
+    croisement = croisements_service.croiser(
+        base, selection, code_facteur=facteur.code,
+        code_resultat=resultat.code, seuils=seuils,
+    )
+    _afficher_croisement(croisement)
+
+
+def _lire_seuils(saisie: str) -> tuple[float, ...] | None:
+    """« 100, 200, 300 » → (100.0, 200.0, 300.0). None si c'est illisible.
+
+    Séparateurs : virgule, point-virgule ou espace. Le séparateur décimal est
+    le **point** — la virgule sert déjà à séparer les seuils, et accepter les
+    deux rendrait « 1,5 » indécidable entre un seuil et deux.
+    """
+    if not saisie.strip():
+        return None
+    morceaux = saisie.replace(";", " ").replace(",", " ").split()
+    try:
+        valeurs = tuple(float(m) for m in morceaux)
+    except ValueError:
+        return None
+    return tuple(sorted(valeurs)) or None
+
+
+def _afficher_croisement(croisement) -> None:
+    # Pas de `.lower()` sur le libellé du facteur : il mangeait les
+    # abréviations — « selon pao₂/fio₂ le plus bas ».
+    st.markdown(
+        f"#### {croisement.resultat.libelle} selon {croisement.facteur.libelle}"
+    )
+    lignes = "".join(
+        f"<tr>"
+        f"<td style='padding:.35rem .6rem'>{s.libelle}</td>"
+        f"<td style='padding:.35rem .6rem;text-align:right'>{s.effectif}</td>"
+        f"<td style='padding:.35rem .6rem;"
+        f"color:{'#94a3b8' if not s.interpretable else 'inherit'}'>{s.texte}</td>"
+        f"</tr>"
+        for s in croisement.strates
+    )
+    retenus = croisement.total - croisement.non_renseignes
+    theme.bloc_html(
+        f"{retenus} séjour{'s' if retenus > 1 else ''} dans le tableau",
+        "<table style='width:100%;font-size:.9rem'>"
+        "<tr style='color:#64748b;font-size:.78rem'>"
+        "<th style='text-align:left'>Tranche</th><th>n</th>"
+        "<th style='text-align:left'>&nbsp;Résultat</th></tr>"
+        + lignes + "</table>",
+        theme.BLEU,
+    )
+    for note in croisement.avertissements:
+        st.caption(note)
 
 
 def _table_1(base: Base, selection: list[dict]) -> None:

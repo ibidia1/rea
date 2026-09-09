@@ -926,6 +926,71 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.17 — 9 septembre 2026 — les entrées comptées pour de vrai, l'administration lisible, les protocoles déclenchés, les croisements**
+
+*Le bilan hydrique comptait les seringues à leur vitesse de départ.* Une
+noradrénaline montée à 30 cc/h dans la nuit puis redescendue à 8 le matin
+valait sa vitesse d'ouverture pendant 24 h. Le volume est maintenant intégré
+**réglage par réglage**, à la minute, sur la journée de service (8 h → 8 h) :
+25 cc/h passés à 10 à midi valent 300 mL, pas 600. La pancarte imprimée et le
+plan hémodynamique lisent le même calcul — deux chiffres différents pour la
+même journée, et plus personne ne sait lequel croire.
+
+Reste une imprécision, nommée plutôt que masquée : une ligne porte une date de
+début, pas une heure. Le premier jour d'une seringue posée à 14 h est donc
+compté depuis 8 h. Y remédier demande une heure de pose sur la ligne — décision
+du service, pas invention du logiciel.
+
+*L'écran Administration.* Il présentait quinze noms de fichiers horodatés à la
+seconde et une liste déroulante de toutes les sauvegardes. Personne ne choisit
+une base sur un horodatage : ce qu'on veut, c'est emporter le service sur une
+clé, ou remettre celle d'hier soir. Quatre gestes nommés par ce qu'ils font,
+chacun expliqué sous son bouton : **exporter** (une copie complète à
+télécharger), **importer** (installer une base venue d'ailleurs),
+**sauvegarder**, **revenir à la dernière sauvegarde**. La liste complète
+descend sous un dépliant.
+
+Un fichier importé est **inspecté avant d'être installé** : est-ce du SQLite,
+porte-t-il les tables du logiciel, et combien de patients contient-il. Ce
+dernier chiffre est affiché à côté de celui de la base actuelle — c'est lui qui
+arrête quelqu'un qui s'est trompé de fichier.
+
+*Les protocoles se déclenchent enfin sur autre chose que l'admission.* Motif
+d'entrée et région traumatique décrivent le patient qui arrive ; la plupart des
+protocoles d'un service répondent pourtant à ce qui *survient*. Un troisième
+déclencheur attache un protocole au **code d'une règle d'aide** : quand la
+règle « hypokaliémie » se déclenche, le protocole de correction s'ouvre sous le
+rappel qui vient de le déclencher, dans l'écran Évolution.
+
+Les quatre règles de sécurité du §4.5 ne bougent pas : seul un protocole
+**signé** est proposé, il est proposé et non appliqué, les lignes posées sont
+des lignes ordinaires, et elles partent **sans dose** (§3.1). Le dépôt livre
+`protocoles/correction_hypokaliemie.json` en **brouillon** : il montre le
+mécanisme, il ne prescrit rien tant qu'un senior ne l'a pas relu et signé.
+
+*Croisements (bloc 19).* Les indicateurs répondent à « comment va le
+service ? ». Il manquait la famille de questions qu'on se pose en staff : la
+mortalité change-t-elle avec le PaO₂/FiO₂ ? avec le E/e' ? combien de temps
+reste-t-on ventilé sous telle molécule ? On choisit un résultat et un facteur,
+la cohorte est découpée en tranches, le résultat s'affiche tranche par tranche
+avec son effectif.
+
+Le catalogue de biologie étant ouvert, **un analyte ajouté par le service
+devient un facteur sans reprogrammer** : « mortalité selon le E/e' » ne demande
+que d'avoir saisi des E/e' dans l'écran Bilans.
+
+Trois refus tiennent ce module :
+
+* une tranche de moins de cinq séjours garde son effectif mais n'affiche pas de
+  pourcentage — dans douze lits, « 100 % de mortalité » sur deux patients est
+  le cas le plus fréquent, et ce n'est pas un résultat ;
+* un séjour dont le facteur n'est pas renseigné n'entre dans aucune tranche, et
+  ce nombre est affiché : une donnée manquante ne devient jamais un « non » ;
+* aucun test statistique n'est calculé, délibérément. Un p affiché à côté d'un
+  tableau descriptif univarié, monocentrique et non ajusté serait lu comme une
+  preuve. Chaque tableau porte la phrase : il fabrique une hypothèse, il ne
+  démontre rien.
+
 **v3.16 — 9 septembre 2026 — le bouton Copier ne suppose plus la dernière version de Streamlit**
 
 L'écran Évolution plantait sur le poste du service : `AttributeError: module
