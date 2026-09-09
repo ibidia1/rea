@@ -271,3 +271,61 @@ def test_modifier_admission_ne_touche_pas_au_lit(base):
     sejour = base.une_ligne("SELECT * FROM sejour WHERE id = ?", (sid,))
     assert sejour["lit_admission"] == 5
     assert sejour["date_admission"] == "2026-09-02"
+
+
+# --- inspecter un fichier avant de l'installer -----------------------------
+#
+# Importer une base remplace tout le service. Un fichier qui n'en est pas une
+# laisserait le logiciel sans dossier au moment de le rouvrir : on regarde
+# donc avant d'accepter (écran Administration, 9 septembre).
+
+def test_inspecter_refuse_un_fichier_qui_n_est_pas_une_base(tmp_path):
+    from rea.db import inspecter_fichier_base
+
+    faux = tmp_path / "photo.db"
+    faux.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 500)
+    etat = inspecter_fichier_base(faux)
+    assert not etat["lisible"]
+    assert etat["erreur"]
+
+
+def test_inspecter_refuse_un_fichier_absent(tmp_path):
+    from rea.db import inspecter_fichier_base
+
+    etat = inspecter_fichier_base(tmp_path / "jamais_ecrit.db")
+    assert not etat["lisible"]
+    assert "introuvable" in etat["erreur"].lower()
+
+
+def test_inspecter_refuse_une_base_sqlite_d_un_autre_logiciel(tmp_path):
+    import sqlite3
+
+    from rea.db import inspecter_fichier_base
+
+    autre = tmp_path / "comptabilite.db"
+    connexion = sqlite3.connect(str(autre))
+    connexion.execute("CREATE TABLE facture (id TEXT)")
+    connexion.commit()
+    connexion.close()
+
+    etat = inspecter_fichier_base(autre)
+    assert not etat["lisible"]
+    assert "logiciel" in etat["erreur"]
+
+
+def test_inspecter_compte_les_patients_d_une_vraie_base(base):
+    """C'est ce chiffre que l'écran affiche avant de remplacer : il arrête
+    l'utilisateur quand il s'est trompé de fichier."""
+    from rea.db import inspecter_fichier_base
+    from rea.services import sejours
+
+    sejours.creer_patient(base, matricule="M1", nom_affichage="Un",
+                          date_naissance=None)
+    sejours.creer_patient(base, matricule="M2", nom_affichage="Deux",
+                          date_naissance=None)
+    copie = base.sauvegarder(motif="test-inspection")
+
+    etat = inspecter_fichier_base(copie)
+    assert etat["lisible"] and etat["erreur"] is None
+    assert etat["patients"] == 2
+    assert etat["date"]

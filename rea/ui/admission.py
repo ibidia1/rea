@@ -9,7 +9,7 @@ import streamlit as st
 
 from .. import listes, protocoles, referentiels
 from ..domaine import coherence
-from ..services import prescriptions as prescriptions_service
+from ..services import protocoles as protocoles_service
 from ..services import sejours as sejours_service
 from . import contexte
 
@@ -55,23 +55,12 @@ def choix_protocoles(cle: str, protocoles_proposes: list) -> list:
 
 
 def appliquer_protocoles(base, sejour_id: str, protocoles_choisis: list, *, date_debut: str, utilisateur_id: str | None) -> None:
-    """Pose les lignes de prescription du protocole, tracées comme telles.
-
-    Chaque ligne part sans dose (SPEC §3.1 — le logiciel ne calcule ni ne
-    propose de dose) : le protocole ne porte que voie, produit, rythme —
-    exactement ce qu'un protocole signé a le droit de préremplir.
-    """
-    for p in protocoles_choisis:
-        for ligne in p.lignes_prescription:
-            if not ligne.get("voie") or not ligne.get("produit"):
-                continue
-            prescriptions_service.ajouter_ligne(
-                base, sejour_id=sejour_id, voie=ligne["voie"], produit=ligne["produit"],
-                date_debut=date_debut, rythme=ligne.get("rythme") or None,
-                condition_texte=ligne.get("note") or None,
-                protocole_code=p.code, protocole_version=p.version,
-                utilisateur_id=utilisateur_id,
-            )
+    """Le geste lui-même est dans `services.protocoles` : l'évolution en a
+    besoin aussi, pour les protocoles déclenchés par une règle d'aide."""
+    protocoles_service.appliquer(
+        base, sejour_id, protocoles_choisis,
+        date_debut=date_debut, utilisateur_id=utilisateur_id,
+    )
 
 
 def choix_motif_principal(cle: str, *, defaut: str | None = None) -> str | None:

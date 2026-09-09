@@ -5,7 +5,7 @@ elle ne calcule jamais une dose (SPEC §3.1)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 from .. import config
 from .dates import jour_traitement, parse_date
@@ -124,6 +124,66 @@ def fenetre_journee(date_jour: str | date) -> tuple[str, str]:
 
     return (f"{jour.isoformat()}T{heure:02d}:00",
             f"{lendemain(jour).isoformat()}T{heure:02d}:00")
+
+
+def volume_perfuse(
+    vitesse_initiale: float | None,
+    reglages: list[dict],
+    date_jour: str | date,
+) -> float:
+    """Le volume réellement passé dans la journée de service, en mL.
+
+    L'ancien calcul faisait « vitesse de départ × 24 ». Une noradrénaline
+    montée à 30 cc/h pendant la nuit puis redescendue à 8 le matin comptait
+    donc pour sa valeur d'ouverture toute la journée — et le bilan hydrique,
+    qui décide d'une déplétion ou d'un remplissage, était faux des deux côtés.
+    L'erreur se voit sur une seringue : 25 cc/h passés à 10 à midi, c'est 600
+    mL comptés au lieu de 340.
+
+    On intègre donc réglage par réglage : chaque segment vaut sa vitesse
+    multipliée par sa durée réelle, à la minute. Les réglages antérieurs à la
+    journée ne comptent pas pour eux-mêmes, ils fixent la vitesse d'ouverture
+    — même règle que la grille horaire imprimée, et c'est voulu : le bilan et
+    la feuille doivent raconter la même journée.
+
+    Reste une imprécision, qu'il vaut mieux nommer que masquer : une ligne
+    porte une date de début, pas une heure. Le premier jour d'une seringue
+    posée à 14 h est donc compté depuis 8 h. Y remédier demande une heure de
+    pose sur la ligne — question ouverte, pas une invention à faire ici.
+    """
+    debut, fin = fenetre_journee(date_jour)
+    en_vigueur = vitesse_initiale
+    changements: list[tuple[str, float]] = []
+    for reglage in sorted(reglages, key=lambda r: r.get("date_heure") or ""):
+        horodatage = reglage.get("date_heure") or ""
+        if horodatage < debut:
+            en_vigueur = reglage["vitesse"]
+        elif horodatage < fin:
+            changements.append((horodatage, reglage["vitesse"]))
+
+    volume = 0.0
+    courant, vitesse = debut, en_vigueur
+    for horodatage, suivante in changements + [(fin, None)]:
+        heures = _heures_entre(courant, horodatage)
+        if vitesse and heures > 0:
+            volume += float(vitesse) * heures
+        if horodatage > courant:
+            courant = horodatage
+        vitesse = suivante
+    return volume
+
+
+def _heures_entre(debut: str, fin: str) -> float:
+    """La durée en heures entre deux horodatages « AAAA-MM-JJTHH:MM ».
+
+    Un horodatage illisible rend 0 plutôt que de lever : un réglage mal saisi
+    ne doit pas empêcher le reste du bilan de s'afficher.
+    """
+    try:
+        ecart = datetime.fromisoformat(fin) - datetime.fromisoformat(debut)
+    except ValueError:
+        return 0.0
+    return ecart.total_seconds() / 3600
 
 
 def vitesses_par_heure(
@@ -605,6 +665,8 @@ def bilan_hydrique(
     drains: list[tuple[str, float]] | None = None,
     poids_kg: float | None,
     temperature_c: float | None,
+    reglages_par_ligne: dict[str, list[dict]] | None = None,
+    date_jour: str | date | None = None,
 ) -> BilanHydrique:
     """Le bilan des 24 h, tel que le service l'a défini (8 septembre 2026) :
 
@@ -615,7 +677,9 @@ def bilan_hydrique(
     hémodynamique de l'évolution : elles sont relevées au lit du malade, le
     logiciel n'a aucun moyen de les deviner.
     """
-    entrees = volume_entrees_24h(lignes_actives)
+    entrees = volume_entrees_24h(
+        lignes_actives, reglages_par_ligne=reglages_par_ligne, date_jour=date_jour
+    )
     drains = list(drains or [])
     base, majoration, formule = pertes_insensibles_24h(poids_kg, temperature_c)
     return BilanHydrique(
@@ -632,25 +696,45 @@ def bilan_hydrique(
     )
 
 
-def volume_entrees_24h(lignes_actives: list[dict]) -> BilanEntrees:
+def volume_entrees_24h(
+    lignes_actives: list[dict],
+    *,
+    reglages_par_ligne: dict[str, list[dict]] | None = None,
+    date_jour: str | date | None = None,
+) -> BilanEntrees:
     """SPEC §5.6 :
-        Σ (perfusions : vitesse cc/h × 24)
-      + Σ (PSE : vitesse cc/h × 24)
+        Σ (perfusions : volume réellement passé sur la journée)
+      + Σ (PSE : volume réellement passé sur la journée)
       + Σ (médicaments IV : volume de dilution × nombre de prises)
       + nutrition entérale (volume/j)
       + nutrition parentérale (volume/j)
     Les sorties restent manuscrites — ce bilan ne porte que les entrées.
+
+    Ce qui coule en continu se compte **réglage par réglage** dès qu'on donne
+    `reglages_par_ligne` et `date_jour` : c'est `volume_perfuse` qui intègre,
+    et le résultat colle à ce que la grille horaire imprime. Sans cet
+    historique — un appelant qui ne l'a pas sous la main, un test du domaine —
+    on retombe sur « vitesse de départ × 24 », qui est une estimation et non
+    une mesure. Les deux écrans qui affichent le bilan, eux, le fournissent.
     """
     bilan = BilanEntrees()
+
+    def continu(ligne: dict) -> float:
+        vitesse = ligne.get("vitesse")
+        if reglages_par_ligne is None or date_jour is None:
+            return float(vitesse) * 24 if vitesse else 0.0
+        return volume_perfuse(
+            vitesse, reglages_par_ligne.get(ligne.get("id"), []), date_jour
+        )
+
     for ligne in lignes_actives:
         voie = ligne.get("voie")
-        vitesse = ligne.get("vitesse")
-        if voie == "PSE" and vitesse:
-            bilan.ajouter(f"{ligne['produit']} (PSE)", float(vitesse) * 24)
+        if voie == "PSE":
+            bilan.ajouter(f"{ligne['produit']} (PSE)", continu(ligne))
         elif voie == "ENTREES":
             sous_type = ligne.get("sous_type")
-            if sous_type == "perfusion" and vitesse:
-                bilan.ajouter(ligne["produit"], float(vitesse) * 24)
+            if sous_type == "perfusion":
+                bilan.ajouter(ligne["produit"], continu(ligne))
             elif sous_type in ("nutrition_enterale", "nutrition_parenterale"):
                 volume = ligne.get("volume_24h")
                 if volume:

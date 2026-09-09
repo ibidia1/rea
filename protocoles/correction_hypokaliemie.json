@@ -1,0 +1,38 @@
+{
+  "code": "correction_hypokaliemie",
+  "titre": "Correction d'une hypokaliémie",
+  "version": "2026-09-09-v1",
+  "date_version": "2026-09-09",
+  "signe_par": null,
+  "valide": false,
+  "declencheur": {
+    "type": "regle",
+    "valeur": "hypokaliemie"
+  },
+  "note": "BROUILLON — non signé. Écrit pour montrer le mécanisme : un protocole attaché au code d'une règle d'aide (`regles/rappels_biologie.json`, règle `hypokaliemie`) est proposé sous le rappel qui vient de le déclencher. Le contenu doit être relu, complété et signé par le chef de service avant d'être proposé aux internes (SPEC §4.5, règle de sécurité 1). Les lignes sont posées SANS DOSE : le logiciel ne propose aucune posologie (SPEC §3.1), les doses et vitesses restent à celui qui signe la prescription.",
+  "lignes_prescription": [
+    {
+      "voie": "IV",
+      "produit": "Chlorure de potassium",
+      "rythme": "conditionnel",
+      "note": "sur voie centrale, dose et vitesse à préciser par le prescripteur"
+    },
+    {
+      "voie": "SOINS",
+      "produit": "Scope — surveillance du rythme",
+      "rythme": "continu"
+    }
+  ],
+  "explorations_proposees": [
+    {
+      "type": "ecg",
+      "delai": "immediat",
+      "libelle": "ECG à la découverte"
+    }
+  ],
+  "consignes": [
+    "Contrôler la kaliémie après la correction — délai à fixer par le service",
+    "Vérifier la magnésémie : une hypokaliémie qui ne se corrige pas est souvent une hypomagnésémie",
+    "Chercher la cause : diurétiques, pertes digestives, alcalose"
+  ]
+}

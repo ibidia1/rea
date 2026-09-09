@@ -270,3 +270,76 @@ def test_tous_les_types_de_drains_du_referentiel_sont_proposables(base):
         assert code in listes.ORDRE_DISPOSITIFS      # proposé dans la liste de pose
         dispositifs.poser(base, sejour_id=sid, type_=code, date_pose="2026-09-07")
     assert len(evolution.drains_du_jour(base, sid, "2026-09-08")) == len(draines)
+
+
+# --- les vitesses suivies réglage par réglage ------------------------------
+#
+# Le calcul comptait la vitesse d'ouverture pendant 24 h. Une noradrénaline
+# montée la nuit et redescendue le matin valait donc sa valeur de départ toute
+# la journée, et le bilan — celui qui décide d'une déplétion ou d'un
+# remplissage — était faux des deux côtés (demande du service, 9 septembre).
+
+def test_volume_perfuse_integre_chaque_reglage():
+    """25 cc/h jusqu'à midi puis 10 : 4 h × 25 + 20 h × 10 = 300 mL, pas 600."""
+    reglages = [{"date_heure": "2026-09-09T12:00", "vitesse": 10}]
+    assert dom.volume_perfuse(25, reglages, "2026-09-09") == 300.0
+
+
+def test_volume_perfuse_sans_reglage_vaut_la_vitesse_pendant_24_h():
+    assert dom.volume_perfuse(25, [], "2026-09-09") == 600.0
+
+
+def test_volume_perfuse_compte_la_journee_de_service_pas_le_jour_civil():
+    """La journée court de 8 h à 8 h : un réglage noté à 3 h du matin
+    appartient à la feuille ouverte la veille, comme la grille imprimée."""
+    reglages = [
+        {"date_heure": "2026-09-08T22:00", "vitesse": 12},   # avant : fixe l'ouverture
+        {"date_heure": "2026-09-10T03:00", "vitesse": 4},    # la nuit de cette feuille
+    ]
+    # 8 h → 3 h le lendemain = 19 h à 12, puis 5 h à 4.
+    assert dom.volume_perfuse(25, reglages, "2026-09-09") == 19 * 12 + 5 * 4
+
+
+def test_volume_perfuse_ignore_un_horodatage_illisible():
+    """Un réglage mal saisi ne doit pas empêcher le bilan de s'afficher."""
+    reglages = [{"date_heure": "2026-09-09Tmidi", "vitesse": 10}]
+    assert dom.volume_perfuse(25, reglages, "2026-09-09") >= 0
+
+
+def test_les_entrees_du_dossier_suivent_les_changements_de_vitesse(base):
+    """Bout en bout : le service lit l'historique, le bilan le reflète."""
+    from rea.services import vitesses
+
+    sid = _sejour(base, poids=70)
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="ENTREES", produit="Ringer",
+        sous_type="perfusion", vitesse=60, date_debut="2026-09-07",
+    )
+    vitesses.regler(base, cible=vitesses.LIGNE, cible_id=ligne_id,
+                    date_heure="2026-09-08T20:00", vitesse=20)
+    evolution.enregistrer_elements(base, sid, "2026-09-08",
+                                   {"diurese_24h": 1200, "temperature": 37})
+
+    bilan = evolution.bilan_hydrique(base, sid, "2026-09-08")
+    # 8 h → 20 h à 60 cc/h, puis 20 h → 8 h à 20 cc/h.
+    assert bilan.entrees_ml == 12 * 60 + 12 * 20
+    assert bilan.entrees_ml != 60 * 24
+
+
+def test_la_pancarte_compte_les_entrees_comme_le_bilan(base):
+    """La pancarte imprimée et le plan hémodynamique doivent annoncer le même
+    volume : deux chiffres différents pour la même journée, et plus personne
+    ne sait lequel croire."""
+    from rea.services import vitesses
+
+    sid = _sejour(base, poids=70)
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Noradrénaline",
+        vitesse=25, date_debut="2026-09-07",
+    )
+    vitesses.regler(base, cible=vitesses.LIGNE, cible_id=ligne_id,
+                    date_heure="2026-09-08T12:00", vitesse=10)
+
+    pancarte = prescriptions.pancarte_du_jour(base, sid, "2026-09-08")
+    bilan = evolution.bilan_hydrique(base, sid, "2026-09-08")
+    assert pancarte["bilan_entrees"].total_ml == bilan.entrees_ml == 4 * 25 + 20 * 10

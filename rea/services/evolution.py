@@ -17,6 +17,7 @@ from . import dispositifs as dispositifs_service
 from . import explorations as explorations_service
 from . import prescriptions as prescriptions_service
 from . import sejours as sejours_service
+from . import vitesses as vitesses_service
 
 PLANS = ("plan_neurologique", "plan_respiratoire", "plan_hemodynamique", "plan_infectieux")
 LIBELLES_PLANS = {
@@ -270,6 +271,12 @@ def bilan_hydrique(base: Base, sejour_id: str, date_jour: str) -> dom.BilanHydri
         drains=drains,
         poids_kg=(sejour or {}).get("poids_kg"),
         temperature_c=_nombre_ou_none(elements.get("temperature")),
+        # Ce qui coule en continu se compte réglage par réglage : une
+        # noradrénaline montée la nuit et redescendue le matin ne vaut pas sa
+        # vitesse d'ouverture pendant 24 h. Une seule requête pour tout le
+        # séjour, pas une par seringue.
+        reglages_par_ligne=vitesses_service.reglages_du_sejour(base, sejour_id),
+        date_jour=date_jour,
     )
 
 

@@ -20,7 +20,7 @@ import re
 import unicodedata
 
 from .. import aides, config, listes, protocoles, referentiels
-from ..db import Base
+from ..db import Base, inspecter_fichier_base
 from ..domaine import regles as regles_dom
 from ..domaine.dates import format_date_fr
 from ..services import pancarte as pancarte_service
@@ -63,55 +63,163 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
 # --------------------------------------------------------------------------
 
 def _sauvegardes(base: Base) -> None:
-    gauche, droite = st.columns([1, 2], gap="large")
+    """Quatre gestes, nommés par ce qu'ils font, chacun expliqué sous son
+    bouton.
+
+    L'écran présentait une liste de quinze fichiers `rea-20260909-143012.db`
+    et une liste déroulante de toutes les sauvegardes existantes. Personne ne
+    choisit une base sur un horodatage à la seconde : ce qu'on veut, c'est
+    « emporter le service sur une clé » ou « remettre celle d'hier soir ». La
+    liste complète descend donc sous un dépliant, et les quatre gestes
+    montent : exporter, importer, sauvegarder, restaurer la dernière.
+    """
+    _exporter_importer(base)
+    st.divider()
+    _sauvegarder_restaurer(base)
+
+
+def _exporter_importer(base: Base) -> None:
+    gauche, droite = st.columns(2, gap="large")
 
     with gauche:
-        if st.button("Sauvegarder maintenant", use_container_width=True,
+        st.markdown("##### Emporter la base")
+        if st.button("Préparer le fichier à exporter", use_container_width=True,
                      type="primary"):
+            # Jamais le fichier vivant : en mode WAL, les dernières écritures
+            # sont encore dans un fichier annexe, et la copie brute serait en
+            # retard sur ce qu'on voit à l'écran.
+            chemin = base.sauvegarder(motif="export")
+            st.session_state["export_base"] = (chemin.name, chemin.read_bytes())
+        st.caption(
+            "Écrit **une copie complète** du service — patients, prescriptions, "
+            "bilans, tout — dans un seul fichier `.db`, à télécharger ensuite. "
+            "C'est ce fichier qu'on met sur une clé USB, qu'on garde hors du "
+            "poste, ou qu'on ouvre sur un autre ordinateur."
+        )
+        if "export_base" in st.session_state:
+            nom, donnees = st.session_state["export_base"]
+            st.download_button(
+                f"Télécharger {nom}  ({_taille(len(donnees))})",
+                data=donnees, file_name=nom, mime="application/x-sqlite3",
+                use_container_width=True,
+            )
+
+    with droite:
+        st.markdown("##### Installer une base venue d'ailleurs")
+        # Le libellé interne du dépôt de fichier reste en anglais — il vient
+        # de Streamlit. D'où la consigne en français juste au-dessus.
+        fichier = st.file_uploader(
+            "Déposer ici le fichier `.db` à installer", type=["db"],
+            key="import_base",
+        )
+        st.caption(
+            "Remplace la base actuelle par le fichier choisi — le contenu du "
+            "poste est **entièrement** remplacé. L'état actuel est sauvegardé "
+            "juste avant, donc l'opération reste réversible. Sert à reprendre "
+            "un export fait sur un autre poste, ou à remonter une base "
+            "conservée sur clé."
+        )
+        if fichier is not None:
+            _importer(base, fichier)
+
+
+def _importer(base: Base, fichier) -> None:
+    """On regarde le fichier avant de l'installer, et on dit ce qu'il contient.
+
+    Un fichier qui n'est pas une base REA — une photo renommée, une copie
+    interrompue sur clé USB — laisserait le logiciel sans dossier au moment de
+    le rouvrir. Et même valide, il faut que l'utilisateur voie *combien de
+    patients* il s'apprête à installer : c'est ce chiffre qui l'arrête quand
+    il s'est trompé de fichier.
+    """
+    depot = config.DOSSIER_SAUVEGARDES / f"importe-{fichier.name}"
+    depot.parent.mkdir(parents=True, exist_ok=True)
+    depot.write_bytes(fichier.getbuffer())
+
+    etat = inspecter_fichier_base(depot)
+    if not etat["lisible"]:
+        st.error(f"Fichier refusé : {etat['erreur']}")
+        depot.unlink(missing_ok=True)
+        return
+
+    actuelle = inspecter_fichier_base(base.chemin)
+    st.info(
+        f"Ce fichier contient **{etat['patients']} patients** et "
+        f"{etat['sejours']} séjours (modifié le "
+        f"{etat['date'].replace('T', ' à ')}).\n\n"
+        f"La base actuelle en contient {actuelle['patients']} — "
+        "elle sera remplacée."
+    )
+    confirme = st.checkbox(
+        "Je confirme vouloir remplacer la base actuelle par ce fichier",
+        key="confirme_import",
+    )
+    if st.button("Installer cette base", disabled=not confirme, type="primary"):
+        filet = base.restaurer(depot)
+        st.success(
+            f"Base installée. L'état précédent reste disponible dans "
+            f"{filet.name} — le bouton Restaurer ci-dessous permet d'y revenir."
+        )
+        st.session_state.pop("sejour_id", None)
+
+
+def _sauvegarder_restaurer(base: Base) -> None:
+    disponibles = base.sauvegardes_disponibles()
+    gauche, droite = st.columns(2, gap="large")
+
+    with gauche:
+        st.markdown("##### Sauvegarder sur ce poste")
+        if st.button("Sauvegarder maintenant", use_container_width=True):
             chemin = base.sauvegarder(motif="manuelle")
             st.success(f"Sauvegarde écrite : {chemin.name}")
         st.caption(
-            f"{config.SAUVEGARDES_CONSERVEES} sauvegardes conservées, "
-            "les plus anciennes sont effacées automatiquement."
+            f"Le logiciel sauvegarde déjà tout seul toutes les "
+            f"{config.INTERVALLE_SAUVEGARDE_MINUTES} minutes, à l'ouverture et "
+            f"à la fermeture. Ce bouton sert avant une manipulation qu'on "
+            f"préfère pouvoir annuler. Les {config.SAUVEGARDES_CONSERVEES} "
+            f"dernières sont conservées, sur ce poste uniquement — "
+            f"une sauvegarde qui reste sur le disque du poste ne protège pas "
+            f"d'un disque en panne : pour cela, il faut l'export ci-dessus."
         )
 
-    disponibles = base.sauvegardes_disponibles()
     with droite:
+        st.markdown("##### Revenir en arrière")
         if not disponibles:
             st.info("Aucune sauvegarde pour l'instant.")
             return
-        lignes = [
-            f"<tr><td>{s['date'].replace('T', ' ')}</td>"
-            f"<td>{s['nom']}</td><td style='text-align:right'>{_taille(s['taille'])}</td></tr>"
-            for s in disponibles[:15]
-        ]
-        theme.bloc_html(
-            f"{len(disponibles)} sauvegardes",
-            "<table style='width:100%;font-size:0.85rem'>"
-            + "".join(lignes)
-            + "</table>",
-            theme.BLEU,
+        derniere = disponibles[0]
+        st.caption(
+            f"Dernière sauvegarde : **{derniere['date'].replace('T', ' à ')}** "
+            f"({_taille(derniere['taille'])}). Restaurer remplace toute la base "
+            "actuelle ; l'état d'avant est sauvegardé juste avant, donc on peut "
+            "encore faire marche arrière."
         )
+        if st.checkbox("Je confirme vouloir revenir à cette sauvegarde",
+                       key="confirme_derniere"):
+            if st.button("Restaurer la dernière sauvegarde", type="primary",
+                         use_container_width=True):
+                _restaurer(base, derniere)
 
-    st.divider()
-    st.subheader("Restaurer")
-    st.warning(
-        "Restaurer remplace **toute** la base actuelle par la sauvegarde choisie. "
-        "L'état actuel est sauvegardé juste avant : l'opération reste réversible.",
-        icon="⚠️",
+    with st.expander(f"Choisir une sauvegarde plus ancienne "
+                     f"({len(disponibles)} disponibles)"):
+        noms = [f"{s['date'].replace('T', ' ')} — {_taille(s['taille'])}"
+                for s in disponibles]
+        choix = st.selectbox("Sauvegarde à restaurer", noms, index=None,
+                             placeholder="Choisir une sauvegarde")
+        confirme = st.checkbox("Je confirme vouloir remplacer la base actuelle",
+                               key="confirme_ancienne")
+        if st.button("Restaurer", disabled=not (choix and confirme)):
+            _restaurer(base, disponibles[noms.index(choix)])
+
+
+def _restaurer(base: Base, sauvegarde: dict) -> None:
+    filet = base.restaurer(sauvegarde["chemin"])
+    st.success(
+        f"Base restaurée depuis la sauvegarde du "
+        f"{sauvegarde['date'].replace('T', ' à ')}. "
+        f"L'état précédent reste disponible dans {filet.name}."
     )
-    noms = [f"{s['date'].replace('T', ' ')} — {s['nom']}" for s in disponibles]
-    choix = st.selectbox("Sauvegarde à restaurer", noms, index=None,
-                         placeholder="Choisir une sauvegarde")
-    confirme = st.checkbox("Je confirme vouloir remplacer la base actuelle")
-    if st.button("Restaurer", disabled=not (choix and confirme)):
-        selection = disponibles[noms.index(choix)]
-        filet = base.restaurer(selection["chemin"])
-        st.success(
-            f"Base restaurée depuis {selection['nom']}. "
-            f"L'état précédent reste disponible dans {filet.name}."
-        )
-        st.session_state.pop("sejour_id", None)
+    st.session_state.pop("sejour_id", None)
 
 
 # --------------------------------------------------------------------------
@@ -314,7 +422,15 @@ def _charger_regle_dans_editeur(regle: dict) -> None:
 def _protocoles() -> None:
     st.caption(
         "Un protocole n'est proposé à l'écran que s'il est **validé et signé** "
-        "par le chef de service (SPEC §4.5). Les autres restent des brouillons."
+        "par le chef de service (SPEC §4.5). Les autres restent des brouillons : "
+        "ils sont visibles ici, jamais proposés aux internes."
+    )
+    st.caption(
+        "**Où apparaît un protocole**, selon son déclencheur : à l'admission "
+        "pour un motif d'entrée ou une région traumatique ; dans l'écran "
+        "Évolution, sous le rappel qui vient de le déclencher, pour une règle "
+        "d'aide. Dans tous les cas il est *proposé* — les lignes ne sont "
+        "posées qu'après un clic, sans dose, et restent modifiables."
     )
     tous = protocoles.tous_les_protocoles()
     if not tous:
@@ -325,11 +441,19 @@ def _protocoles() -> None:
             f"Validé — signé par {p.signe_par}" if p.valide and p.signe_par
             else "Brouillon — non proposé à l'écran"
         )
+        declencheur = p.declencheur or {}
+        quand = (
+            f"{_LIBELLE_DECLENCHEUR.get(declencheur['type'], declencheur['type'])}"
+            f" : {declencheur.get('valeur')}"
+            if declencheur.get("type")
+            else "Aucun déclencheur — jamais proposé automatiquement"
+        )
         theme.bloc(
             p.titre,
             [
                 f"Version {p.version} du {p.date_version}",
                 etat,
+                quand,
                 f"{len(p.lignes_prescription)} lignes de prescription, "
                 f"{len(p.explorations_proposees)} explorations, "
                 f"{len(p.consignes)} consignes",
@@ -356,6 +480,9 @@ def _charger_protocole_dans_editeur(code: str | None) -> None:
     elif declencheur.get("type") == "motif":
         st.session_state["ed_proto_decl_type"] = "motif"
         st.session_state["ed_proto_decl_valeur_motif"] = declencheur.get("valeur")
+    elif declencheur.get("type") == "regle":
+        st.session_state["ed_proto_decl_type"] = "regle"
+        st.session_state["ed_proto_decl_valeur_regle"] = declencheur.get("valeur")
     else:
         st.session_state["ed_proto_decl_type"] = "aucun (jamais proposé automatiquement)"
     for i, ligne in enumerate(p.get("lignes_prescription", [])[:6]):
@@ -370,6 +497,23 @@ def _charger_protocole_dans_editeur(code: str | None) -> None:
     st.session_state["ed_proto_consignes"] = "\n".join(p.get("consignes", []))
     st.session_state["ed_proto_valide"] = bool(p.get("valide"))
     st.session_state["ed_proto_signe_par"] = p.get("signe_par") or ""
+
+
+_LIBELLE_DECLENCHEUR = {
+    "region_traumatique": "À l'admission — région traumatique",
+    "motif": "À l'admission — motif d'entrée",
+    "regle": "Quand une règle d'aide se déclenche (hypokaliémie, fièvre…)",
+    "aucun (jamais proposé automatiquement)": "Jamais proposé automatiquement",
+}
+
+
+def _codes_des_regles() -> list[str]:
+    """Les codes de règles auxquels un protocole peut s'attacher.
+
+    Ils viennent des fichiers `regles/*.json`, pas d'une liste écrite ici :
+    ajouter une règle doit suffire à pouvoir lui accrocher un protocole.
+    """
+    return sorted({r.code for r in aides.toutes_les_regles()})
 
 
 def _editeur_protocoles() -> None:
@@ -398,8 +542,11 @@ def _editeur_protocoles() -> None:
     st.markdown("**Déclencheur** — quand ce protocole doit-il être proposé ?")
     c1, c2 = st.columns(2)
     type_declencheur = c1.selectbox(
-        "Type", ["region_traumatique", "motif", "aucun (jamais proposé automatiquement)"],
+        "Type",
+        ["region_traumatique", "motif", "regle",
+         "aucun (jamais proposé automatiquement)"],
         key="ed_proto_decl_type",
+        format_func=_LIBELLE_DECLENCHEUR.get,
     )
     valeur_declencheur = None
     if type_declencheur == "region_traumatique":
@@ -415,6 +562,14 @@ def _editeur_protocoles() -> None:
             "Motif", codes_motifs, format_func=listes.libelle_motif,
             key="ed_proto_decl_valeur_motif",
         )
+    elif type_declencheur == "regle":
+        codes_regles = _codes_des_regles()
+        if codes_regles:
+            valeur_declencheur = c2.selectbox(
+                "Règle d'aide", codes_regles, key="ed_proto_decl_valeur_regle",
+            )
+        else:
+            c2.warning("Aucune règle d'aide installée.")
     else:
         c2.caption("Jamais proposé automatiquement — un dossier à part.")
 

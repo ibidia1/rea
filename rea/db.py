@@ -589,6 +589,60 @@ class Base:
         self.connexion.close()
 
 
+def inspecter_fichier_base(chemin: Path | str) -> dict:
+    """Ce qu'il y a dans un fichier de base, avant d'accepter de l'installer.
+
+    Importer une base remplace tout le service. Un fichier qui n'est pas une
+    base REA — une photo renommée, l'export d'un autre logiciel, une base
+    tronquée par une copie interrompue sur clé USB — laisserait le logiciel
+    sans dossier au moment de le rouvrir. On regarde donc avant : est-ce du
+    SQLite, porte-t-il les tables du logiciel, et surtout **combien de patients
+    contient-il** — c'est ce chiffre qui dit à l'utilisateur ce qu'il
+    s'apprête à installer, et qui l'arrête s'il s'est trompé de fichier.
+
+    Rendu : `{"lisible": bool, "erreur": str | None, "patients": int,
+    "sejours": int, "date": str | None}`. On n'ouvre jamais qu'en lecture.
+    """
+    chemin = Path(chemin)
+    refus = {"lisible": False, "patients": 0, "sejours": 0, "date": None}
+    if not chemin.exists():
+        return {**refus, "erreur": "Fichier introuvable."}
+    try:
+        connexion = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return {**refus, "erreur": "Ce fichier n'est pas une base de données."}
+    try:
+        connexion.row_factory = _dict_factory
+        presentes = {
+            ligne["name"]
+            for ligne in connexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        attendues = {"patient", "sejour", "prescription_ligne"}
+        if not attendues <= presentes:
+            manquantes = ", ".join(sorted(attendues - presentes))
+            return {**refus, "erreur": f"Ce n'est pas une base du logiciel "
+                                       f"(tables manquantes : {manquantes})."}
+        patients = connexion.execute(
+            "SELECT COUNT(*) AS n FROM patient WHERE supprime = 0").fetchone()["n"]
+        sejours = connexion.execute(
+            "SELECT COUNT(*) AS n FROM sejour WHERE supprime = 0").fetchone()["n"]
+    except sqlite3.DatabaseError:
+        # Un fichier tronqué s'ouvre sans broncher et casse à la première
+        # lecture : c'est le cas d'une copie interrompue.
+        return {**refus, "erreur": "Base illisible ou incomplète."}
+    finally:
+        connexion.close()
+    return {
+        "lisible": True,
+        "erreur": None,
+        "patients": patients,
+        "sejours": sejours,
+        "date": datetime.fromtimestamp(chemin.stat().st_mtime).isoformat(timespec="minutes"),
+    }
+
+
 _BASE: Base | None = None
 
 

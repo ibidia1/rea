@@ -27,6 +27,7 @@ from datetime import date
 from ..db import Base
 from ..domaine import prescription as dom
 from ..domaine.dates import lendemain
+from . import vitesses as vitesses_service
 
 
 # --------------------------------------------------------------------------
@@ -342,7 +343,11 @@ def pancarte_du_jour(base: Base, sejour_id: str, date_jour: str) -> dict:
     lignes actives par voie, étiquettes J{n}, bilan hydrique, bilans
     demandés, allergies en tête."""
     lignes = lignes_actives_le(base, sejour_id, date_jour)
-    bilan = dom.volume_entrees_24h(lignes)
+    bilan = dom.volume_entrees_24h(
+        lignes,
+        reglages_par_ligne=vitesses_service.reglages_du_sejour(base, sejour_id),
+        date_jour=date_jour,
+    )
     journee = base.une_ligne(
         "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
         (sejour_id, date_jour),

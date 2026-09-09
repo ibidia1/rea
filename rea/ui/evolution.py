@@ -9,7 +9,7 @@ from datetime import date
 
 import streamlit as st
 
-from .. import listes
+from .. import listes, protocoles
 from ..db import ConflitDeVersion
 from ..domaine import avis as dom_avis
 from ..domaine import prescription as dom
@@ -19,7 +19,9 @@ from ..services import avis as avis_service
 from ..services import definitions_cliniques
 from ..services import evolution as evolution_service
 from ..services import prescriptions as prescriptions_service
+from ..services import protocoles as protocoles_service
 from ..services import scores as scores_service
+from ..services import vitesses as vitesses_service
 from . import contexte, theme
 
 from . import champs
@@ -81,6 +83,53 @@ def _champ_element(cle: str, libelle: str, unite: str, type_: str, plage: str,
     )
 
 
+def _protocole_de_la_regle(sejour: dict, date_jour_str: str, code_regle: str) -> None:
+    """Le protocole du service attaché à ce rappel, proposé là où il sert.
+
+    Un rappel qui dit « kaliémie à 2,6 » et s'arrête là oblige à aller
+    chercher le protocole de correction ailleurs — dans un classeur, ou dans
+    la mémoire de celui qui est de garde. Quand le service a écrit un
+    protocole pour cette situation et l'a signé, il s'ouvre ici, sous le
+    rappel qui vient de le déclencher.
+
+    Proposé, jamais appliqué (SPEC §4.5, règle 2) : il faut cliquer, et les
+    lignes posées sont des lignes de prescription ordinaires, modifiables et
+    supprimables. Sans dose (SPEC §3.1) : le protocole préremplit la voie, le
+    produit et le rythme, la dose reste à celui qui signe.
+    """
+    for p in protocoles.protocoles_pour_regle(code_regle):
+        with st.expander(f"Protocole du service : {p.titre}"):
+            st.caption(f"Version {p.version} du {p.date_version} — "
+                       f"signé {p.signe_par}")
+            for consigne in p.consignes:
+                st.markdown(f"- {consigne}")
+            if p.lignes_prescription:
+                st.markdown("**Lignes proposées au prescrit :**")
+                for ligne in p.lignes_prescription:
+                    detail = " · ".join(
+                        m for m in (ligne.get("rythme"), ligne.get("note")) if m
+                    )
+                    st.markdown(
+                        f"- {ligne.get('voie', '?')} — {ligne.get('produit', '?')}"
+                        + (f" ({detail})" if detail else "")
+                    )
+                if st.button("Ajouter ces lignes au prescrit",
+                             key=f"proto_{code_regle}_{p.code}_{date_jour_str}"):
+                    posees = protocoles_service.appliquer(
+                        contexte.base(), sejour["id"], [p],
+                        date_debut=date_jour_str,
+                        utilisateur_id=contexte.utilisateur_id(),
+                    )
+                    st.success(
+                        f"{posees} lignes ajoutées au prescrit, sans dose — "
+                        "à compléter et à signer dans l'écran Prescrit."
+                    )
+            if p.explorations_proposees:
+                st.markdown("**Explorations proposées :** " + ", ".join(
+                    e.get("libelle") or e.get("type", "") for e in p.explorations_proposees
+                ))
+
+
 def panneau_aides(sejour: dict, date_jour_str: str) -> None:
     """Rappels du jour — des questions, jamais des consignes.
 
@@ -106,6 +155,7 @@ def panneau_aides(sejour: dict, date_jour_str: str) -> None:
                     r["libelle"], r["message"] + note,
                     _STYLE_GRAVITE.get(r["gravite"], theme.GRIS),
                 )
+                _protocole_de_la_regle(sejour, date_jour_str, r["code"])
     else:
         theme.bloc_html("Rappels", "Aucun rappel déclenché aujourd'hui.", theme.VERT)
     st.caption(
@@ -310,6 +360,10 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
         drains=drains,
         poids_kg=sejour.get("poids_kg"),
         temperature_c=_valeur_en_cours(prefixe, "temperature", sauvegardees),
+        reglages_par_ligne=vitesses_service.reglages_du_sejour(
+            contexte.base(), sejour["id"]
+        ),
+        date_jour=date_jour_str,
     )
 
     if bilan.net_ml is None:

@@ -81,6 +81,28 @@ def protocoles_pour_region_traumatique(region: str) -> tuple[Protocole, ...]:
     )
 
 
+def protocoles_pour_regle(code_regle: str) -> tuple[Protocole, ...]:
+    """Les protocoles attachés à une règle d'aide.
+
+    Les deux premiers déclencheurs — motif d'admission, région traumatique —
+    ne servent qu'à l'admission : ils décrivent le patient qui arrive. Or la
+    plupart des protocoles d'un service de réanimation répondent à quelque
+    chose qui *survient* : une kaliémie à 2,6 le quatrième jour, une fièvre
+    sous cathéter. Ce déclencheur-là attache un protocole au code d'une règle
+    d'aide (`regles/*.json`) : quand la règle se déclenche, le protocole est
+    proposé, au même endroit et au même moment que le rappel.
+
+    La règle de sécurité 1 ne bouge pas d'un pouce : `protocoles_valides()`
+    filtre d'abord, un brouillon n'est jamais proposé.
+    """
+    return tuple(
+        p
+        for p in protocoles_valides()
+        if p.declencheur.get("type") == "regle"
+        and p.declencheur.get("valeur") == code_regle
+    )
+
+
 def protocoles_pour_motif(code_motif: str) -> tuple[Protocole, ...]:
     return tuple(
         p
