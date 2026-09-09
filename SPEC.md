@@ -926,6 +926,55 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.12 — 9 septembre 2026 — les bilans : modes ventilatoires, ordre, catalogue ouvert**
+
+*Chaque mode ventilatoire a ses paramètres.* Tous les champs étaient proposés
+quel que soit le mode : une PEP sous air ambiant, une AI en VAC. Des cases qui
+n'existent pas cliniquement, et qu'un interne de garde finit par remplir avec le
+paramètre d'à côté — après quoi la valeur est en base, indiscernable d'une
+mesure. Chaque mode déclare maintenant ce qui a un sens pour lui, dans
+`referentiels/modes_ventilatoires.json` :
+
+| Mode | Paramètres |
+|---|---|
+| Air ambiant | aucun |
+| Lunettes, masque | débit |
+| Optiflow *(nouveau)* | débit, FiO₂ |
+| VS-AI | FiO₂, PEP, AI, Vt |
+| VAC | FiO₂, PEP, FR, Vt |
+| VACI *(nouveau)* | FiO₂, PEP, FR, Vt, AI |
+
+Le gaz du sang lui-même — pH, PaO₂, PaCO₂, HCO₃⁻, lactates, SaO₂ — ne dépend
+d'aucun mode : c'est une seringue de sang artériel, qu'on soit ventilé ou non.
+
+Les modes sont désormais des **codes** et non des libellés. Un libellé se
+réécrit, un code non, et c'est le code qui décide des paramètres. Les gaz du
+sang écrits par la version précédente sont traduits à l'ouverture de la base.
+
+*Le bicarbonate quitte l'ionogramme.* Il figure déjà avec le gaz du sang : deux
+lignes pour le même chiffre, c'était deux cinétiques à lire pour un paramètre.
+
+*L'ordre des bilans* est celui de la visite : gaz et ventilation, ionogramme,
+fonction rénale, métabolique, NFS et hémostase, puis l'inflammation — la CRP et
+la PCT se lisent avec le bilan infectieux, qui n'est pas demandé tous les jours.
+L'observation générée suit maintenant cet ordre au lieu d'une liste recopiée à
+côté, qui divergeait de l'écran à la première réorganisation.
+
+*Un catalogue qu'on peut compléter.* Le catalogue de biologie est du code : y
+ajouter la troponine demandait une nouvelle version du logiciel. Un service qui
+se met à doser quelque chose ne peut pas attendre ça — il le noterait dans un
+commentaire libre, où le résultat ne se compare pas d'un jour à l'autre, ne
+trace aucune courbe et ne sort dans aucune statistique. La table
+`analyte_local` porte les analytes du service, avec leur unité et leurs bornes ;
+ils rejoignent les bilans non systématiques et portent leur libellé partout,
+saisie comme observation générée.
+
+Ils sont dans la **base** et non dans `referentiels/` : ce sont des données du
+service, pas du logiciel. Ils sont donc sauvegardés et restaurés avec elle,
+alors qu'un fichier de référentiel réécrit à l'exécution cesserait d'être
+versionné. Retirer un analyte de la liste ne touche pas aux valeurs déjà
+mesurées : ce qui a été mesuré a été mesuré.
+
 **v3.11 — 9 septembre 2026 — les colonnes de biologie, pour de bon**
 
 Deux défauts restaient, visibles dès la première feuille imprimée.

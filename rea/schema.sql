@@ -497,6 +497,32 @@ CREATE INDEX IF NOT EXISTS idx_protocole_sejour ON protocole_applique(sejour_id)
 -- Un avis n'annule jamais le précédent, même de la même spécialité : c'est la
 -- suite des avis qui raconte l'évolution d'une décision chirurgicale, et le
 -- second ne se comprend souvent qu'à la lumière du premier.
+-- Les analytes que le service dose et que le catalogue ne connaît pas (§8).
+--
+-- Le catalogue de biologie (rea/analytes.py) est du code : y ajouter la
+-- troponine demande une nouvelle version du logiciel. Un service qui se met à
+-- doser quelque chose ne peut pas attendre ça — il le noterait dans un
+-- commentaire libre, où le résultat ne se compare pas d'un jour à l'autre et
+-- ne sort dans aucune statistique (demande du service, 9 septembre).
+--
+-- Ici et non dans `referentiels/` : ce sont des données du service, pas du
+-- logiciel. Elles sont sauvegardées et restaurées avec la base, alors qu'un
+-- fichier de référentiel réécrit à l'exécution cesserait d'être versionné.
+CREATE TABLE IF NOT EXISTS analyte_local (
+    id           TEXT PRIMARY KEY,
+    code         TEXT NOT NULL UNIQUE,   -- stable : c'est lui qui est écrit sur chaque résultat
+    libelle      TEXT NOT NULL,
+    unite        TEXT,
+    borne_basse  REAL,
+    borne_haute  REAL,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS avis_specialise (
     id           TEXT PRIMARY KEY,
     sejour_id    TEXT NOT NULL REFERENCES sejour(id),

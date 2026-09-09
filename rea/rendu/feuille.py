@@ -517,6 +517,11 @@ def _valeurs_biologie(
     return lignes
 
 
+#: Ce qui dépend du mode ventilatoire, par opposition au gaz du sang lui-même :
+#: une seringue de sang artériel se lit pareil qu'on soit ventilé ou non.
+_PARAMETRES_VENTILATOIRES = ("fio2", "pep", "fr", "vt", "ai", "debit_o2")
+
+
 def _creneaux_du_jour(
     dossier, jour: str, code: str, source: str, colonnes: int
 ) -> list[str]:
@@ -541,7 +546,21 @@ def _creneaux_du_jour(
             g for g in dossier.gaz_du_sang
             if (g["date_heure"] or "").startswith(jour)
         ]
-        valeurs = [_nombre(g.get(code)) for g in lignes]
+        if code == "mode_ventilatoire":
+            # Le mode est enregistré sous son code : la feuille imprime le
+            # sigle que le service emploie, pas « vs_ai ».
+            valeurs = [listes.libelle_mode_court(g.get(code)) for g in lignes]
+        else:
+            # Un paramètre qui n'a pas de sens pour ce mode-là n'est pas
+            # imprimé même s'il traîne en base : une PEP sous air ambiant
+            # viendrait forcément d'une saisie antérieure au filtrage.
+            valeurs = [
+                _nombre(g.get(code))
+                if code not in _PARAMETRES_VENTILATOIRES
+                or code in listes.parametres_du_mode(g.get("mode_ventilatoire"))
+                else ""
+                for g in lignes
+            ]
     valeurs = [v for v in valeurs if v]
     return (valeurs + [""] * colonnes)[:colonnes]
 

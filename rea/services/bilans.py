@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .. import analytes as cat
+from .. import listes
 from ..db import Base
 
 
@@ -226,25 +227,33 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
         return ligne["valeur_num"] if ligne else None
 
     lignes = []
-    for groupe_code, titre in (
-        ("nfs", "NFS"), ("hemostase", "Hémostase"), ("ionogramme", "Ionogramme"),
-        ("renale", "Fonction rénale"), ("inflammation", "Inflammation"),
-        ("hepatique", "Bilan hépatique"), ("lipidique", "Bilan lipidique"),
-    ):
-        groupe = next(g for g in cat.GROUPES if g.code == groupe_code)
+    # L'ordre du catalogue, pas une liste recopiée ici : elle divergeait de
+    # l'écran de saisie à la première réorganisation, et l'observation ne se
+    # relisait plus dans l'ordre où elle avait été remplie. Les analytes
+    # ajoutés par le service y entrent du même coup.
+    courants, occasionnels = cat.groupes_de_saisie()
+    for groupe in courants + occasionnels:
         paires = [(a.libelle, v(a.id), a.unite) for a in groupe.analytes]
-        texte = _ligne(titre, paires)
+        texte = _ligne(groupe.titre, paires)
         if texte:
             lignes.append(texte)
 
     gds = dernier_gaz_du_sang(base, sejour_id, date_jour)
     if gds:
-        mode = gds["mode_ventilatoire"]
-        if mode in cat.MODES_AVEC_DEBIT and gds["debit_o2"]:
+        code_mode = gds["mode_ventilatoire"]
+        mode = listes.libelle_mode_court(code_mode)
+        parametres = listes.parametres_du_mode(code_mode)
+        if "debit_o2" in parametres and gds["debit_o2"]:
             mode = f"{mode} {_formate_nombre(gds['debit_o2'])}L"
+        # Seuls les paramètres qui ont un sens pour ce mode : une PEP recopiée
+        # sous air ambiant est une valeur que personne n'a mesurée.
         vent = _ligne("Ventilation", [
-            ("Mode", mode, ""), ("FiO₂", gds["fio2"], "%"), ("PEP", gds["pep"], "cmH₂O"),
-            ("FR", gds["fr"], "/min"), ("SpO₂", gds["spo2"], "%"),
+            ("Mode", mode, ""),
+            *[(lib, gds[cle] if cle in parametres else None, unite)
+              for cle, lib, unite in (("fio2", "FiO₂", "%"), ("pep", "PEP", "cmH₂O"),
+                                      ("fr", "FR", "/min"), ("ai", "AI", "cmH₂O"),
+                                      ("vt", "Vt", "mL"))],
+            ("SpO₂", gds["spo2"], "%"),
         ])
         if vent:
             lignes.append(vent)

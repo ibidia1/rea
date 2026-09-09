@@ -102,6 +102,10 @@ SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
 # Les deux étaient des champs libres : « SG5 », « G5% » et « sérum glucosé 5 »
 # désignaient le même soluté sans jamais se compter ensemble, et « KCl 2 »,
 # « 2 amp KCl » et « +2K » la même ampoule (demande du service, 8 septembre).
+# Chaque mode ventilatoire déclare les paramètres qui ont un sens pour lui :
+# une PEP sous air ambiant est une case qui n'existe pas cliniquement, et
+# qu'un interne finit par remplir avec le paramètre d'à côté.
+MODES_VENTILATOIRES = _charger("modes_ventilatoires")
 SPECIALITES_AVIS = _charger("specialites_avis")
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
@@ -182,6 +186,33 @@ def libelle(liste, code: str | None, defaut: str = "") -> str:
         if entree[0] == code:
             return entree[1]
     return code
+
+
+def libelle_mode_court(code: str | None) -> str:
+    """« VAC » plutôt que « VAC — ventilation assistée contrôlée ».
+
+    La liste déroulante montre le nom complet, parce qu'un interne de première
+    garde ne connaît pas encore les sigles. La ligne d'observation et la feuille
+    imprimée montrent le sigle, parce que la place y est comptée et que celui
+    qui les lit, lui, le connaît.
+    """
+    for entree in MODES_VENTILATOIRES:
+        if entree[0] == code:
+            return entree[1].split(" — ")[0]
+    return code or ""
+
+
+def parametres_du_mode(code: str | None) -> tuple[str, ...]:
+    """Les paramètres qui ont un sens pour ce mode ventilatoire.
+
+    Ce qui n'est pas déclaré n'est pas demandé, et n'est donc pas enregistré :
+    une AI en VAC ou un débit sous air ambiant sont des valeurs que personne
+    n'a mesurées.
+    """
+    for entree in MODES_VENTILATOIRES:
+        if entree[0] == code:
+            return tuple(entree[2]) if len(entree) > 2 else ()
+    return ()
 
 
 def champs_exploration(type_: str) -> tuple[dict, ...]:

@@ -1,0 +1,16 @@
+{
+  "nom": "modes_ventilatoires",
+  "libelle": "Modes ventilatoires et paramètres qui leur correspondent",
+  "version": "2026-09-09.1",
+  "date": "2026-09-09",
+  "note": "Chaque mode déclare les paramètres qui ont un sens pour lui (demande du service, 9 septembre). Tous les champs étaient affichés quel que soit le mode : une PEP sous air ambiant, une AI en VAC — des cases qui n'existent pas cliniquement, et qu'un interne finit par remplir avec le paramètre d'à côté. Ce qui n'est pas déclaré ici n'est pas demandé, et n'est donc pas enregistré. Format : [code, libellé, paramètres]. Le code est stocké en base ; le libellé n'est qu'un affichage et peut être réécrit sans toucher aux données. L'ordre est celui de la liste déroulante : du plus lourd au plus léger, parce qu'un patient de réanimation est ventilé plus souvent qu'il n'est en air ambiant.",
+  "valeurs": [
+    ["vac", "VAC — ventilation assistée contrôlée", ["fio2", "pep", "fr", "vt"]],
+    ["vaci", "VACI — assistée contrôlée intermittente", ["fio2", "pep", "fr", "vt", "ai"]],
+    ["vs_ai", "VS-AI — ventilation spontanée avec aide", ["fio2", "pep", "ai", "vt"]],
+    ["optiflow", "Optiflow — oxygénothérapie à haut débit", ["debit_o2", "fio2"]],
+    ["masque", "Masque à oxygène", ["debit_o2"]],
+    ["lunette", "Lunettes à oxygène", ["debit_o2"]],
+    ["air_ambiant", "Air ambiant", []]
+  ]
+}
