@@ -926,6 +926,69 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.20 — 10 septembre 2026 — des comptes, des rôles, et le travail infirmier**
+
+Le logiciel avait un sélecteur d'ouverture qui ne servait qu'à signer les
+écritures : tout le monde saisissait tout. Le service s'organisant, trois
+choses arrivent ensemble — les comptes, l'écran de l'infirmier, celui du
+surveillant.
+
+*Les rôles.* Administrateur, senior, résident, interne, surveillant,
+infirmier. Leurs droits sont dans `referentiels/roles.json`, pas dans le
+code : déplacer un droit d'un rôle à l'autre est une décision de service.
+Le senior signe les protocoles, le surveillant change tout **sauf** les
+protocoles, l'infirmier voit le prescrit sans le modifier. L'écran d'accueil
+suit le rôle : un infirmier ouvre son poste, un surveillant sa supervision.
+
+**Ce qu'il faut savoir, et que le logiciel dit à l'écran plutôt que de le
+taire : un rôle organise l'application, il ne la protège pas.** Tant qu'un
+compte n'a pas de code d'accès, son nom reste sélectionnable par n'importe
+qui, et son rôle avec. La serrure, c'est le code — facultatif compte par
+compte, pour qu'un service qui démarre ne se bloque pas un matin de garde,
+et exigé dès qu'il est posé. Il n'est jamais gardé en clair : empreinte
+PBKDF2 salée, parce qu'une base copiée sur une clé rendrait sinon tous les
+codes du service.
+
+Un compte ne se supprime pas, il se **désactive** : l'effacer rendrait
+anonymes des années de prescriptions. Et l'on refuse de retirer le dernier
+compte capable de gérer les comptes — on ne se ferme pas la porte de
+l'extérieur.
+
+*L'écran de l'infirmier.* Trois vacations : 7 h – 13 h, 13 h – 19 h,
+19 h – 7 h. L'infirmier choisit ses malades en prenant son poste, et voit
+**ce qu'il va donner sur ces heures-là** — pas la pancarte des vingt-quatre
+heures où il faudrait retrouver ses prises. Une case à cocher par prise, un
+« non donné » avec son motif, et la surveillance horaire du verso de la
+feuille — FC, PA, T°, SpO₂, Glasgow, diurèse — saisie heure par heure et
+relue en tableau.
+
+Deux points où le calcul naïf se trompe, et qu'un test protège chacun. La
+vacation de nuit **franchit minuit** : `debut <= heure < fin` la rendrait
+vide, et l'équipe de nuit ouvrirait un poste sans rien à donner. Et elle
+reste **datée du jour de prise de poste** : à 2 h du matin le 10, l'équipe
+de nuit est celle entrée à 19 h le 9 — sinon l'écran se vide au milieu de la
+garde.
+
+Ce qui coule en continu apparaît **une fois**, à l'ouverture du poste : une
+seringue qu'on ne touche pas ne mérite pas douze cases à cocher. Les
+conditionnels sont à part — ils se connaissent, ils ne se préparent pas.
+
+Une prise non donnée **se note**, elle ne s'omet pas. Une case vide dit
+« pas encore », une ligne « non donné » dit « décidé, à telle heure, et
+voici pourquoi ». Les confondre, c'est perdre la seule trace d'un traitement
+volontairement sauté — exactement ce qu'on cherche en relisant une nuit qui
+s'est mal passée.
+
+*L'écran du surveillant.* Trois questions, aucune ne demande de chercher :
+qui s'occupe de qui, vacation par vacation ; ce qu'il faut commander,
+patient par patient ; et surtout **ce qui a changé** dans les prescriptions,
+en phrases — « Ajout de Tienam 1 g x3/j pendant 7 jours — M. X, matricule
+123456, lit 3 ». Aujourd'hui le surveillant relit chaque pancarte pour
+repérer les nouveautés de la garde ; il en manque, et un antibiotique
+commencé à 4 h du matin n'est commandé qu'à midi. Les arrêts y figurent
+autant que les ajouts : un antibiotique arrêté est une commande à ne pas
+passer.
+
 **v3.19 — 9 septembre 2026 — croiser ses données, pas six variables prévues ; le total des pertes**
 
 *Les exemples étaient des exemples.* « Mortalité et E/e' », « mortalité et

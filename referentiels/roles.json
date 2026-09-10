@@ -1,21 +1,15 @@
 {
   "nom": "roles",
-  "libelle": "Rôles des utilisateurs",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
-  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "libelle": "Rôles des utilisateurs et ce qu'ils ont le droit de faire",
+  "version": "2026-09-09.1",
+  "date": "2026-09-09",
+  "note": "Modifiable sans toucher au code : ajouter un rôle ou déplacer un droit se fait ici. Les droits sont : dossier_lire (voir un dossier), dossier_ecrire (admission, prescrit, bilans, actes, évolution, sortie), protocoles (écrire et SIGNER les protocoles et règles d'aide — §4.5, réservé au senior), comptes (créer et supprimer des comptes), administrations (cocher les traitements donnés), constantes (saisir la surveillance horaire), supervision (écran du surveillant), recherche (cohortes et indicateurs). AVERTISSEMENT : tant qu'un compte n'a pas de code d'accès, ces rôles organisent l'écran mais n'empêchent rien — n'importe qui peut choisir n'importe quel nom dans la liste. Voir SPEC §2.4.",
   "valeurs": [
-    [
-      "interne",
-      "Interne"
-    ],
-    [
-      "resident",
-      "Résident"
-    ],
-    [
-      "senior",
-      "Senior"
-    ]
+    ["admin", "Administrateur", ["dossier_lire", "dossier_ecrire", "protocoles", "comptes", "administrations", "constantes", "supervision", "recherche"]],
+    ["senior", "Senior", ["dossier_lire", "dossier_ecrire", "protocoles", "supervision", "recherche"]],
+    ["resident", "Résident", ["dossier_lire", "dossier_ecrire", "recherche"]],
+    ["interne", "Interne", ["dossier_lire", "dossier_ecrire", "recherche"]],
+    ["surveillant", "Surveillant", ["dossier_lire", "dossier_ecrire", "supervision", "administrations", "constantes", "recherche"]],
+    ["infirmier", "Infirmier", ["dossier_lire", "administrations", "constantes"]]
   ]
 }

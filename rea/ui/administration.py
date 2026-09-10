@@ -24,7 +24,9 @@ from ..db import Base, inspecter_fichier_base
 from ..domaine import regles as regles_dom
 from ..domaine.dates import format_date_fr
 from ..services import pancarte as pancarte_service
+from . import comptes as comptes_ui
 from . import theme
+from . import utilisateur as utilisateur_ui
 
 
 def _taille(octets: int) -> str:
@@ -40,22 +42,28 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
         f"une sauvegarde automatique toutes les {config.INTERVALLE_SAUVEGARDE_MINUTES} min"
     )
 
-    onglets = st.tabs(
-        ["Sauvegardes", "Journal", "Fiches imprimées", "Référentiels",
-         "Protocoles", "Règles d'aide"]
-    )
-    with onglets[0]:
-        _sauvegardes(base)
-    with onglets[1]:
-        _journal(base)
-    with onglets[2]:
-        _fiches_imprimees(base)
-    with onglets[3]:
-        _referentiels()
-    with onglets[4]:
-        _protocoles()
-    with onglets[5]:
-        _regles()
+    # Chaque onglet ne s'affiche qu'à qui il sert : un senior n'a pas à voir
+    # la gestion des comptes, un administrateur qui n'est pas médecin n'a pas
+    # à signer des protocoles. Ce n'est pas une serrure (voir
+    # `domaine/droits.py`), c'est un écran qui ne propose pas l'inutile.
+    vues: dict[str, object] = {}
+    if utilisateur_ui.peut("comptes"):
+        vues["Comptes"] = lambda: comptes_ui.ecran(base, utilisateur_id)
+    vues["Sauvegardes"] = lambda: _sauvegardes(base)
+    vues["Journal"] = lambda: _journal(base)
+    vues["Fiches imprimées"] = lambda: _fiches_imprimees(base)
+    vues["Référentiels"] = _referentiels
+    if utilisateur_ui.peut("protocoles"):
+        vues["Protocoles"] = _protocoles
+        vues["Règles d'aide"] = _regles
+
+    noms = list(vues)
+    choix = st.segmented_control(
+        "Section", noms, default=st.session_state.get("vue_admin", noms[0]),
+        key="segments_admin", label_visibility="collapsed",
+    ) or st.session_state.get("vue_admin", noms[0])
+    st.session_state["vue_admin"] = choix
+    vues[choix]()
 
 
 # --------------------------------------------------------------------------

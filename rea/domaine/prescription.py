@@ -529,6 +529,27 @@ def parties_ligne(ligne: dict, a_la_date: str | date) -> tuple[EtiquetteJour, st
     return etiquette, " ".join(m for m in morceaux if m), dose_affichee(ligne)
 
 
+def libelle_court(ligne: dict) -> str:
+    """« Tienam 1 g x3/j » — le produit et sa posologie, sans les horaires.
+
+    Deux endroits en ont besoin, pour la même raison : les horaires y sont
+    déjà dits ailleurs, et les répéter allonge chaque ligne d'un tiers pour
+    rien. Sur l'écran de l'infirmier, les prises sont **groupées par heure** —
+    « Enoxaparine (20h) » sous le titre « 20 h » est une redite. Dans les
+    nouveautés du surveillant, l'heure de prise ne sert pas : ce qui compte
+    est ce qui a été prescrit.
+    """
+    morceaux = [str(ligne.get("produit") or "")]
+    if ligne.get("additifs"):
+        morceaux.append(str(ligne["additifs"]))
+    if ligne.get("nb_ampoules"):
+        mot = "cp" if ligne.get("voie") == "PO" else "amp"
+        morceaux.append(f"({_nombre(ligne['nb_ampoules'])} {mot})")
+    if ligne.get("rythme") == "conditionnel" and ligne.get("condition_texte"):
+        morceaux.append(f"si {ligne['condition_texte']}")
+    return " ".join(m for m in morceaux if m)
+
+
 def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
     """Texte complet d'une ligne tel qu'affiché sur la pancarte, ex.
     « J2 Targocid 400mg x2/j » ou « Introduction de Targocid 400mg x2/j ».
