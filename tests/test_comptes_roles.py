@@ -209,3 +209,39 @@ def test_les_comptes_sans_code_sont_reperables(base):
     utilisateurs.creer(base, "Avec", "infirmier", code="492817")
     sans = [u["nom"] for u in utilisateurs.comptes_sans_code(base)]
     assert sans == ["Sans"]
+
+
+# --- l'écran d'accueil du rôle ne doit pas devenir une prison -------------
+#
+# Trouvé en ouvrant chaque écran de chaque rôle dans un navigateur : le
+# surveillant et l'infirmier ne pouvaient **jamais** ouvrir un dossier
+# patient. Ouvrir un dossier retire l'écran courant pour laisser passer la
+# fiche ; le point d'entrée, qui reposait l'accueil du rôle « chaque fois que
+# l'écran est absent », le remettait aussitôt. La nuance entre « une fois par
+# session » et « chaque fois qu'il manque » décidait de tout.
+
+def test_l_accueil_du_role_est_pose_une_fois_et_non_a_chaque_execution():
+    """Le point d'entrée doit poser l'accueil derrière un drapeau de session,
+    et non derrière l'absence de l'écran courant."""
+    import pathlib
+
+    source = (pathlib.Path(__file__).resolve().parent.parent / "rea_app.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"accueil_pose" not in st.session_state' in source
+    assert '"ecran" not in st.session_state' not in source, (
+        "reposer l'accueil dès que l'écran manque empêche d'ouvrir un dossier"
+    )
+
+
+def test_changer_d_utilisateur_oublie_l_ecran_du_precedent():
+    """Sinon le suivant hérite de l'écran du précédent — et un infirmier
+    ouvrirait la supervision."""
+    import pathlib
+
+    source = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "rea" / "ui" / "utilisateur.py"
+    ).read_text(encoding="utf-8")
+    for cle in ("accueil_pose", "ecran", "sejour_id"):
+        assert f'"{cle}"' in source.split("def changer_utilisateur")[1]
