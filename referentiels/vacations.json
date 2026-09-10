@@ -1,0 +1,12 @@
+{
+  "nom": "vacations",
+  "libelle": "Les trois équipes qui se relaient",
+  "version": "2026-09-09.1",
+  "date": "2026-09-09",
+  "note": "Organisation du service (9 septembre 2026) : deux équipes de six heures le jour, une de douze heures la nuit. La nuit franchit minuit — c'est la seule qui le fasse, et c'est ce qui rend le découpage moins simple qu'il n'en a l'air. Les heures sont pleines : une vacation qui commence à 7 h couvre les heures 7, 8, 9, 10, 11 et 12, et rend la main à 13 h.",
+  "valeurs": [
+    ["matin", "Matin", 7, 13],
+    ["apres_midi", "Après-midi", 13, 19],
+    ["nuit", "Nuit", 19, 7]
+  ]
+}

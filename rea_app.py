@@ -9,6 +9,11 @@ vit dans son propre module sous `rea/ui/` — voir SPEC.md pour leur détail.
 Il n'y a volontairement aucune logique ici. C'est ce qui permet aux écrans
 d'être des modules ordinaires, importables et vérifiables sans lancer
 Streamlit — ce qu'un fichier de deux mille lignes ne permettait pas.
+
+L'aiguillage tient compte du rôle : un infirmier ouvre son poste, un
+surveillant sa supervision, un médecin le tableau des lits. Ce n'est pas une
+barrière de sécurité — c'est écrit dans `domaine/droits.py` — mais un écran
+qui ne propose que ce qu'on a le droit de faire évite la moitié des erreurs.
 """
 
 from __future__ import annotations
@@ -19,8 +24,10 @@ from rea import config
 from rea.ui import administration as administration_ui
 from rea.ui import contexte
 from rea.ui import fiche as fiche_ui
+from rea.ui import infirmier as infirmier_ui
 from rea.ui import lits as lits_ui
 from rea.ui import recherche as recherche_ui
+from rea.ui import surveillant as surveillant_ui
 from rea.ui import theme
 from rea.ui import utilisateur as utilisateur_ui
 
@@ -33,26 +40,43 @@ utilisateur_id = utilisateur_ui.selecteur(base)
 if not utilisateur_id:
     st.stop()
 
+#: L'écran d'accueil dépend du rôle : celui qu'on ouvre vingt fois par jour
+#: doit être celui qui s'affiche en entrant.
+ACCUEIL_PAR_ROLE = {"infirmier": "poste", "surveillant": "supervision"}
+
+if "ecran" not in st.session_state:
+    st.session_state["ecran"] = ACCUEIL_PAR_ROLE.get(utilisateur_ui.role_courant(), "")
+
+
 # --------------------------------------------------------------------------
-# Barre latérale — utilisateur courant, retour à l'accueil
+# Barre latérale — utilisateur courant, navigation selon le rôle
 # --------------------------------------------------------------------------
+
 with st.sidebar:
+    from rea.domaine import droits as dom_droits
+
     st.write(f"**{utilisateur_ui.nom_utilisateur_courant()}**")
+    st.caption(dom_droits.libelle(utilisateur_ui.role_courant()))
     if st.button("Changer d'utilisateur"):
         utilisateur_ui.changer_utilisateur()
     st.divider()
-    if st.button("Tableau des lits", use_container_width=True):
-        st.session_state.pop("sejour_id", None)
-        st.session_state.pop("ecran", None)
-        st.rerun()
-    if st.button("Recherche", use_container_width=True):
-        st.session_state.pop("sejour_id", None)
-        st.session_state["ecran"] = "recherche"
-        st.rerun()
-    if st.button("Administration", use_container_width=True):
-        st.session_state.pop("sejour_id", None)
-        st.session_state["ecran"] = "administration"
-        st.rerun()
+
+    if utilisateur_ui.peut("administrations"):
+        if st.button("Mon poste", use_container_width=True):
+            contexte.aller_a("poste")
+    if utilisateur_ui.peut("dossier_lire"):
+        if st.button("Tableau des lits", use_container_width=True):
+            contexte.aller_a("")
+    if utilisateur_ui.peut("supervision"):
+        if st.button("Surveillance", use_container_width=True):
+            contexte.aller_a("supervision")
+    if utilisateur_ui.peut("recherche"):
+        if st.button("Recherche", use_container_width=True):
+            contexte.aller_a("recherche")
+    if utilisateur_ui.peut("protocoles") or utilisateur_ui.peut("comptes"):
+        if st.button("Administration", use_container_width=True):
+            contexte.aller_a("administration")
+
     st.caption(f"Réanimation polyvalente · {config.NB_LITS} lits")
     st.caption("SPEC.md — voir le dépôt pour l'état d'avancement")
 
@@ -60,11 +84,24 @@ with st.sidebar:
 # --------------------------------------------------------------------------
 # Aiguillage
 # --------------------------------------------------------------------------
-if st.session_state.get("ecran") == "administration":
+ecran = st.session_state.get("ecran")
+
+if ecran == "poste" and utilisateur_ui.peut("administrations"):
+    infirmier_ui.ecran(base, utilisateur_id)
+elif ecran == "supervision" and utilisateur_ui.peut("supervision"):
+    surveillant_ui.ecran(base, utilisateur_id)
+elif ecran == "administration" and (
+    utilisateur_ui.peut("protocoles") or utilisateur_ui.peut("comptes")
+):
     administration_ui.ecran(base, utilisateur_id)
-elif st.session_state.get("ecran") == "recherche":
+elif ecran == "recherche" and utilisateur_ui.peut("recherche"):
     recherche_ui.ecran(base, utilisateur_id)
 elif st.session_state.get("sejour_id"):
     fiche_ui.ecran_fiche(st.session_state["sejour_id"])
-else:
+elif utilisateur_ui.peut("dossier_lire"):
     lits_ui.ecran_lits()
+else:
+    st.error(
+        "Ce compte n'a accès à aucun écran. Demander à un administrateur de "
+        "vérifier son rôle."
+    )

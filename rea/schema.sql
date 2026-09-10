@@ -835,3 +835,87 @@ CREATE TABLE IF NOT EXISTS sauvegarde (
     motif       TEXT NOT NULL    -- ouverture / periodique / fermeture / manuelle
 );
 CREATE INDEX IF NOT EXISTS idx_sauvegarde_date ON sauvegarde(date_heure);
+
+-- -------------------------------------------------------------------------
+-- Le travail infirmier : affectations, administrations, surveillance horaire
+-- (SPEC §5.8, demande du service du 9 septembre 2026)
+-- -------------------------------------------------------------------------
+
+-- Qui s'occupe de qui, sur quelle vacation. Une ligne par infirmier, par
+-- patient et par vacation : un infirmier peut avoir plusieurs patients, et un
+-- patient change d'infirmier trois fois par jour. C'est cette table que le
+-- surveillant lit pour savoir qui appeler à trois heures du matin.
+CREATE TABLE IF NOT EXISTS affectation (
+    id             TEXT PRIMARY KEY,
+    sejour_id      TEXT NOT NULL REFERENCES sejour(id),
+    utilisateur_id TEXT NOT NULL REFERENCES utilisateur(id),
+    date_jour      TEXT NOT NULL,   -- le jour de PRISE DE POSTE : la nuit du 9
+                                    -- se termine le 10, elle reste datée du 9
+    vacation       TEXT NOT NULL,   -- matin / apres_midi / nuit
+    cree_le        TEXT NOT NULL,
+    cree_par       TEXT REFERENCES utilisateur(id),
+    modifie_le     TEXT,
+    modifie_par    TEXT REFERENCES utilisateur(id),
+    supprime       INTEGER NOT NULL DEFAULT 0,
+    version        INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_affectation_jour
+    ON affectation(date_jour, vacation, supprime);
+CREATE INDEX IF NOT EXISTS idx_affectation_sejour
+    ON affectation(sejour_id, date_jour, supprime);
+
+-- Une prise administrée (ou non), à son heure prévue.
+--
+-- `heure_prevue` est l'heure de la pancarte, pas l'heure réelle : c'est elle
+-- qui identifie la prise, et elle ne bouge pas si l'infirmière coche à 8 h 20.
+-- `date_heure_reelle` garde le moment du clic. Les deux servent : la première
+-- pour retrouver la prise, la seconde pour relire ce qui s'est passé.
+--
+-- Une prise NON donnée se note, elle ne s'omet pas : une case vide veut dire
+-- « pas encore », une ligne « non_donne » veut dire « décidé ». Confondre les
+-- deux, c'est perdre la seule trace d'un traitement volontairement sauté.
+CREATE TABLE IF NOT EXISTS administration (
+    id                TEXT PRIMARY KEY,
+    sejour_id         TEXT NOT NULL REFERENCES sejour(id),
+    ligne_id          TEXT NOT NULL REFERENCES prescription_ligne(id),
+    date_jour         TEXT NOT NULL,
+    heure_prevue      INTEGER NOT NULL,
+    statut            TEXT NOT NULL,   -- donne / non_donne / refuse
+    motif             TEXT,            -- pourquoi, si non donné
+    date_heure_reelle TEXT,
+    cree_le           TEXT NOT NULL,
+    cree_par          TEXT REFERENCES utilisateur(id),
+    modifie_le        TEXT,
+    modifie_par       TEXT REFERENCES utilisateur(id),
+    supprime          INTEGER NOT NULL DEFAULT 0,
+    version           INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_administration_jour
+    ON administration(sejour_id, date_jour, supprime);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_administration_prise
+    ON administration(ligne_id, date_jour, heure_prevue)
+    WHERE supprime = 0;
+
+-- La surveillance clinique heure par heure — celle du verso de la feuille.
+-- Format long (une ligne par mesure) comme `evolution_element`, pour la même
+-- raison : ajouter une constante ne doit pas demander une colonne de plus.
+CREATE TABLE IF NOT EXISTS constante_horaire (
+    id           TEXT PRIMARY KEY,
+    sejour_id    TEXT NOT NULL REFERENCES sejour(id),
+    date_jour    TEXT NOT NULL,   -- jour de service (8 h → 8 h), comme la feuille
+    heure        INTEGER NOT NULL,
+    cle          TEXT NOT NULL,   -- fc, pas, pad, temperature, spo2, diurese…
+    valeur_num   REAL,
+    valeur_texte TEXT,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_constante_jour
+    ON constante_horaire(sejour_id, date_jour, supprime);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_constante_mesure
+    ON constante_horaire(sejour_id, date_jour, heure, cle)
+    WHERE supprime = 0;

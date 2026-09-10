@@ -33,6 +33,18 @@ def utilisateur_id() -> str | None:
     return st.session_state.get("utilisateur_id")
 
 
+def aller_a(ecran: str) -> None:
+    """Change d'écran et repart de l'accueil de cet écran.
+
+    Le séjour ouvert est oublié au passage : garder « lit 3 » en mémoire en
+    allant sur la recherche fait revenir sur la fiche du lit 3 au clic
+    suivant, sans que personne comprenne pourquoi.
+    """
+    st.session_state.pop("sejour_id", None)
+    st.session_state["ecran"] = ecran
+    st.rerun()
+
+
 def aujourdhui() -> str:
     return date.today().isoformat()
 
