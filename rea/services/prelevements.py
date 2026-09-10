@@ -167,14 +167,17 @@ def effacer(
     Corriger doit coûter le même nombre de gestes que noter, sinon on corrige
     sur le papier.
     """
-    ligne = base.une_ligne(
-        "SELECT id FROM prelevement WHERE sejour_id = ? AND date_jour = ? "
-        "AND examen_code = ? AND heure_prevue = ? AND supprime = 0",
-        (sejour_id, date_jour, examen_code, heure_prevue),
-    )
-    if ligne:
-        base.supprimer_logiquement("prelevement", ligne["id"],
-                                   utilisateur_id=utilisateur_id)
+    # Lire puis effacer n'est atomique que dans une transaction : deux doigts
+    # sur le même bouton effaceraient sinon deux fois la même ligne.
+    with base.transaction():
+        ligne = base.une_ligne(
+            "SELECT id FROM prelevement WHERE sejour_id = ? AND date_jour = ? "
+            "AND examen_code = ? AND heure_prevue = ? AND supprime = 0",
+            (sejour_id, date_jour, examen_code, heure_prevue),
+        )
+        if ligne:
+            base.supprimer_logiquement("prelevement", ligne["id"],
+                                       utilisateur_id=utilisateur_id)
 
 
 def non_faits_du_sejour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:

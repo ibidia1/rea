@@ -926,6 +926,45 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.32 — 10 septembre 2026 — l'audit du même motif partout, et le garde-fou qui l'empêche de revenir**
+
+Corriger ce que le test de charge avait trouvé ne suffisait pas : cinq
+fonctions réparées ne disent rien des autres, ni de celles qu'on écrira
+demain. Un examen systématique de la couche service — lecture de l'arbre
+syntaxique de chaque fonction, à la recherche d'une lecture suivie d'une
+écriture hors transaction — en a trouvé **huit de plus**.
+
+Toutes corrigées. Trois méritent d'être nommées, parce que leur conséquence
+n'est pas la même :
+
+* **`pancarte.imprimer`** numérotait ses versions par `MAX(version) + 1` sur
+  `pancarte_snapshot`, la table d'audit immuable — et cette table ne porte
+  **aucun index unique**. Deux impressions au même instant y auraient rangé
+  deux feuilles différentes sous le même numéro, *sans que rien ne le
+  signale*. C'est le seul cas de la liste où l'absence d'erreur était le pire
+  résultat possible.
+* **`prescriptions.obtenir_ou_creer_journee`** : deux internes préparant la
+  pancarte du lendemain au même moment, et c'est toute la préparation qui
+  tombe sur l'index unique.
+* **`sejours.definir_etat_antecedents`** : pas d'index non plus, donc deux
+  évaluations rangées côte à côte en silence.
+
+Deux corrections gardent délibérément le travail **long hors** de la
+transaction : `pancarte.imprimer` compose son HTML avant d'entrer,
+`scores.historiser` calcule son SOFA avant. Le verrou étant pris aussi en
+lecture, une transaction lente bloque tout le service, lecteurs compris.
+
+*Le garde-fou.* `tests/test_pas_de_course_ecriture.py` relit l'arbre
+syntaxique de tous les services à chaque exécution de la suite et refuse toute
+fonction qui lit puis écrit sans transaction. Une seule exception, nommée et
+vérifiée existante — une fonction dont l'appelant ouvre la transaction. Le
+motif ne peut plus revenir sans que quelqu'un le décide explicitement.
+
+**Vérifications.** 1 113 tests passent (2 ajoutés), pyflakes propre. Test de
+charge rejoué sur le code entièrement corrigé : **zéro erreur sur 54 085
+écritures**, 1 201/s, p99 24 ms, `integrity_check` à « ok ». Recette navigateur
+rejouée sur les cinq rôles.
+
 **v3.31 — 10 septembre 2026 — seize écrivains simultanés, et la course qu'ils ont révélée**
 
 Question du service : SQLite tient-il soixante comptes et une quinzaine de

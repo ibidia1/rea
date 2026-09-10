@@ -33,26 +33,39 @@ def generer_html(base: Base, sejour_id: str, date_jour: str) -> str:
 
 
 def imprimer(base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None) -> dict:
+    # Le HTML se compose **avant** la transaction, et c'est délibéré : il lit
+    # tout le dossier et met des dizaines de millisecondes. Le faire à
+    # l'intérieur tiendrait le verrou pendant tout ce temps et bloquerait le
+    # service entier — lecteurs compris, puisque le verrou est pris aussi en
+    # lecture.
     html_genere = generer_html(base, sejour_id, date_jour)
-    derniere = base.une_ligne(
-        "SELECT MAX(version) AS v FROM pancarte_snapshot WHERE sejour_id = ? AND date_jour = ?",
-        (sejour_id, date_jour),
-    )
-    version = (derniere["v"] or 0) + 1 if derniere else 1
-    id_ = base.inserer(
-        "pancarte_snapshot",
-        {
-            "sejour_id": sejour_id,
-            "date_jour": date_jour,
-            "version": version,
-            "html": html_genere,
-            "format_page": config.FORMAT_PAGE,
-            "imprime_le": maintenant(),
-            "imprime_par": utilisateur_id,
-        },
-        utilisateur_id=utilisateur_id,
-        action="impression",
-    )
+    # Le numéro de version, lui, se lit et s'écrit d'un seul tenant.
+    # `pancarte_snapshot` ne porte **aucun** index unique — c'est une table
+    # d'audit où l'on n'ajoute que des lignes. Deux impressions au même instant
+    # y auraient donc rangé deux feuilles différentes sous le même numéro,
+    # **sans que rien ne le signale** : c'est exactement le cas où l'absence
+    # d'erreur est le pire des résultats.
+    with base.transaction():
+        derniere = base.une_ligne(
+            "SELECT MAX(version) AS v FROM pancarte_snapshot "
+            "WHERE sejour_id = ? AND date_jour = ?",
+            (sejour_id, date_jour),
+        )
+        version = (derniere["v"] or 0) + 1 if derniere else 1
+        id_ = base.inserer(
+            "pancarte_snapshot",
+            {
+                "sejour_id": sejour_id,
+                "date_jour": date_jour,
+                "version": version,
+                "html": html_genere,
+                "format_page": config.FORMAT_PAGE,
+                "imprime_le": maintenant(),
+                "imprime_par": utilisateur_id,
+            },
+            utilisateur_id=utilisateur_id,
+            action="impression",
+        )
     return base.une_ligne("SELECT * FROM pancarte_snapshot WHERE id = ?", (id_,))
 
 

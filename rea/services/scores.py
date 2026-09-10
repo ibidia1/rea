@@ -123,18 +123,26 @@ def historiser(
             ensure_ascii=False,
         ),
     }
-    existant = base.une_ligne(
-        "SELECT id FROM score_quotidien WHERE sejour_id = ? AND date_jour = ? AND score = ?",
-        (sejour_id, date_jour, score.code),
-    )
-    if existant:
-        base.mettre_a_jour(
-            "score_quotidien", existant["id"],
-            {k: v for k, v in valeurs.items() if k not in ("sejour_id", "date_jour", "score")},
-            utilisateur_id=utilisateur_id,
+    # Le SOFA se calcule **avant** la transaction : il lit tout le dossier du
+    # jour, et le faire à l'intérieur tiendrait le verrou pendant ce temps.
+    # Seul le « lire puis écrire » y entre, car `score_quotidien` porte un
+    # index unique sur (séjour, jour, score) : deux écrans ouverts sur le même
+    # patient auraient sinon fait échouer le second.
+    with base.transaction():
+        existant = base.une_ligne(
+            "SELECT id FROM score_quotidien WHERE sejour_id = ? AND date_jour = ? "
+            "AND score = ?",
+            (sejour_id, date_jour, score.code),
         )
-    else:
-        base.inserer("score_quotidien", valeurs, utilisateur_id=utilisateur_id)
+        if existant:
+            base.mettre_a_jour(
+                "score_quotidien", existant["id"],
+                {k: v for k, v in valeurs.items()
+                 if k not in ("sejour_id", "date_jour", "score")},
+                utilisateur_id=utilisateur_id,
+            )
+        else:
+            base.inserer("score_quotidien", valeurs, utilisateur_id=utilisateur_id)
 
 
 def evolution_sofa(base: Base, sejour_id: str) -> list[tuple[str, int]]:
