@@ -22,6 +22,7 @@ import streamlit as st
 
 from rea import config
 from rea.ui import administration as administration_ui
+from rea.ui import bandeau as bandeau_ui
 from rea.ui import contexte
 from rea.ui import fiche as fiche_ui
 from rea.ui import infirmier as infirmier_ui
@@ -40,18 +41,16 @@ utilisateur_id = utilisateur_ui.selecteur(base)
 if not utilisateur_id:
     st.stop()
 
-#: L'écran d'accueil dépend du rôle : celui qu'on ouvre vingt fois par jour
-#: doit être celui qui s'affiche en entrant.
-ACCUEIL_PAR_ROLE = {"infirmier": "poste", "surveillant": "supervision"}
-
 # Une seule fois par session, et pas « chaque fois que l'écran est absent ».
 # La nuance décide de tout : ouvrir un dossier retire `ecran` pour laisser
 # passer la fiche, et un test « si absent, remets l'accueil du rôle » la
 # reposait aussitôt — le surveillant et l'infirmier étaient renvoyés chez eux
 # à chaque tentative d'ouvrir un patient, sans jamais pouvoir en lire un.
 if "accueil_pose" not in st.session_state:
-    st.session_state["ecran"] = ACCUEIL_PAR_ROLE.get(utilisateur_ui.role_courant(), "")
-    st.session_state["accueil_pose"] = True
+    contexte.poser_accueil(utilisateur_ui.role_courant())
+
+
+bandeau_ui.haut_de_page()
 
 
 # --------------------------------------------------------------------------

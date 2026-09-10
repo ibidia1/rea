@@ -926,6 +926,55 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.30 — 10 septembre 2026 — les prélèvements du poste, et l'essai de rôle**
+
+*Les bilans et les radios de sa vacation.* `bilan_demande` disait ce qu'il faut
+prélever et à quelle heure ; rien ne disait si ça avait été fait. Un bilan
+demandé la veille au soir et jamais prélevé ne laissait aucune trace, et
+personne ne s'en apercevait avant que le résultat manque à la visite (demande
+du service, 10 septembre).
+
+L'onglet **À prélever** montre à chaque équipe **ses** examens, groupés par
+heure — le matin voit les prélèvements du matin, pas les vingt-quatre heures.
+Les radios, l'ECG et l'échographie y sont : ils sont demandés dans la même
+liste et portent la même heure, et une radio de 8 h oubliée coûte la même
+visite qu'une NFS oubliée. Un examen se coche comme une prise, et un
+non-prélevé dit **pourquoi**, dans une liste à part
+(`referentiels/motifs_non_prelevement.json`) : un bilan ne se rate pas pour
+rupture de stock, il se rate parce que le patient était au bloc.
+
+*L'accès Admin, en haut à droite de chaque écran.* La barre latérale se replie
+sur un téléphone et se referme d'un clic par erreur. La barre d'outils de
+Streamlit est retirée au passage : elle propose « Deploy », sans objet dans un
+service, et elle occupait précisément ce coin — le bouton passait dessous et
+n'était plus cliquable.
+
+*Essayer un rôle.* Un administrateur peut voir l'application **comme** un
+infirmier ou un surveillant. Les deux seuls moyens jusqu'ici étaient mauvais :
+créer un compte d'essai par rôle — qui encombre la liste d'ouverture de
+comptes qui ne soignent personne — ou demander son code à quelqu'un, ce qui
+apprend au service à se prêter les codes.
+
+**L'identité qui signe ne change pas**, et c'est la seule propriété qui compte :
+tout ce qui s'écrit pendant l'essai reste signé par l'administrateur, parce
+qu'une observation signée du nom d'un infirmier qui ne l'a pas écrite serait un
+faux dans un dossier médical. Un bandeau permanent le rappelle — un message qui
+passe se serait oublié. Et l'essai ne peut que **retirer** des droits : seul un
+administrateur l'ouvre, et il les a tous.
+
+*Un bug trouvé à l'écran, et pas par les tests.* Le bouton Admin ne menait
+nulle part. Quitter un essai effaçait le drapeau « accueil posé », et le rerun
+suivant reposait l'accueil du rôle par-dessus la destination demandée.
+L'accueil par rôle est désormais dans `ui/contexte.poser_accueil`, appelé par
+le point d'entrée **et** par l'essai — une seule façon de poser un accueil, au
+lieu de deux qui se marchaient dessus.
+
+**Vérifications.** 1 104 tests passent (22 ajoutés), pyflakes propre. Recette
+navigateur rejouée sur les cinq rôles avec les deux nouvelles vues. Vérifié à
+l'écran : l'équipe d'après-midi voit 14 h Gaz du sang et 16 h ECG, et
+l'administrateur en essai « Infirmier » n'a plus que les écrans d'un
+infirmier.
+
 **v3.29 — 10 septembre 2026 — le nom commercial entre parenthèses**
 
 Le prescrit écrit désormais « Imipénème (Tienam) », « Lévétiracétam (Keppra) »

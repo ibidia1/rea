@@ -145,8 +145,55 @@ def nom_utilisateur_courant() -> str:
     return st.session_state.get("utilisateur_nom", "")
 
 
-def role_courant() -> str | None:
+#: Le rôle réellement porté par le compte connecté — jamais celui d'un essai.
+def role_reel() -> str | None:
     return st.session_state.get("utilisateur_role")
+
+
+def role_courant() -> str | None:
+    """Le rôle dont l'écran doit tenir compte, essai compris.
+
+    Un administrateur peut demander à voir l'application **comme** un
+    infirmier ou un surveillant, pour vérifier ce que chacun trouve à son
+    écran sans avoir à connaître le code de quelqu'un d'autre.
+
+    Ce que cet essai change : les écrans proposés et les droits qu'ils
+    consultent. Ce qu'il ne change **jamais** : l'identité qui signe. Tout ce
+    qui s'écrit pendant l'essai reste signé par l'administrateur, parce
+    qu'une observation signée du nom d'un infirmier qui ne l'a pas écrite est
+    un faux dans un dossier médical.
+
+    Et l'essai ne peut que **retirer** des droits : seul un administrateur
+    peut l'ouvrir, et il les a tous. Aucun rôle d'essai ne donne accès à ce
+    que le compte n'aurait pas déjà.
+    """
+    return st.session_state.get("role_essai") or role_reel()
+
+
+def role_essaye() -> str | None:
+    """Le rôle qu'on est en train d'essayer, ou None hors essai."""
+    return st.session_state.get("role_essai")
+
+
+def essayer_role(role: str | None) -> None:
+    from ..domaine import droits as _droits
+
+    if not dom_droits.peut(role_reel(), "comptes"):
+        raise PermissionError("Seul un administrateur peut essayer un rôle.")
+    if role and role not in _droits.roles():
+        raise ValueError(f"Rôle inconnu : {role}")
+    if role:
+        st.session_state["role_essai"] = role
+    else:
+        st.session_state.pop("role_essai", None)
+    # L'écran courant appartenait au rôle précédent : le garder afficherait
+    # une page à laquelle le nouveau rôle n'a pas droit. On pose donc
+    # directement l'accueil du rôle visé — plutôt que d'effacer le drapeau
+    # « accueil posé », ce qui laisserait le point d'entrée reposer cet
+    # accueil au rerun suivant, par-dessus une destination demandée entre-temps.
+    from . import contexte
+
+    contexte.poser_accueil(role_courant())
 
 
 def peut(droit: str) -> bool:
@@ -161,6 +208,6 @@ def peut(droit: str) -> bool:
 
 def changer_utilisateur() -> None:
     for cle in ("utilisateur_id", "utilisateur_nom", "utilisateur_role",
-                "accueil_pose", "ecran", "sejour_id"):
+                "role_essai", "accueil_pose", "ecran", "sejour_id"):
         st.session_state.pop(cle, None)
     st.rerun()

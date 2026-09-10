@@ -33,6 +33,26 @@ def utilisateur_id() -> str | None:
     return st.session_state.get("utilisateur_id")
 
 
+#: L'écran d'accueil de chaque rôle : celui qu'on ouvre vingt fois par jour
+#: doit être celui qui s'affiche en entrant. Les autres rôles arrivent sur le
+#: tableau des lits, qui est l'accueil vide.
+ACCUEIL_PAR_ROLE = {"infirmier": "poste", "surveillant": "supervision"}
+
+
+def poser_accueil(role: str | None) -> None:
+    """Place l'écran d'accueil du rôle — sans rerun, et sans rien oublier.
+
+    Séparé de `aller_a` parce que les deux se marchaient dessus : quitter un
+    essai de rôle pour aller à l'administration effaçait le drapeau
+    « accueil posé », et le rerun suivant reposait l'accueil du rôle
+    par-dessus la destination demandée. Le bouton Admin ne menait alors
+    nulle part.
+    """
+    st.session_state["ecran"] = ACCUEIL_PAR_ROLE.get(role or "", "")
+    st.session_state.pop("sejour_id", None)
+    st.session_state["accueil_pose"] = True
+
+
 def aller_a(ecran: str) -> None:
     """Change d'écran et repart de l'accueil de cet écran.
 
