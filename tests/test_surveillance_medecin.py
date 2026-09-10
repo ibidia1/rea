@@ -41,28 +41,35 @@ def test_la_journee_commence_a_la_prise_de_poste_du_matin():
     assert heures.index(23) + 1 == heures.index(0)
 
 
-# -- le résumé de fin de ligne ---------------------------------------------
+# -- la colonne de synthèse ------------------------------------------------
 
-def test_les_constantes_se_resument_en_min_max_et_les_sorties_en_total():
-    """Se tromper de résumé rendrait la colonne fausse : additionner des
-    Glasgow ou moyenner une diurèse ne veut rien dire."""
+def test_les_constantes_se_resument_par_leurs_extremes():
+    """Les deux chiffres qui décident : le plus bas et le plus haut. Une PA
+    moyenne à 75 ne dit pas qu'on a passé la nuit à 55."""
     vue = importlib.import_module("rea.ui.surveillance")
-    assert "60" in vue._resume("fc", [60.0, 110.0, 90.0], "/min")
-    assert "110" in vue._resume("fc", [60.0, 110.0, 90.0], "/min")
-    # Une diurèse : la somme, et sur combien d'heures elle est faite.
-    total = vue._resume("diurese", [100.0, None, 50.0], "mL")
-    assert "150" in total and "2 h" in total
+    resume = vue._extremes([60.0, 110.0, 90.0], "/min")
+    assert "60" in resume and "110" in resume
 
 
 def test_une_valeur_unique_ne_s_affiche_pas_comme_un_intervalle():
     vue = importlib.import_module("rea.ui.surveillance")
-    resume = vue._resume("fc", [None, 88.0, None], "/min")
+    resume = vue._extremes([None, 88.0, None], "/min")
     assert "88" in resume and "–" not in resume
 
 
 def test_une_ligne_sans_aucune_mesure_ne_produit_pas_de_resume():
     vue = importlib.import_module("rea.ui.surveillance")
-    assert vue._resume("fc", [None, None], "/min") == ""
+    assert vue._extremes([None, None], "/min") == ""
+
+
+def test_les_recueils_ne_passent_pas_par_le_resume_des_constantes():
+    """Un recueil n'a pas de min-max : sa case porte un niveau, et ce qu'on
+    veut en lire est le volume calculé. Les deux familles ne se rendent donc
+    pas de la même façon, et c'est le seul endroit où l'écart se voit."""
+    constantes = importlib.import_module("rea.services.constantes")
+    vitales = {c for c, _l, _u in constantes.VITALES}
+    assert not (vitales & set(constantes.CLES_NIVEAU))
+    assert "diurese" in constantes.CLES_NIVEAU
 
 
 # -- le branchement --------------------------------------------------------
@@ -91,11 +98,24 @@ def test_l_ecran_medecin_ne_modifie_pas_le_releve_infirmier():
 
 def test_le_total_infirmier_est_propose_au_medecin_pas_ecrit_a_sa_place():
     """Le chiffre des 24 h reste celui du médecin : le relevé peut porter des
-    trous, et une somme partielle affichée comme une mesure entrerait telle
-    quelle dans le bilan hydrique."""
+    trous, et un total partiel affiché comme une mesure entrerait tel quel
+    dans le bilan hydrique."""
     source = _source("evolution")
     assert "_releve_infirmier" in source
     assert "Relevé infirmier" in source
     # Proposé par une légende, jamais par la valeur du champ de saisie.
     evo = importlib.import_module("rea.ui.evolution")
-    assert set(evo._RELEVE_HORAIRE) == {"diurese_24h", "jetes_24h"}
+    assert set(evo._RELEVE_HORAIRE) == {"diurese_24h"}
+
+
+def test_le_medecin_voit_les_volumes_calcules_pas_les_niveaux_seuls():
+    """Afficher les seuls niveaux ferait prendre « 900 à 13 h » pour une
+    diurèse horaire de 900 mL."""
+    assert "sorties_du_jour(" in _source("surveillance")
+
+
+def test_un_total_incomplet_le_dit_au_medecin():
+    """Un total amputé qui se présente comme complet est pire qu'un total
+    absent : il se recopie dans l'observation."""
+    assert "incomplet" in _source("evolution")
+    assert "_reserves" in _source("surveillance")

@@ -268,7 +268,6 @@ def bilan_hydrique(base: Base, sejour_id: str, date_jour: str) -> dom.BilanHydri
     return dom.bilan_hydrique(
         prescriptions_service.lignes_actives_le(base, sejour_id, date_jour),
         diurese_ml=_nombre_ou_none(elements.get("diurese_24h")),
-        jetes_ml=_nombre_ou_none(elements.get("jetes_24h")),
         drains=drains,
         poids_kg=(sejour or {}).get("poids_kg"),
         temperature_c=_nombre_ou_none(elements.get("temperature")),

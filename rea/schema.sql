@@ -916,6 +916,13 @@ CREATE TABLE IF NOT EXISTS constante_horaire (
     cle          TEXT NOT NULL,   -- fc, pas, pad, temperature, spo2, diurese…
     valeur_num   REAL,
     valeur_texte TEXT,
+    -- Pour ce qui se recueille dans un sac (la diurèse), valeur_num est le
+    -- NIVEAU LU sur le sac, pas ce qui est sorti pendant l'heure : c'est ce
+    -- que l'infirmier voit, et lui demander la soustraction au lit du malade
+    -- serait lui demander de se tromper. Ce drapeau dit que le sac a été jeté
+    -- juste après ce relevé — le suivant repart donc de zéro. Sans lui, un
+    -- changement de sac se lirait comme une diurèse qui s'effondre.
+    sac_jete     INTEGER NOT NULL DEFAULT 0,
     cree_le      TEXT NOT NULL,
     cree_par     TEXT REFERENCES utilisateur(id),
     modifie_le   TEXT,

@@ -82,6 +82,23 @@ def heures_du_jour() -> tuple[int, ...]:
     return tuple(heures_ordonnees)
 
 
+def instant_du_releve(jour: str | date, heure: int) -> datetime:
+    """L'horodatage réel d'un relevé rangé sous ce jour, à cette heure.
+
+    Une journée d'infirmerie va de 7 h à 7 h : un relevé de 3 h rangé sous le
+    9 a eu lieu le **10** à 3 h du matin. Sans cette conversion, deux relevés
+    successifs — 23 h puis 1 h — se compareraient à l'envers, et la diurèse
+    calculée de la nuit serait négative.
+    """
+    from .dates import parse_date
+
+    premiere = heures_du_jour()[0]
+    date_reelle = parse_date(jour)
+    if heure < premiere:
+        date_reelle += timedelta(days=1)
+    return datetime.combine(date_reelle, datetime.min.time()) + timedelta(hours=heure)
+
+
 def contient(code: str, heure: int) -> bool:
     return heure % 24 in heures(code)
 

@@ -310,20 +310,24 @@ def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
 #: Les cases des 24 h que les infirmiers alimentent heure par heure. Le
 #: rapprochement se fait sur la clé, à un suffixe près : c'est la même
 #: mesure, comptée sur la journée d'un côté et relevée à l'heure de l'autre.
-_RELEVE_HORAIRE = {"diurese_24h": "diurese", "jetes_24h": "jetes"}
+_RELEVE_HORAIRE = {"diurese_24h": "diurese"}
 
 
 def _releve_infirmier(sejour: dict, date_jour_str: str, cle: str) -> None:
     """Ce que les infirmiers ont relevé sur la journée — proposé, pas écrit.
 
-    Le chiffre reste celui du médecin : il arrête ce qu'il retient pour les
-    24 h, et le total infirmier peut porter des trous (une heure non relevée,
-    un bocal changé entre deux). L'écrire à sa place ferait passer une somme
-    partielle pour une mesure, et c'est ce total-là qui entre ensuite dans le
-    bilan hydrique.
+    Ce n'est pas la somme de leurs cases : ils y notent le **niveau du sac**,
+    et l'additionner recompterait la même urine à chaque heure. C'est la somme
+    des différences entre niveaux successifs, sacs jetés compris
+    (`domaine/recueil.py`).
 
-    Le total est celui de la journée d'infirmerie — les trois vacations
-    ouvertes ce jour-là, de 7 h à 7 h.
+    Le chiffre reste celui du médecin : il arrête ce qu'il retient pour les
+    24 h, et le relevé peut porter des trous. L'écrire à sa place ferait
+    passer un total partiel pour une mesure — et c'est ce total-là qui entre
+    ensuite dans le bilan hydrique.
+
+    La journée est celle de l'infirmerie : les trois vacations ouvertes ce
+    jour-là, de 7 h à 7 h.
     """
     horaire = _RELEVE_HORAIRE.get(cle)
     if not horaire:
@@ -331,15 +335,17 @@ def _releve_infirmier(sejour: dict, date_jour_str: str, cle: str) -> None:
     total = constantes_service.total_du_jour(
         contexte.base(), sejour["id"], date_jour_str, horaire
     )
-    if total is None:
+    if total.volume_ml is None:
         return
-    heures = constantes_service.heures_relevees(
-        contexte.base(), sejour["id"], date_jour_str, horaire
+    texte = (
+        f"Relevé infirmier : {champs.format_valeur(round(total.volume_ml))} mL "
+        f"sur {total.heures_comptees} h"
     )
-    st.caption(
-        f"Relevé infirmier : {champs.format_valeur(round(total))} mL "
-        f"sur {heures} h"
-    )
+    if not total.complet:
+        # Un total amputé qui se présente comme complet est pire qu'un total
+        # absent : le médecin le recopie sans savoir ce qui lui manque.
+        texte += " — incomplet, voir le détail horaire ci-dessus"
+    st.caption(texte)
 
 
 def _champs_drains(sejour: dict, date_jour_str: str, elements: dict, prefixe: str) -> None:
@@ -398,7 +404,6 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     bilan = dom.bilan_hydrique(
         prescriptions_service.lignes_actives_le(contexte.base(), sejour["id"], date_jour_str),
         diurese_ml=_valeur_en_cours(prefixe, "diurese_24h", sauvegardees),
-        jetes_ml=_valeur_en_cours(prefixe, "jetes_24h", sauvegardees),
         drains=drains,
         poids_kg=sejour.get("poids_kg"),
         temperature_c=_valeur_en_cours(prefixe, "temperature", sauvegardees),
@@ -419,8 +424,6 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     detail = [
         f"Diurèse {champs.format_valeur(round(bilan.diurese_ml))} mL",
     ]
-    if bilan.jetes_ml:
-        detail.append(f"Jetés {champs.format_valeur(round(bilan.jetes_ml))} mL")
     if bilan.drains_ml:
         detail.append(f"Drains {bilan.texte_drains}")
     detail.append(

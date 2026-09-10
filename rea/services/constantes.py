@@ -17,7 +17,11 @@ relevé de 2 h du matin appartient à la feuille ouverte la veille.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from ..db import Base
+from ..domaine import recueil
+from ..domaine import vacations as dom_vacations
 
 #: Ce qui se relève toutes les heures, dans l'ordre du verso de la feuille.
 #:
@@ -36,30 +40,28 @@ VITALES = (
     ("dextro", "Dextro", "g/L"),
 )
 
-#: Ce qui **sort** du malade, relevé heure par heure comme le reste.
+#: Ce qui se recueille dans un sac, relevé heure par heure comme le reste —
+#: mais ce n'est **pas la même chose qu'on écrit**.
 #:
-#: Séparé des constantes vitales pour deux raisons, et la seconde compte plus
-#: que la première. À l'écran, ces cases se remplissent d'un autre geste : on
-#: vide un bocal, on ne lit pas un moniteur. Et surtout ces valeurs-là
-#: **s'additionnent sur la journée** — une FC ne se somme pas, une diurèse
-#: si. C'est cette somme qui devient le total des pertes du bilan hydrique ;
-#: sommer par erreur une température donnerait 900 °C.
+#: Dans ces cases, l'infirmier note le **niveau lu sur le sac** : 120, puis
+#: 210, puis 300. Pas ce qui est sorti pendant l'heure. C'est ce qu'il voit,
+#: et lui demander la soustraction au lit du malade, de nuit, avec des gants,
+#: serait lui demander de se tromper (pratique du service, 10 septembre).
 #:
-#: Les « jetés » sont ce qu'on recueille et qu'on jette au lieu de le
-#: réinjecter — le liquide gastrique aspiré, avant tout (demande du service,
-#: 10 septembre). Sans cette ligne, un patient qui perd 800 mL par la sonde
-#: gastrique apparaît en bilan positif alors qu'il se déshydrate.
+#: Le logiciel fait la soustraction, dans `domaine/recueil.py`. Additionner
+#: ces cases recompterait la même urine à chaque heure : douze relevés d'un
+#: patient qui fait 100 mL/h annonceraient 7 800 mL pour 1 200 produits.
 SORTIES = (
     ("diurese", "Diurèse", "mL"),
-    ("jetes", "Jetés", "mL"),
 )
 
 #: Tout ce qui se relève, dans l'ordre du papier. Les sorties ferment la
 #: liste, comme au verso de la feuille.
 CLES = VITALES + SORTIES
 
-#: Les clés dont la somme de la journée a un sens (voir `SORTIES`).
-CLES_SOMMABLES = tuple(cle for cle, _l, _u in SORTIES)
+#: Les clés dont la case porte un **niveau** et non une quantité. Elles ne
+#: s'additionnent jamais telles quelles : elles passent par `recueil`.
+CLES_NIVEAU = tuple(cle for cle, _l, _u in SORTIES)
 
 
 def libelle(cle: str) -> str:
@@ -77,13 +79,20 @@ def enregistrer(
     heure: int,
     valeurs: dict[str, float | None],
     *,
+    sacs_jetes: set[str] | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
     """Écrit les mesures d'une heure. Une valeur à None efface la mesure.
 
     Effacer plutôt que d'écrire zéro : une FC à 0 est un arrêt cardiaque, pas
     une case qu'on a vidée.
+
+    `sacs_jetes` nomme les recueils vidés **juste après** ce relevé : le
+    niveau qu'on vient d'écrire est le dernier de ce sac-là, et le suivant
+    repartira de zéro. Sans ce drapeau, un sac changé se lirait comme une
+    diurèse qui s'effondre.
     """
+    jetes = sacs_jetes or set()
     existantes = {
         ligne["cle"]: ligne
         for ligne in base.requete(
@@ -99,21 +108,27 @@ def enregistrer(
                 base.supprimer_logiquement("constante_horaire", ancienne["id"],
                                            utilisateur_id=utilisateur_id)
             continue
+        drapeau = 1 if cle in jetes else 0
         if ancienne:
             base.mettre_a_jour("constante_horaire", ancienne["id"],
-                               {"valeur_num": float(valeur)},
+                               {"valeur_num": float(valeur), "sac_jete": drapeau},
                                utilisateur_id=utilisateur_id)
         else:
             base.inserer(
                 "constante_horaire",
                 {"sejour_id": sejour_id, "date_jour": date_jour, "heure": heure,
-                 "cle": cle, "valeur_num": float(valeur)},
+                 "cle": cle, "valeur_num": float(valeur), "sac_jete": drapeau},
                 utilisateur_id=utilisateur_id,
             )
 
 
 def du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[int, dict[str, float]]:
-    """heure -> {clé: valeur} pour toute la journée de service."""
+    """heure -> {clé: valeur} pour toute la journée de service.
+
+    Pour les recueils, la valeur est le **niveau lu**, pas ce qui est sorti :
+    c'est la case telle qu'elle a été remplie. Les volumes se demandent à
+    `sorties_du_jour`.
+    """
     grille: dict[int, dict[str, float]] = {}
     for ligne in base.requete(
         "SELECT heure, cle, valeur_num FROM constante_horaire "
@@ -123,6 +138,20 @@ def du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[int, dict[str, f
     ):
         grille.setdefault(ligne["heure"], {})[ligne["cle"]] = ligne["valeur_num"]
     return grille
+
+
+def sacs_jetes_du_jour(base: Base, sejour_id: str, date_jour: str) -> set[tuple[int, str]]:
+    """Les (heure, clé) après lesquels le sac a été jeté — pour le marquer à
+    l'écran. Un niveau qui retombe à 40 après 900 doit s'expliquer de
+    lui-même, sinon c'est le relevé qu'on soupçonne."""
+    return {
+        (l["heure"], l["cle"])
+        for l in base.requete(
+            "SELECT heure, cle FROM constante_horaire WHERE sejour_id = ? "
+            "AND date_jour = ? AND supprime = 0 AND sac_jete = 1",
+            (sejour_id, date_jour),
+        )
+    }
 
 
 def serie(base: Base, sejour_id: str, date_jour: str, cle: str) -> list[tuple[int, float]]:
@@ -138,38 +167,77 @@ def serie(base: Base, sejour_id: str, date_jour: str, cle: str) -> list[tuple[in
     ]
 
 
-def total_du_jour(base: Base, sejour_id: str, date_jour: str, cle: str) -> float | None:
-    """La somme d'une sortie sur la journée de service, ou None si rien n'a
-    été relevé.
+def _releves(base: Base, sejour_id: str, cle: str) -> list[recueil.Releve]:
+    """Tous les niveaux lus pour ce recueil, depuis l'admission.
 
-    None et 0 ne disent pas la même chose et l'écart se paie dans le bilan
-    hydrique : « rien de relevé » n'est pas « rien de perdu ». Ce total est
-    proposé au médecin dans l'évolution, jamais écrit à sa place — c'est lui
-    qui arrête le chiffre des 24 h, et une journée peut avoir été relevée à
-    trous.
-
-    Refuse une clé qui ne s'additionne pas : la somme des températures de la
-    journée n'est pas une température.
+    Toute la série et pas seulement la journée demandée : le premier relevé
+    d'un jour se compare à **celui de la veille au soir**. Coupé à minuit ou
+    à 7 h, le calcul perdrait la première heure de chaque journée, soit une
+    heure sur vingt-quatre, tous les jours.
     """
-    if cle not in CLES_SOMMABLES:
-        raise ValueError(f"{cle} ne s'additionne pas sur la journée")
-    ligne = base.une_ligne(
-        "SELECT COUNT(*) AS n, SUM(valeur_num) AS total FROM constante_horaire "
-        "WHERE sejour_id = ? AND date_jour = ? AND cle = ? AND supprime = 0 "
-        "AND valeur_num IS NOT NULL",
-        (sejour_id, date_jour, cle),
-    )
-    if not ligne or not ligne["n"]:
-        return None
-    return float(ligne["total"])
+    return [
+        recueil.Releve(
+            instant=dom_vacations.instant_du_releve(l["date_jour"], l["heure"]),
+            niveau_ml=float(l["valeur_num"]),
+            sac_jete=bool(l["sac_jete"]),
+        )
+        for l in base.requete(
+            "SELECT date_jour, heure, valeur_num, sac_jete FROM constante_horaire "
+            "WHERE sejour_id = ? AND cle = ? AND supprime = 0 "
+            "AND valeur_num IS NOT NULL",
+            (sejour_id, cle),
+        )
+    ]
 
 
-def heures_relevees(base: Base, sejour_id: str, date_jour: str, cle: str) -> int:
-    """Combien d'heures portent une valeur — ce qui dit si le total vaut
-    quelque chose. Un « total » sur trois heures n'est pas un total /24 h."""
-    ligne = base.une_ligne(
-        "SELECT COUNT(*) AS n FROM constante_horaire WHERE sejour_id = ? "
-        "AND date_jour = ? AND cle = ? AND supprime = 0 AND valeur_num IS NOT NULL",
-        (sejour_id, date_jour, cle),
-    )
-    return int((ligne or {}).get("n") or 0)
+def sorties_du_jour(
+    base: Base, sejour_id: str, date_jour: str, cle: str
+) -> dict[int, recueil.Sortie]:
+    """heure -> ce qui est sorti pendant cette heure-là, calculé.
+
+    C'est la ligne que le médecin lit et que l'infirmier vérifie : pas les
+    niveaux qu'on a écrits, mais les volumes qu'ils impliquent.
+    """
+    _verifier_niveau(cle)
+    debut, fin = _fenetre(date_jour)
+    return {
+        s.instant.hour: s
+        for s in recueil.sorties(_releves(base, sejour_id, cle))
+        if debut <= s.instant < fin
+    }
+
+
+def total_du_jour(
+    base: Base, sejour_id: str, date_jour: str, cle: str
+) -> recueil.Total:
+    """Ce qui est sorti sur les 24 h de la journée d'infirmerie.
+
+    Pas la somme des cases : la somme des **différences** entre niveaux
+    successifs, sac jeté compris (`domaine/recueil.py`). Additionner les cases
+    recompterait la même urine à chaque heure.
+
+    Le total sait aussi ce qui lui manque — heures sans relevé de référence,
+    niveaux en baisse sans sac déclaré jeté. Un total amputé qui se présente
+    comme complet est pire qu'un total absent : le médecin le recopie.
+    """
+    _verifier_niveau(cle)
+    debut, fin = _fenetre(date_jour)
+    return recueil.total(recueil.sorties(_releves(base, sejour_id, cle)), debut, fin)
+
+
+def _verifier_niveau(cle: str) -> None:
+    """La somme des températures d'une journée n'est pas une température."""
+    if cle not in CLES_NIVEAU:
+        raise ValueError(f"{cle} n'est pas un recueil : rien à cumuler")
+
+
+def _fenetre(date_jour: str) -> tuple[datetime, datetime]:
+    """Les bornes de la journée d'infirmerie, en horodatages.
+
+    De 7 h ce jour-là à 7 h le lendemain — pas de minuit à minuit : une
+    équipe de nuit a pris son poste la veille, et son relevé de 3 h appartient
+    à sa journée.
+    """
+    heures = dom_vacations.heures_du_jour()
+    debut = dom_vacations.instant_du_releve(date_jour, heures[0])
+    return debut, debut + timedelta(hours=len(heures))

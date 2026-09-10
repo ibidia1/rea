@@ -1,9 +1,9 @@
 {
   "nom": "elements_plan",
   "libelle": "Éléments fixes des quatre plans de l'évolution",
-  "version": "2026-09-10.1",
+  "version": "2026-09-10.2",
   "date": "2026-09-10",
-  "note": "Format : [clé, libellé, unité, type, plage affichée en gris]. La PAM ne figure pas parmi les éléments saisis : elle se déduit de la PAS et de la PAD ((PAS + 2 × PAD) / 3) et s'écrit PAS/PAD(PAM) dans le texte du plan. Trois cases dont une déductible des deux autres, c'est une incohérence qui attend son tour. Les « jetés » sont ce qui est recueilli puis jeté au lieu d'être réinjecté — le liquide gastrique aspiré avant tout (demande du service, 10 septembre). Ils entrent dans le total des pertes du bilan hydrique, à côté de la diurèse et des drains, et l'infirmier les relève heure par heure : le chiffre des 24 h est proposé au médecin, jamais écrit à sa place. Pas de plage affichée : il n'y a pas de valeur normale de jetés, zéro est le cas le plus fréquent.",
+  "note": "Format : [clé, libellé, unité, type, plage affichée en gris]. La PAM ne figure pas parmi les éléments saisis : elle se déduit de la PAS et de la PAD ((PAS + 2 × PAD) / 3) et s'écrit PAS/PAD(PAM) dans le texte du plan. Trois cases dont une déductible des deux autres, c'est une incohérence qui attend son tour. La diurèse des 24 h n'est plus additionnée à partir des cases horaires : l'infirmier y note le niveau lu sur le sac, et le logiciel fait les différences (`domaine/recueil.py`). Une case « jetés » avait été ajoutée le 10 septembre au matin comme perte supplémentaire — retirée le soir : jeter un sac est un geste de comptage, et ce qu'il contient est déjà la diurèse. L'y ajouter doublait l'urine du patient dans le total des pertes.",
   "valeurs": {
     "neurologique": [
       [
@@ -93,13 +93,6 @@
         "mL",
         "nombre",
         "> 1000"
-      ],
-      [
-        "jetes_24h",
-        "Jetés /24 h",
-        "mL",
-        "nombre",
-        ""
       ],
       [
         "diurese_conservee",
