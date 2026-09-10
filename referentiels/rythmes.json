@@ -1,41 +1,134 @@
 {
   "nom": "rythmes",
-  "libelle": "Rythmes d'administration",
-  "version": "2026-09-03.1",
-  "date": "2026-09-03",
-  "note": "Modifiable sans toucher au code. Incrémenter la version à chaque changement.",
+  "libelle": "Rythmes de prise",
+  "version": "2026-09-10.1",
+  "date": "2026-09-10",
+  "note": "Format : [code, libellé, horaires proposés en heures pleines]. Les horaires étaient dans `config.py`, c'est-à-dire dans le code : ils sont revenus ici, où le service peut les revoir sans reprogrammer — l'heure d'une prise est une habitude de service, pas une règle de programme. La liste va d'une prise par jour à une prise par heure (demande du service, 10 septembre). N'y figurent que les rythmes dont l'intervalle divise la journée : ×5/j tomberait toutes les 4 h 48, ce qui ne se prescrit pas et ne se donne pas. Un rythme irrégulier reste possible — on choisit alors ses heures à la main dans « Heures de prise », qui l'emporte sur celles-ci. Deux horaires ne suivent pas la règle mécanique et c'est voulu : ×1/j propose 8 h et ×2/j 8 h − 20 h, l'heure de la visite plutôt que minuit.",
   "valeurs": [
     [
       "x1/j",
-      "×1/j"
+      "×1/j — une prise",
+      [
+        8
+      ]
     ],
     [
       "x2/j",
-      "×2/j"
+      "×2/j — toutes les 12 h",
+      [
+        8,
+        20
+      ]
     ],
     [
       "x3/j",
-      "×3/j"
+      "×3/j — toutes les 8 h",
+      [
+        8,
+        16,
+        24
+      ]
     ],
     [
       "x4/j",
-      "×4/j"
+      "×4/j — toutes les 6 h",
+      [
+        6,
+        12,
+        18,
+        24
+      ]
     ],
     [
       "x6/j",
-      "×6/j"
+      "×6/j — toutes les 4 h",
+      [
+        4,
+        8,
+        12,
+        16,
+        20,
+        24
+      ]
+    ],
+    [
+      "x8/j",
+      "×8/j — toutes les 3 h",
+      [
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        24
+      ]
+    ],
+    [
+      "x12/j",
+      "×12/j — toutes les 2 h",
+      [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24
+      ]
+    ],
+    [
+      "x24/j",
+      "×24/j — toutes les heures",
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ]
     ],
     [
       "1j/2",
-      "1 jour sur 2"
+      "1 jour sur 2",
+      [
+        8
+      ]
     ],
     [
       "continu",
-      "Continu"
+      "Continu",
+      []
     ],
     [
       "conditionnel",
-      "Conditionnel"
+      "Conditionnel",
+      []
     ]
   ]
 }

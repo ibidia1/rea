@@ -515,15 +515,45 @@ le voient.
 | ×3/j | 8 h — 16 h — 24 h |
 | ×4/j | toutes les 6 h |
 | ×6/j | toutes les 4 h |
+| ×8/j | toutes les 3 h |
+| ×12/j | toutes les 2 h |
+| ×24/j | toutes les heures |
+| 1 jour sur 2 | 8 h, un jour sur deux |
 | Continu | pas d'horaire, débit affiché |
 | Conditionnel | pas d'horaire, condition affichée |
 
 Horaires modifiables ligne par ligne.
 
+N'y figurent que les rythmes dont l'intervalle divise la journée : ×5/j
+tomberait toutes les 4 h 48, ce qui ne se prescrit pas et ne se donne pas. Un
+rythme irrégulier reste possible — on choisit alors ses heures à la main dans
+« Heure(s) de prise », qui l'emporte sur celles-ci.
+
+Au-delà de six prises, la parenthèse affichée derrière le produit se replie :
+« toutes les 2h dès 2h », « toutes les heures ». Écrite en entier, une prise
+horaire donnait quatre-vingts caractères de chiffres et le nom du médicament se
+perdait dedans. Ce sont les cases horaires de la feuille qui portent l'heure
+exacte de chaque prise.
+
 ✅ *Tranché en v1.3 : ×4/j → 6 h — 12 h — 18 h — 24 h, ×6/j → 4 h — 8 h — 12 h —
-16 h — 20 h — 24 h. Valeur par défaut modifiable dans `rea/config.py`
-(`HORAIRES_PAR_RYTHME`) et ligne par ligne dans l'écran Prescrit. À
-contre-valider par un senior.*
+16 h — 20 h — 24 h. À contre-valider par un senior.*
+
+✅ *Élargi le 10 septembre 2026, à la demande du service : de une prise par
+jour à une prise par heure. Les horaires ont quitté `rea/config.py` pour
+`referentiels/rythmes.json` — l'heure d'une prise est une habitude de service,
+8 h parce que c'est l'heure de la visite, pas une règle de programme : le
+service doit pouvoir la revoir sans reprogrammer (règle R2). Ils restent
+modifiables ligne par ligne dans l'écran Prescrit.*
+
+### Ordre des voies
+
+Les blocs de traitement se suivent partout dans le même ordre : **entrées, PSE,
+IV, PO, S/C, aérosols, soins locaux, kiné** — l'ordre de la visite, on commence
+par ce qui coule et on finit par ce qui se fait au lit *(demande du service,
+10 septembre 2026)*. Il est déclaré dans `referentiels/voies.json` (`ordre`) et
+vaut pour l'écran Prescrit, le mode Visite, le regroupement par voie et
+l'observation générée. La feuille imprimée, elle, suit la maquette
+pré-imprimée de ses blocs, qui ne se déplace pas.
 
 ## 5.4 Compteurs de jours
 

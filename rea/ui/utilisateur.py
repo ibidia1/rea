@@ -102,7 +102,58 @@ def selecteur(base: Base) -> str | None:
         "Un compte oublié ou un code perdu se règle dans "
         "Administration → Comptes, depuis un compte administrateur."
     )
+    if utilisateurs_service.sans_administrateur(base):
+        _designer_un_administrateur(base, utilisateurs)
     return None
+
+
+def _designer_un_administrateur(base: Base, utilisateurs: list[dict]) -> None:
+    """La base a des comptes, mais aucun administrateur.
+
+    C'est l'état d'un service qui tournait avant que les rôles n'existent :
+    personne n'a le droit « comptes », donc le bouton Admin ne s'affiche pour
+    personne, et le seul recours serait la ligne de commande — c'est-à-dire,
+    en pratique, personne. Cette porte-ci ne s'ouvre que dans ce cas précis,
+    et se referme dès qu'un administrateur existe.
+
+    Elle ne donne rien à qui n'avait rien : il faut le code du compte que
+    l'on promeut, et un compte sans code doit en recevoir un au passage.
+    """
+    st.divider()
+    with st.expander("Aucun compte administrateur — en désigner un"):
+        st.warning(
+            "Cette base n'a aucun compte capable de gérer les comptes : "
+            "personne ne peut donc créer un compte, poser un code, ni ouvrir "
+            "le bouton **Admin**. Désigner ci-dessous un compte existant — "
+            "son code d'accès est demandé, et un compte qui n'en a pas doit "
+            "en recevoir un ici."
+        )
+        noms = [u["nom"] for u in utilisateurs]
+        with st.form("designer_administrateur"):
+            nom = st.selectbox("Quel compte devient administrateur ?", noms,
+                               index=None, placeholder="Choisir un compte")
+            code = st.text_input(
+                "Son code d'accès actuel", type="password",
+                help="À laisser vide si ce compte n'a pas encore de code.",
+            )
+            nouveau = st.text_input(
+                "Code d'accès à poser sur ce compte", type="password",
+                help="Obligatoire si le compte n'a pas encore de code ; "
+                     "sinon, à laisser vide pour garder l'actuel.",
+            )
+            if st.form_submit_button("Désigner et entrer", type="primary"):
+                if not nom:
+                    st.error("Choisir un compte.")
+                    return
+                compte = next(u for u in utilisateurs if u["nom"] == nom)
+                try:
+                    utilisateurs_service.designer_administrateur(
+                        base, compte["id"], code=code, nouveau_code=nouveau or None
+                    )
+                except ValueError as erreur:
+                    st.error(str(erreur))
+                    return
+                _entrer(utilisateurs_service.par_id(base, compte["id"]))
 
 
 def _premier_compte(base: Base) -> str | None:

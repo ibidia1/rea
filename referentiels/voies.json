@@ -1,19 +1,19 @@
 {
   "nom": "voies",
   "libelle": "Voies d'administration et champs demandés",
-  "version": "2026-09-05.2",
-  "date": "2026-09-05",
-  "note": "Les champs déclarés ici décident de ce que le formulaire demande. « nb_ampoules » sert aussi, pour PO et SC, à noter le nombre de comprimés ou d'ampoules administrés par prise — une valeur saisie par le médecin, jamais déduite du dosage (SPEC §3.1).",
+  "version": "2026-09-10.1",
+  "date": "2026-09-10",
+  "note": "Les champs déclarés ici décident de ce que le formulaire demande. « nb_ampoules » sert aussi, pour PO et SC, à noter le nombre de comprimés ou d'ampoules administrés par prise — une valeur saisie par le médecin, jamais déduite du dosage (SPEC §3.1). « ordre » est l'ordre dans lequel les blocs se suivent à l'écran (Prescrit, Visite) et dans l'observation générée : entrées, PSE, IV, PO, SC, aérosols, soins locaux, kiné (demande du service, 10 septembre 2026). C'est l'ordre de la visite — on commence par ce qui coule, on finit par ce qui se fait au lit — et non l'ordre alphabétique ni celui de la saisie. La feuille imprimée, elle, suit la maquette pré-imprimée de ses blocs.",
   "valeurs": {
     "ordre": [
-      "PO",
-      "IV",
+      "ENTREES",
       "PSE",
+      "IV",
+      "PO",
       "SC",
       "AEROSOL",
       "SOINS",
-      "KINE",
-      "ENTREES"
+      "KINE"
     ],
     "voies": {
       "PO": {

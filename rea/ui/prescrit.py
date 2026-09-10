@@ -171,9 +171,8 @@ def onglet_prescrit(sejour: dict) -> None:
 
     with zone_pancarte:
         st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
-        gauche, droite = st.columns(2)
         _afficher_pancarte(
-            voies_remplies, pancarte, date_jour_str, gauche, droite, sedation, vitesses_jour,
+            voies_remplies, pancarte, date_jour_str, sedation, vitesses_jour,
         )
         _panneau_vitesses(sejour, pancarte, date_jour_str)
         _panneau_posologie(sejour, pancarte, date_jour_str)
@@ -367,13 +366,26 @@ def _panneau_vitesses(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
 
 
 def _afficher_pancarte(
-    voies_remplies, pancarte, date_jour_str, gauche, droite,
+    voies_remplies, pancarte, date_jour_str,
     sedation: str | None = None, vitesses_jour: dict | None = None,
 ) -> None:
     """Chaque traitement porte sa propre croix « X » : l'arrêter est un
-    geste sur la ligne elle-même, plus une liste séparée à rouvrir."""
+    geste sur la ligne elle-même, plus une liste séparée à rouvrir.
+
+    Les blocs se lisent deux par deux, de gauche à droite puis ligne
+    suivante : entrées, PSE, IV, PO, SC, aérosols, soins locaux, kiné —
+    l'ordre de la visite (`referentiels/voies.json`).
+
+    Chaque paire a ses propres colonnes plutôt qu'une seule paire de
+    colonnes pour toute la pancarte : avec deux longues piles, un bloc de
+    huit lignes en face d'un bloc de deux décalait tout ce qui suivait, et
+    l'ordre lu à l'écran n'était plus celui qu'on demande à voix haute au
+    lit du malade.
+    """
     for i, code_voie in enumerate(voies_remplies):
         lignes = pancarte["lignes_par_voie"].get(code_voie, [])
+        if i % 2 == 0:
+            gauche, droite = st.columns(2)
         colonne = gauche if i % 2 == 0 else droite
         couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
         with colonne:
