@@ -264,6 +264,65 @@ def _refuser_dernier_administrateur(
         )
 
 
+def administrateurs(base: Base) -> list[dict]:
+    """Les comptes actifs capables de gérer les comptes."""
+    return [u for u in actifs(base) if dom_droits.peut(u["role"], "comptes")]
+
+
+def sans_administrateur(base: Base) -> bool:
+    """Une base qui a des comptes, mais aucun pour les administrer.
+
+    C'est l'état d'un service qui tournait avant que les rôles n'existent :
+    des médecins et des infirmiers, personne d'administrateur, donc aucun
+    moyen d'en désigner un — le bouton qui le permettrait est justement
+    réservé à l'administrateur qui n'existe pas.
+    """
+    return bool(actifs(base)) and not administrateurs(base)
+
+
+def designer_administrateur(
+    base: Base, cible_id: str, *, code: str, nouveau_code: str | None = None
+) -> None:
+    """Sortie de secours : donner le rôle d'administrateur à un compte
+    existant, quand la base n'en a aucun.
+
+    Deux verrous, parce qu'un écran d'ouverture est vu par tout le service :
+
+    * la porte ne s'ouvre que si **aucun** administrateur actif n'existe.
+      Dès qu'il y en a un, c'est à lui de distribuer les rôles, dans
+      Administration → Comptes ;
+    * il faut le code du compte que l'on promeut. On ne promeut donc que le
+      compte dans lequel on sait déjà entrer, et promouvoir ne donne rien de
+      plus que ce qu'on avait. Un compte sans code doit en recevoir un ici :
+      donner les pleins pouvoirs à un nom que n'importe qui peut choisir dans
+      une liste reviendrait à ne rien protéger du tout.
+    """
+    if not sans_administrateur(base):
+        raise ValueError(
+            "Cette base a déjà un administrateur : c'est à lui de changer "
+            "les rôles, dans Administration → Comptes."
+        )
+    cible = par_id(base, cible_id)
+    if not cible or not cible["actif"]:
+        raise ValueError("Compte introuvable.")
+    if cible["pin"]:
+        if not code_correct(code, cible["pin"]):
+            raise ValueError("Code d'accès incorrect.")
+        a_poser = nouveau_code or None
+    else:
+        refus = code_acceptable(nouveau_code or "")
+        if refus:
+            raise ValueError(
+                f"Ce compte n'a pas de code : en poser un pour le promouvoir. {refus}"
+            )
+        a_poser = nouveau_code
+    with base.transaction():
+        base.mettre_a_jour("utilisateur", cible_id, {"role": "admin"},
+                           utilisateur_id=cible_id)
+        if a_poser:
+            definir_code(base, cible_id, a_poser, utilisateur_id=cible_id)
+
+
 def comptes_sans_code(base: Base) -> list[dict]:
     """Les comptes actifs qu'aucun code ne protège.
 

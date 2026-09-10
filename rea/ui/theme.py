@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from .. import listes
+
 ROUGE = "#D62839"
 ORANGE = "#E8850C"
 BLEU = "#1D6FB8"
@@ -41,10 +43,15 @@ COULEUR_VOIE = {
     "ENTREES": BLEU,
 }
 
-# Un bouton par voie, dans l'ordre de COULEUR_VOIE (ORDRE_VOIES) : le
-# sélecteur de voie du panneau « Ajouter une ligne » retrouve, bouton par
-# bouton, la couleur que cette voie porte déjà sur la pancarte — sans quoi
-# les deux ne se répondraient pas visuellement.
+# Un bouton par voie : le sélecteur de voie du panneau « Ajouter une ligne »
+# retrouve, bouton par bouton, la couleur que cette voie porte déjà sur la
+# pancarte — sans quoi les deux ne se répondraient pas visuellement.
+#
+# Le CSS vise les boutons par leur rang (`nth-of-type`), il suit donc l'ordre
+# des voies à l'écran, et non celui de `COULEUR_VOIE`. Les deux ont coïncidé
+# jusqu'au jour où l'ordre des blocs a changé (10 septembre 2026) : les
+# couleurs se sont alors décalées d'un cran, chaque bouton portant celle de
+# son voisin. `tests/test_ordre_des_voies.py` interdit que cela recommence.
 _CSS_BOUTONS_VOIES = "\n".join(
     f'div[data-testid="stButtonGroup"] button[data-variant="segmented_control"]:nth-of-type({i}) {{'
     f" border-color:{couleur} !important; }}\n"
@@ -52,7 +59,9 @@ _CSS_BOUTONS_VOIES = "\n".join(
     f" background:{couleur} !important; border-color:{couleur} !important; }}\n"
     f'div[data-testid="stButtonGroup"] button[data-variant="segmented_control"]:nth-of-type({i})[aria-checked="true"] p {{'
     f" color:#fff !important; }}"
-    for i, couleur in enumerate(COULEUR_VOIE.values(), start=1)
+    for i, couleur in enumerate(
+        (COULEUR_VOIE.get(voie, GRIS) for voie in listes.ORDRE_VOIES), start=1
+    )
 )
 
 # Idem pour les familles de dispositifs.

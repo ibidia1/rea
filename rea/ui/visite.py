@@ -27,6 +27,7 @@ from ..services import avis as avis_service
 from ..services import bilans as bilans_service
 from ..services import dispositifs as dispositifs_service
 from ..services import evolution as evolution_service
+from ..services import medicaments as medicaments_service
 from ..services import microbiologie as micro_service
 from ..services import prescriptions as prescriptions_service
 from ..services import vitesses as vitesses_service
@@ -129,7 +130,18 @@ def _ligne_traitement(ligne: dict, date_jour_str: str, vitesses_jour: dict) -> s
     antibiotique ; il descend celle des doses pour vérifier une posologie. Une
     phrase d'un seul tenant l'oblige à relire chaque ligne en entier.
     """
-    etiquette, libelle, dose = dom.parties_ligne(ligne, date_jour_str)
+    # « Imipénème (Tienam) » : la DCI, et la marque pour la reconnaître. Le
+    # mode Visite est la pancarte à l'écran — c'est là qu'on lit le
+    # traitement à voix haute au lit du malade, et le nom qui vient en tête
+    # est celui de la boîte. La marque est ajoutée **avant** le découpage du
+    # domaine : `parties_ligne` colle déjà les horaires derrière le nom, et
+    # chercher ce texte-là au catalogue ne trouverait rien. Ce qui est
+    # enregistré reste la seule DCI ; la parenthèse n'existe qu'à l'écran.
+    etiquette, libelle, dose = dom.parties_ligne(
+        {**ligne, "produit": medicaments_service.nom_affiche(
+            contexte.base(), ligne.get("produit") or "")},
+        date_jour_str,
+    )
     arretee = ligne["statut"] != "active"
     classe_j = "rea-v-j fin" if etiquette.dernier_jour else "rea-v-j"
     jour = "" if etiquette.introduction else etiquette.texte

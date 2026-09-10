@@ -114,19 +114,12 @@ FORMATS_PAGE_POSSIBLES = ("A4 portrait", "A4 landscape", "A3 landscape")
 # tard.
 HEURE_DEBUT_JOURNEE = 8
 
-# ×4/j et ×6/j sont calés sur minuit plutôt que sur 8 h : les relèves du
-# service tombent ainsi sur des heures rondes. À contre-valider par un senior ;
-# ces horaires restent modifiables ligne par ligne dans l'écran Prescrit.
-HORAIRES_PAR_RYTHME: dict[str, tuple[int, ...]] = {
-    "x1/j": (8,),
-    "x2/j": (8, 20),
-    "x3/j": (8, 16, 24),
-    "x4/j": (6, 12, 18, 24),
-    "x6/j": (4, 8, 12, 16, 20, 24),
-    "1j/2": (8,),
-    "continu": (),
-    "conditionnel": (),
-}
+# Les horaires proposés par rythme ne sont plus ici : ils sont partis dans
+# `referentiels/rythmes.json` (10 septembre 2026). L'heure d'une prise est une
+# habitude de service — 8 h parce que c'est l'heure de la visite — pas une
+# règle de programme, et le service doit pouvoir la revoir sans reprogrammer.
+# `domaine/prescription.horaires_pour_rythme` les y lit, et elles restent
+# modifiables ligne par ligne dans l'écran Prescrit.
 
 # --------------------------------------------------------------------------
 # Texte généré (SPEC §8.2 — test de collage dans le DMI à faire)

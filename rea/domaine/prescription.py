@@ -5,6 +5,7 @@ elle ne calcule jamais une dose (SPEC §3.1)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from datetime import date, datetime, timedelta
 
 from .. import config
@@ -21,14 +22,53 @@ def horaires_pour_rythme(rythme: str | None, override: str | None = None) -> tup
         return tuple(int(h.strip()) for h in override.split(",") if h.strip() != "")
     if rythme is None:
         return ()
-    return config.HORAIRES_PAR_RYTHME.get(rythme, ())
+    return _horaires_du_referentiel().get(rythme, ())
+
+
+@lru_cache(maxsize=1)
+def _horaires_du_referentiel() -> dict[str, tuple[int, ...]]:
+    """Les horaires proposés par rythme, lus dans `referentiels/rythmes.json`.
+
+    Ils vivaient dans `config.py`, c'est-à-dire dans le code. L'heure d'une
+    prise est une habitude de service — 8 h parce que c'est l'heure de la
+    visite — pas une règle de programme : elle appartient aux référentiels,
+    que le service peut revoir sans reprogrammer (règle R2).
+    """
+    from .. import referentiels
+
+    table: dict[str, tuple[int, ...]] = {}
+    for entree in referentiels.charger("rythmes"):
+        heures = entree[2] if len(entree) > 2 else []
+        table[entree[0]] = tuple(int(h) for h in heures)
+    return table
 
 
 def horaires_affiches(rythme: str | None, override: str | None = None) -> str:
+    """Les heures de prise, telles qu'elles se lisent derrière un produit.
+
+    Au-delà de six prises, la liste est repliée : « toutes les 2h dès 2h »
+    plutôt que douze horaires collés au nom du médicament. Écrite en entier,
+    une prise horaire donnait quatre-vingts caractères de chiffres sur la
+    ligne, et le nom du produit se perdait dedans (rythmes rapprochés,
+    10 septembre 2026). Ce sont les cases horaires de la feuille qui portent
+    l'heure exacte de chaque prise ; cette parenthèse n'est qu'un rappel.
+    """
     heures = horaires_pour_rythme(rythme, override)
     if not heures:
         return ""
+    if len(heures) > 6:
+        pas = _pas_regulier(heures)
+        if pas == 1:
+            return "toutes les heures"
+        if pas:
+            return f"toutes les {pas}h dès {heures[0]}h"
     return "-".join(f"{h}h" if h < 24 else "24h" for h in heures)
+
+
+def _pas_regulier(heures: tuple[int, ...]) -> int | None:
+    """L'intervalle entre deux prises, s'il est le même partout."""
+    ecarts = {b - a for a, b in zip(heures, heures[1:])}
+    return ecarts.pop() if len(ecarts) == 1 else None
 
 
 def _sans_accent(texte: str) -> str:

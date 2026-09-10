@@ -277,6 +277,27 @@ vide**, elle s'écrit à la main comme partout ailleurs.
 service. Elle sera proposée dès la prochaine prescription, sans que personne
 ait à remplir quoi que ce soit.
 
+**L'ordre des blocs** est celui de la visite : entrées, PSE, IV, PO, S/C,
+aérosols, soins locaux, kiné. On commence par ce qui coule et on finit par ce
+qui se fait au lit. Il est le même sur l'écran Prescrit, en mode Visite et
+dans l'observation générée, et il se change dans `referentiels/voies.json`
+sans reprogrammer.
+
+**Le rythme** va d'une prise par jour à une prise par heure : ×1/j, ×2/j,
+×3/j, ×4/j, ×6/j, ×8/j, ×12/j, ×24/j, plus « 1 jour sur 2 », « Continu » et
+« Conditionnel ». Chacun propose ses heures — ×8/j toutes les 3 h, ×12/j
+toutes les 2 h — et *Heure(s) de prise* les remplace ligne par ligne quand
+l'horaire ne suit pas la règle : « 8,14,20,2 ».
+
+Ne figurent dans la liste que les rythmes dont l'intervalle divise la
+journée : ×5/j tomberait toutes les 4 h 48, ce qui ne se prescrit pas et ne se
+donne pas. Pour un tel cas, on écrit ses heures à la main.
+
+Au-delà de six prises, la parenthèse se replie derrière le produit —
+« toutes les 2h dès 2h », « toutes les heures » — pour que le nom du
+médicament ne se perde pas dans une file de chiffres. Les heures exactes,
+elles, sont dans les cases de la feuille imprimée.
+
 ### Explorations et actes
 
 Dispositifs posés et retirés, imageries, transfusions, anesthésies
@@ -334,6 +355,31 @@ Tout ce qui précède, plus deux responsabilités.
 Le bouton **Admin** est en haut à droite de **chaque** écran. La barre
 latérale se replie sur un téléphone et se referme d'un clic par erreur ;
 l'administration, elle, doit rester à portée.
+
+**Il n'apparaît que pour un compte administrateur.** C'est le seul rôle qui
+porte le droit « comptes » : un senior, même chef de service, ne le voit pas.
+Si le bouton manque, ce n'est pas une panne — c'est que le compte avec lequel
+vous êtes entré n'est pas administrateur.
+
+Pour le devenir, trois cas :
+
+* **quelqu'un est déjà administrateur** — il ouvre Administration →
+  **Comptes** et change votre rôle ;
+* **personne ne l'est** (une base qui tournait avant que les rôles
+  n'existent) — l'écran d'ouverture propose alors, sous la liste des noms,
+  *« Aucun compte administrateur — en désigner un »*. On y choisit un compte
+  existant et **on donne son code d'accès** : on ne promeut donc que le compte
+  dans lequel on sait déjà entrer, et un compte sans code doit en recevoir un
+  au passage. Le volet disparaît dès qu'un administrateur existe ;
+* **depuis le poste où le logiciel est installé**, en dernier recours :
+
+  ```
+  python outils\administrateur.py --lister
+  python outils\administrateur.py --promouvoir "Dr Karaa"
+  ```
+
+  Le code est demandé à l'écran, jamais tapé dans la ligne de commande — il y
+  resterait inscrit dans l'historique du terminal.
 
 ### Essayer un rôle
 

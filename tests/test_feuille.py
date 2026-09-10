@@ -140,6 +140,35 @@ def test_la_prise_de_minuit_n_est_pas_perdue(base, dossier):
     }
 
 
+def test_une_prise_horaire_coche_les_vingt_quatre_cases(base, dossier):
+    """×24/j : une prise par heure, donc toute la grille cochée.
+
+    La grille imprimée a exactement vingt-quatre cases ; le rythme le plus
+    serré qu'on puisse prescrire doit s'y ranger sans déborder ni en perdre
+    une (rythmes rapprochés, 10 septembre 2026).
+    """
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                produit="Insuline rapide", dose=4, unite="UI",
+                                rythme="x24/j", date_debut=J2)
+    grille = feuille.contexte(_dossier(base, sid, AUJ))["ivRows"][0]["grille"].html
+    cases = re.findall(r'justify-content:center">(.*?)</div>', grille)
+    assert len(cases) == len(feuille.ORDRE_HEURES) == 24
+    assert all("○" in c for c in cases)
+
+
+def test_une_prise_toutes_les_deux_heures_coche_une_case_sur_deux(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                produit="Sérum salé hypertonique", dose=100,
+                                unite="mL", rythme="x12/j", date_debut=J2)
+    grille = feuille.contexte(_dossier(base, sid, AUJ))["ivRows"][0]["grille"].html
+    cases = re.findall(r'justify-content:center">(.*?)</div>', grille)
+    coches = {i for i, c in enumerate(cases) if "○" in c}
+    assert coches == {_colonne(h % 24) for h in range(2, 25, 2)}
+    assert len(coches) == 12
+
+
 def test_une_perfusion_continue_n_a_pas_de_rond(base, dossier):
     """Un débit continu se note en ml/h dans les cases, il ne se coche pas."""
     _pid, sid = dossier
