@@ -167,9 +167,9 @@ def test_le_catalogue_ne_propose_aucune_posologie():
     """
     referentiels = importlib.import_module("rea.referentiels")
     for entree in referentiels.charger("medicaments"):
-        # [code, libellé, unité, synonymes] — pas de champ de dose, et
-        # l'unité n'est jamais un nombre.
-        assert len(entree) <= 4
+        # [code, libellé, unité, marque, synonymes] — pas de champ de dose,
+        # et l'unité n'est jamais un nombre.
+        assert len(entree) <= 5
         assert not any(caractere.isdigit() for caractere in (entree[2] or ""))
 
 
@@ -209,3 +209,65 @@ def test_l_ecran_de_prescription_apprend_les_molecules():
     assert "medicaments_service.catalogue(" in source
     # Et le champ texte libre du produit a bien disparu.
     assert 'st.text_input("Produit / libellé")' not in source
+
+
+# -- le nom commercial entre parenthèses -----------------------------------
+
+def test_le_prescrit_ecrit_la_dci_et_la_marque(base):
+    """« Imipénème (Tienam) » : la dénomination pour compter, la marque pour
+    reconnaître la boîte qu'on demande à la pharmacie."""
+    medicaments = _service()
+    assert medicaments.nom_affiche(base, "Imipénème") == "Imipénème (Tienam)"
+    assert medicaments.nom_affiche(base, "Énoxaparine") == "Énoxaparine (Lovenox)"
+
+
+def test_sans_marque_connue_rien_ne_s_affiche(base):
+    """Plutôt qu'une parenthèse vide : le mannitol n'a pas de nom commercial
+    au catalogue, il s'écrit « Mannitol »."""
+    assert _service().nom_affiche(base, "Mannitol") == "Mannitol"
+
+
+def test_un_produit_hors_catalogue_reste_tel_quel(base):
+    """Une ligne ancienne, une molécule tapée à la main : un écran ne perd
+    jamais ce qui a été écrit sous prétexte qu'il ne le reconnaît pas."""
+    assert _service().nom_affiche(base, "Tienam maison") == "Tienam maison"
+
+
+def test_la_parenthese_n_est_jamais_enregistree(base):
+    """Elle est ajoutée à l'affichage. L'écrire en base ramènerait le problème
+    qu'on vient de résoudre : « Imipénème (Tienam) » et « Imipénème » ne se
+    compteraient plus ensemble."""
+    medicaments = _service()
+    prescriptions = importlib.import_module("rea.services.prescriptions")
+    sejours = importlib.import_module("rea.services.sejours")
+    pid = sejours.creer_patient(base, matricule="M1", nom_affichage="P1",
+                                date_naissance="1970-01-01")
+    sid = sejours.creer_sejour(base, patient_id=pid, date_admission="2026-09-01",
+                               lit_admission=1)
+    ligne_id = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Imipénème", date_debut="2026-09-02")
+    ligne = base.une_ligne("SELECT produit FROM prescription_ligne WHERE id = ?",
+                           (ligne_id,))
+    assert ligne["produit"] == "Imipénème"
+    assert medicaments.nom_affiche(base, ligne["produit"]) == "Imipénème (Tienam)"
+
+
+def test_une_famille_ne_s_affiche_jamais_entre_parentheses(base):
+    """Le nom commercial est un champ à part des synonymes, et c'est tout
+    l'objet de la séparation : sans elle on lirait « Imipénème (carbapeneme) »,
+    ce qui est une famille et non un produit qu'on demande à la pharmacie."""
+    medicaments = _service()
+    molecule = medicaments.par_libelle(base, "Imipénème")
+    assert molecule.marque == "Tienam"
+    assert "carbapeneme" in molecule.synonymes
+    assert "carbapeneme" not in molecule.nom_affiche
+
+
+def test_le_prescrit_affiche_bien_le_nom_complet():
+    """Le rendu est branché — un nom d'affichage calculé mais jamais appelé
+    ne se verrait nulle part."""
+    import pathlib as _pathlib
+
+    source = (_pathlib.Path(__file__).resolve().parent.parent
+              / "rea" / "ui" / "prescrit.py").read_text(encoding="utf-8")
+    assert source.count("medicaments_service.nom_affiche(") >= 4

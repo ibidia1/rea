@@ -237,10 +237,16 @@ Le bouton d'impression produit la feuille A3 du service.
 tapant : « tie » propose Imipénème, parce que le catalogue connaît « Tienam ».
 On peut aussi chercher par famille — « curare », « aminoside », « C3G ».
 
-Ce qui s'écrit sur la prescription est la **dénomination commune** et non la
-marque : c'est elle qui permet de compter une molécule à travers ses noms
-commerciaux, et donc de répondre plus tard à « quelle molécule sur quel type
-d'infection ».
+**Le prescrit affiche les deux** : « Imipénème (Tienam) », « Lévétiracétam
+(Keppra) ». La dénomination commune pour compter la molécule à travers ses
+marques — c'est ce qui permet de répondre plus tard à « quelle molécule sur
+quel type d'infection » — et le nom commercial pour reconnaître la boîte
+qu'on demande à la pharmacie.
+
+La parenthèse n'existe qu'à l'écran : **ce qui est enregistré reste la seule
+dénomination commune**. L'écrire en base ramènerait le problème qu'on vient
+de résoudre — « Imipénème (Tienam) » et « Imipénème » cesseraient de se
+compter ensemble.
 
 L'**unité usuelle** est proposée d'avance — « g » pour l'imipénème, « µg »
 pour le sufentanil. C'est une unité, pas une posologie : **la dose reste

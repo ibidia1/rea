@@ -1,14 +1,15 @@
 {
   "nom": "medicaments",
   "libelle": "Catalogue des molécules",
-  "version": "2026-09-10.1",
+  "version": "2026-09-10.2",
   "date": "2026-09-10",
-  "note": "Format : [code, dénomination écrite sur la prescription, unité usuelle, synonymes de recherche]. La dénomination est la DCI et non le nom commercial : c'est elle qui permet de compter une molécule à travers les marques, et donc de répondre à « quelle molécule sur quel type d'infection ». Les noms commerciaux sont dans les synonymes — on tape « tie » et Imipénème sort, parce que « Tienam » est ce qu'on a en tête au lit du malade (demande du service, 10 septembre). L'unité usuelle est proposée à la saisie ; ce n'est pas une posologie, et aucune dose n'est proposée d'elle-même : la dose reste écrite par le prescripteur. Ce catalogue n'est pas fermé — une molécule absente s'écrit à la main et le service l'ajoute à son propre catalogue par ce seul geste.",
+  "note": "Format : [code, dénomination commune écrite sur la prescription, unité usuelle, nom commercial (ou null), synonymes de recherche]. La dénomination est la DCI et non la marque : c'est elle qui permet de compter une molécule à travers les noms commerciaux, et donc de répondre à « quelle molécule sur quel type d'infection ». Le nom commercial est un champ **à part** des synonymes parce qu'il s'affiche : le prescrit écrit « Imipénème (Tienam) » (demande du service, 10 septembre). Les synonymes, eux, ne servent qu'à chercher — familles (« carbapeneme », « curare ») et graphies anglaises — et ne s'affichent jamais entre parenthèses, sans quoi on lirait « Imipénème (carbapeneme) ». Une molécule sans marque connue porte null : rien ne s'affiche alors, plutôt qu'une parenthèse vide. L'unité usuelle est proposée à la saisie ; ce n'est pas une posologie, et aucune dose n'est proposée d'elle-même. Le catalogue n'est pas fermé — une molécule absente s'écrit à la main et le service l'ajoute par ce seul geste.",
   "valeurs": [
     [
       "imipeneme",
       "Imipénème",
       "g",
+      "Tienam",
       [
         "Tienam",
         "imipenem",
@@ -19,6 +20,7 @@
       "meropeneme",
       "Méropénème",
       "g",
+      "Meronem",
       [
         "Meronem",
         "meropenem",
@@ -29,6 +31,7 @@
       "ertapeneme",
       "Ertapénème",
       "g",
+      "Invanz",
       [
         "Invanz",
         "carbapeneme"
@@ -38,7 +41,9 @@
       "ceftriaxone",
       "Ceftriaxone",
       "g",
+      "Rocéphine",
       [
+        "Rocéphine",
         "Rocephine",
         "C3G"
       ]
@@ -47,6 +52,7 @@
       "cefotaxime",
       "Céfotaxime",
       "g",
+      "Claforan",
       [
         "Claforan",
         "C3G"
@@ -56,6 +62,7 @@
       "ceftazidime",
       "Ceftazidime",
       "g",
+      "Fortum",
       [
         "Fortum",
         "C3G"
@@ -65,6 +72,7 @@
       "cefepime",
       "Céfépime",
       "g",
+      "Maxipime",
       [
         "Maxipime",
         "C4G"
@@ -74,6 +82,7 @@
       "amoxicilline_ac",
       "Amoxicilline − acide clavulanique",
       "g",
+      "Augmentin",
       [
         "Augmentin",
         "amox clav"
@@ -83,6 +92,7 @@
       "amoxicilline",
       "Amoxicilline",
       "g",
+      "Clamoxyl",
       [
         "Clamoxyl"
       ]
@@ -91,6 +101,7 @@
       "piperacilline_tazo",
       "Pipéracilline − tazobactam",
       "g",
+      "Tazocilline",
       [
         "Tazocilline",
         "Tazocin",
@@ -101,6 +112,7 @@
       "oxacilline",
       "Oxacilline",
       "g",
+      "Bristopen",
       [
         "Bristopen"
       ]
@@ -109,7 +121,9 @@
       "vancomycine",
       "Vancomycine",
       "mg",
+      "Vancocine",
       [
+        "Vancocine",
         "Vancocin",
         "glycopeptide"
       ]
@@ -118,6 +132,7 @@
       "teicoplanine",
       "Teicoplanine",
       "mg",
+      "Targocid",
       [
         "Targocid",
         "glycopeptide"
@@ -127,6 +142,7 @@
       "linezolide",
       "Linézolide",
       "mg",
+      "Zyvoxid",
       [
         "Zyvoxid"
       ]
@@ -135,6 +151,7 @@
       "colistine",
       "Colistine",
       "MUI",
+      "Colimycine",
       [
         "Colimycine",
         "colistimethate"
@@ -144,6 +161,7 @@
       "amikacine",
       "Amikacine",
       "mg",
+      "Amiklin",
       [
         "Amiklin",
         "aminoside"
@@ -153,6 +171,7 @@
       "gentamicine",
       "Gentamicine",
       "mg",
+      "Gentalline",
       [
         "Gentalline",
         "aminoside"
@@ -162,6 +181,7 @@
       "ciprofloxacine",
       "Ciprofloxacine",
       "mg",
+      "Ciflox",
       [
         "Ciflox",
         "quinolone"
@@ -171,6 +191,7 @@
       "levofloxacine",
       "Lévofloxacine",
       "mg",
+      "Tavanic",
       [
         "Tavanic",
         "quinolone"
@@ -180,6 +201,7 @@
       "metronidazole",
       "Métronidazole",
       "mg",
+      "Flagyl",
       [
         "Flagyl"
       ]
@@ -188,6 +210,7 @@
       "tigecycline",
       "Tigécycline",
       "mg",
+      "Tygacil",
       [
         "Tygacil"
       ]
@@ -196,6 +219,7 @@
       "fosfomycine",
       "Fosfomycine",
       "g",
+      "Fosfocine",
       [
         "Fosfocine"
       ]
@@ -204,6 +228,7 @@
       "rifampicine",
       "Rifampicine",
       "mg",
+      "Rifadine",
       [
         "Rifadine"
       ]
@@ -212,6 +237,7 @@
       "cotrimoxazole",
       "Cotrimoxazole",
       "mg",
+      "Bactrim",
       [
         "Bactrim",
         "sulfamethoxazole trimethoprime"
@@ -221,6 +247,7 @@
       "fluconazole",
       "Fluconazole",
       "mg",
+      "Triflucan",
       [
         "Triflucan",
         "antifongique"
@@ -230,6 +257,7 @@
       "caspofungine",
       "Caspofungine",
       "mg",
+      "Cancidas",
       [
         "Cancidas",
         "antifongique"
@@ -239,9 +267,10 @@
       "amphotericine_b",
       "Amphotéricine B",
       "mg",
+      "Ambisome",
       [
-        "Fungizone",
         "Ambisome",
+        "Fungizone",
         "antifongique"
       ]
     ],
@@ -249,6 +278,7 @@
       "aciclovir",
       "Aciclovir",
       "mg",
+      "Zovirax",
       [
         "Zovirax",
         "antiviral"
@@ -258,6 +288,7 @@
       "oseltamivir",
       "Oseltamivir",
       "mg",
+      "Tamiflu",
       [
         "Tamiflu",
         "antiviral"
@@ -267,6 +298,7 @@
       "midazolam",
       "Midazolam",
       "mg",
+      "Hypnovel",
       [
         "Hypnovel",
         "benzodiazepine",
@@ -277,6 +309,7 @@
       "propofol",
       "Propofol",
       "mg",
+      "Diprivan",
       [
         "Diprivan",
         "sedation"
@@ -286,7 +319,9 @@
       "ketamine",
       "Kétamine",
       "mg",
+      "Kétalar",
       [
+        "Kétalar",
         "Ketalar",
         "sedation"
       ]
@@ -295,6 +330,7 @@
       "dexmedetomidine",
       "Dexmédétomidine",
       "µg",
+      "Dexdor",
       [
         "Dexdor",
         "sedation"
@@ -304,6 +340,7 @@
       "sufentanil",
       "Sufentanil",
       "µg",
+      "Sufenta",
       [
         "Sufenta",
         "morphinique"
@@ -313,6 +350,7 @@
       "fentanyl",
       "Fentanyl",
       "µg",
+      null,
       [
         "morphinique"
       ]
@@ -321,6 +359,7 @@
       "remifentanil",
       "Rémifentanil",
       "µg",
+      "Ultiva",
       [
         "Ultiva",
         "morphinique"
@@ -330,6 +369,7 @@
       "morphine",
       "Morphine",
       "mg",
+      null,
       [
         "morphinique"
       ]
@@ -338,6 +378,7 @@
       "nefopam",
       "Néfopam",
       "mg",
+      "Acupan",
       [
         "Acupan",
         "antalgique"
@@ -347,6 +388,7 @@
       "paracetamol",
       "Paracétamol",
       "g",
+      "Perfalgan",
       [
         "Perfalgan",
         "Doliprane",
@@ -357,6 +399,7 @@
       "tramadol",
       "Tramadol",
       "mg",
+      "Topalgic",
       [
         "Topalgic",
         "antalgique"
@@ -366,6 +409,7 @@
       "cisatracurium",
       "Cisatracurium",
       "mg",
+      "Nimbex",
       [
         "Nimbex",
         "curare"
@@ -375,6 +419,7 @@
       "atracurium",
       "Atracurium",
       "mg",
+      "Tracrium",
       [
         "Tracrium",
         "curare"
@@ -384,6 +429,7 @@
       "rocuronium",
       "Rocuronium",
       "mg",
+      "Esmeron",
       [
         "Esmeron",
         "curare"
@@ -393,7 +439,9 @@
       "succinylcholine",
       "Succinylcholine",
       "mg",
+      "Célocurine",
       [
+        "Célocurine",
         "Celocurine",
         "curare"
       ]
@@ -402,7 +450,9 @@
       "noradrenaline",
       "Noradrénaline",
       "mg",
+      "Lévophed",
       [
+        "Lévophed",
         "Levophed",
         "norepinephrine",
         "amine"
@@ -412,6 +462,7 @@
       "adrenaline",
       "Adrénaline",
       "mg",
+      null,
       [
         "epinephrine",
         "amine"
@@ -421,6 +472,7 @@
       "dobutamine",
       "Dobutamine",
       "mg",
+      "Dobutrex",
       [
         "Dobutrex",
         "amine",
@@ -431,6 +483,7 @@
       "dopamine",
       "Dopamine",
       "mg",
+      null,
       [
         "amine"
       ]
@@ -439,12 +492,14 @@
       "ephedrine",
       "Éphédrine",
       "mg",
+      null,
       []
     ],
     [
       "milrinone",
       "Milrinone",
       "mg",
+      "Corotrope",
       [
         "Corotrope",
         "inotrope"
@@ -454,6 +509,7 @@
       "nicardipine",
       "Nicardipine",
       "mg",
+      "Loxen",
       [
         "Loxen",
         "antihypertenseur"
@@ -463,6 +519,7 @@
       "urapidil",
       "Urapidil",
       "mg",
+      "Eupressyl",
       [
         "Eupressyl",
         "antihypertenseur"
@@ -472,6 +529,7 @@
       "amiodarone",
       "Amiodarone",
       "mg",
+      "Cordarone",
       [
         "Cordarone",
         "antiarythmique"
@@ -481,7 +539,9 @@
       "esmolol",
       "Esmolol",
       "mg",
+      "Brévibloc",
       [
+        "Brévibloc",
         "Brevibloc",
         "betabloquant"
       ]
@@ -490,7 +550,9 @@
       "bisoprolol",
       "Bisoprolol",
       "mg",
+      "Détensiel",
       [
+        "Détensiel",
         "Detensiel",
         "betabloquant"
       ]
@@ -499,6 +561,7 @@
       "amlodipine",
       "Amlodipine",
       "mg",
+      "Amlor",
       [
         "Amlor"
       ]
@@ -507,6 +570,7 @@
       "furosemide",
       "Furosémide",
       "mg",
+      "Lasilix",
       [
         "Lasilix",
         "diuretique"
@@ -516,6 +580,7 @@
       "spironolactone",
       "Spironolactone",
       "mg",
+      "Aldactone",
       [
         "Aldactone",
         "diuretique"
@@ -525,18 +590,21 @@
       "digoxine",
       "Digoxine",
       "mg",
+      null,
       []
     ],
     [
       "atropine",
       "Atropine",
       "mg",
+      null,
       []
     ],
     [
       "enoxaparine",
       "Énoxaparine",
       "UI",
+      "Lovenox",
       [
         "Lovenox",
         "HBPM",
@@ -547,6 +615,7 @@
       "heparine",
       "Héparine non fractionnée",
       "UI",
+      null,
       [
         "HNF",
         "anticoagulant"
@@ -556,6 +625,7 @@
       "fondaparinux",
       "Fondaparinux",
       "mg",
+      "Arixtra",
       [
         "Arixtra",
         "anticoagulant"
@@ -565,6 +635,7 @@
       "acide_tranexamique",
       "Acide tranexamique",
       "g",
+      "Exacyl",
       [
         "Exacyl",
         "antifibrinolytique"
@@ -574,7 +645,9 @@
       "kardegic",
       "Acide acétylsalicylique",
       "mg",
+      "Kardégic",
       [
+        "Kardégic",
         "Kardegic",
         "aspirine",
         "antiagregant"
@@ -584,6 +657,7 @@
       "clopidogrel",
       "Clopidogrel",
       "mg",
+      "Plavix",
       [
         "Plavix",
         "antiagregant"
@@ -593,6 +667,7 @@
       "vitamine_k",
       "Vitamine K1",
       "mg",
+      null,
       [
         "phytomenadione"
       ]
@@ -601,12 +676,14 @@
       "protamine",
       "Protamine",
       "mg",
+      null,
       []
     ],
     [
       "omeprazole",
       "Oméprazole",
       "mg",
+      "Mopral",
       [
         "Mopral",
         "IPP"
@@ -616,6 +693,7 @@
       "esomeprazole",
       "Ésoméprazole",
       "mg",
+      "Inexium",
       [
         "Inexium",
         "IPP"
@@ -625,7 +703,9 @@
       "metoclopramide",
       "Métoclopramide",
       "mg",
+      "Primpéran",
       [
+        "Primpéran",
         "Primperan"
       ]
     ],
@@ -633,6 +713,7 @@
       "erythromycine",
       "Érythromycine",
       "mg",
+      null,
       [
         "prokinetique"
       ]
@@ -641,6 +722,7 @@
       "insuline_rapide",
       "Insuline rapide",
       "UI",
+      "Actrapid",
       [
         "Actrapid",
         "Humalog"
@@ -650,6 +732,7 @@
       "insuline_lente",
       "Insuline lente",
       "UI",
+      "Lantus",
       [
         "Lantus",
         "Levemir"
@@ -659,6 +742,7 @@
       "hydrocortisone",
       "Hydrocortisone",
       "mg",
+      null,
       [
         "HSHC",
         "corticoide"
@@ -668,7 +752,9 @@
       "methylprednisolone",
       "Méthylprednisolone",
       "mg",
+      "Solumédrol",
       [
+        "Solumédrol",
         "Solumedrol",
         "corticoide"
       ]
@@ -677,7 +763,9 @@
       "levothyroxine",
       "Lévothyroxine",
       "µg",
+      "Lévothyrox",
       [
+        "Lévothyrox",
         "Levothyrox"
       ]
     ],
@@ -685,6 +773,7 @@
       "levetiracetam",
       "Lévétiracétam",
       "mg",
+      "Keppra",
       [
         "Keppra",
         "antiepileptique"
@@ -694,7 +783,9 @@
       "phenobarbital",
       "Phénobarbital",
       "mg",
+      "Gardénal",
       [
+        "Gardénal",
         "Gardenal",
         "antiepileptique"
       ]
@@ -703,6 +794,7 @@
       "phenytoine",
       "Phénytoïne",
       "mg",
+      "Dilantin",
       [
         "Dilantin",
         "antiepileptique"
@@ -712,7 +804,9 @@
       "valproate",
       "Valproate de sodium",
       "mg",
+      "Dépakine",
       [
+        "Dépakine",
         "Depakine",
         "antiepileptique"
       ]
@@ -721,6 +815,7 @@
       "mannitol",
       "Mannitol",
       "g",
+      null,
       [
         "osmotherapie"
       ]
@@ -729,6 +824,7 @@
       "nimodipine",
       "Nimodipine",
       "mg",
+      "Nimotop",
       [
         "Nimotop"
       ]
@@ -737,6 +833,7 @@
       "haloperidol",
       "Halopéridol",
       "mg",
+      "Haldol",
       [
         "Haldol",
         "neuroleptique"
@@ -746,6 +843,7 @@
       "salbutamol",
       "Salbutamol",
       "mg",
+      "Ventoline",
       [
         "Ventoline",
         "aerosol"
@@ -755,6 +853,7 @@
       "ipratropium",
       "Ipratropium",
       "mg",
+      "Atrovent",
       [
         "Atrovent",
         "aerosol"
@@ -764,6 +863,7 @@
       "budesonide",
       "Budésonide",
       "mg",
+      "Pulmicort",
       [
         "Pulmicort",
         "aerosol"
@@ -773,6 +873,7 @@
       "acetylcysteine",
       "Acétylcystéine",
       "mg",
+      "Mucomyst",
       [
         "Mucomyst",
         "fluidifiant"
@@ -782,6 +883,7 @@
       "serum_hypertonique",
       "Sérum salé hypertonique",
       "%",
+      null,
       [
         "SSH",
         "aerosol"
@@ -791,6 +893,7 @@
       "kcl",
       "Chlorure de potassium",
       "g",
+      null,
       [
         "KCl",
         "potassium"
@@ -800,6 +903,7 @@
       "nacl_hyper",
       "Chlorure de sodium hypertonique",
       "%",
+      null,
       [
         "NaCl",
         "sodium"
@@ -809,6 +913,7 @@
       "gluconate_calcium",
       "Gluconate de calcium",
       "g",
+      null,
       [
         "calcium"
       ]
@@ -817,6 +922,7 @@
       "sulfate_magnesium",
       "Sulfate de magnésium",
       "g",
+      null,
       [
         "magnesium",
         "MgSO4"
@@ -826,6 +932,7 @@
       "bicarbonate",
       "Bicarbonate de sodium",
       "%",
+      null,
       [
         "HCO3"
       ]
@@ -834,6 +941,7 @@
       "vitamine_b1",
       "Vitamine B1",
       "mg",
+      null,
       [
         "thiamine"
       ]
@@ -842,6 +950,7 @@
       "naloxone",
       "Naloxone",
       "mg",
+      "Narcan",
       [
         "Narcan",
         "antidote"
@@ -851,6 +960,7 @@
       "flumazenil",
       "Flumazénil",
       "mg",
+      "Anexate",
       [
         "Anexate",
         "antidote"
@@ -860,6 +970,7 @@
       "sugammadex",
       "Sugammadex",
       "mg",
+      "Bridion",
       [
         "Bridion",
         "antidote"

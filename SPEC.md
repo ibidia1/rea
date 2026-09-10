@@ -926,6 +926,34 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.29 — 10 septembre 2026 — le nom commercial entre parenthèses**
+
+Le prescrit écrit désormais « Imipénème (Tienam) », « Lévétiracétam (Keppra) »
+(demande du service, 10 septembre). La dénomination commune pour compter la
+molécule à travers ses marques, le nom commercial pour reconnaître la boîte
+qu'on demande à la pharmacie.
+
+*Le nom commercial devient un champ à part*, distinct des synonymes de
+recherche — `[code, DCI, unité, marque, synonymes]`. Sans cette séparation on
+lirait « Imipénème (carbapeneme) » : une famille sert à chercher, elle ne se
+demande pas à la pharmacie. 78 des 98 molécules portent une marque ; les
+autres n'affichent rien, plutôt qu'une parenthèse vide.
+
+*La parenthèse n'existe qu'à l'écran.* Ce qui est enregistré reste la seule
+DCI : l'écrire en base ramènerait exactement le problème que le catalogue
+venait de résoudre — « Imipénème (Tienam) » et « Imipénème » cesseraient de se
+compter ensemble.
+
+*Une erreur en la posant, et elle est instructive.* La marque était d'abord
+ajoutée **après** `parties_ligne`. Or le domaine y colle déjà les horaires
+derrière le nom — « Lévétiracétam (8h-20h) » — et chercher ce texte-là au
+catalogue ne trouve rien : les seringues électriques affichaient leur marque,
+aucune autre voie. Corrigé en enrichissant le nom **avant** le découpage. La
+suite de tests ne l'a pas vu ; la capture d'écran, si.
+
+**Vérifications.** 1 074 tests passent (6 ajoutés), pyflakes propre, recette
+navigateur rejouée sur les cinq rôles. Vérifié à l'écran sur les huit voies.
+
 **v3.28 — 10 septembre 2026 — un catalogue de molécules qui apprend**
 
 Le produit d'une ligne de prescription se tapait à la main. On retapait

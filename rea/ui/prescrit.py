@@ -127,7 +127,8 @@ def _non_donnes(sejour: dict, date_jour_str: str) -> None:
     if not lignes:
         return
     contenu = "".join(
-        f"<div style='padding:.15rem 0'><b>{l['produit']}</b> à "
+        f"<div style='padding:.15rem 0'>"
+        f"<b>{medicaments_service.nom_affiche(contexte.base(), l['produit'])}</b> à "
         f"{l['heure_prevue']:02d} h — {l['libelle_motif'] or 'motif non précisé'}"
         + (f" ({l['motif']})" if l.get("motif") else "")
         + "</div>"
@@ -293,7 +294,8 @@ def _elements_qui_coulent(sejour: dict, pancarte: dict, date_jour_str: str) -> l
         {
             "cible": vitesses_service.LIGNE,
             "id": ligne["id"],
-            "libelle": ligne["produit"],
+            "libelle": medicaments_service.nom_affiche(
+                contexte.base(), ligne["produit"]),
             "initiale": ligne["vitesse"],
         }
         for ligne in pancarte["lignes"]
@@ -393,7 +395,22 @@ def _afficher_pancarte(
                     # produit, la dose. C'est le découpage du domaine, pour que
                     # la dose ne soit pas retranchée d'un texte déjà composé —
                     # elle finissait par s'afficher deux fois.
-                    etiquette, produit, dose = dom.parties_ligne(ligne, date_jour_str)
+                    # « Imipénème (Tienam) » : la DCI, et la marque pour la
+                    # reconnaître. La marque est ajoutée **avant** le découpage
+                    # du domaine, pas après : `parties_ligne` colle déjà les
+                    # horaires derrière le nom — « Lévétiracétam (8h-20h) » —
+                    # et chercher ce texte-là au catalogue ne trouve rien.
+                    #
+                    # Ce qui est enregistré reste la seule DCI ; la parenthèse
+                    # n'existe qu'à l'écran. L'écrire en base ramènerait le
+                    # problème qu'on vient de résoudre : « Imipénème (Tienam) »
+                    # et « Imipénème » cesseraient de se compter ensemble
+                    # (demande du service, 10 septembre).
+                    etiquette, produit, dose = dom.parties_ligne(
+                        {**ligne, "produit": medicaments_service.nom_affiche(
+                            contexte.base(), ligne.get("produit") or "")},
+                        date_jour_str,
+                    )
                     classe_j = "rea-j" + (" rea-fin" if etiquette.dernier_jour else "")
                     marque = "" if etiquette.introduction else etiquette.texte
                     texte = (f'<span class="{classe_j}">{marque}</span> ' if marque else "") + produit
@@ -463,7 +480,10 @@ def _panneau_posologie(sejour: dict, pancarte: dict, date_jour_str: str) -> None
             "seule la posologie change, à partir du jour affiché."
         )
         libelles = {
-            ligne["id"]: f"{ligne['produit']} — {dom.dose_affichee(ligne) or 'sans dose'}"
+            ligne["id"]: (
+                f"{medicaments_service.nom_affiche(contexte.base(), ligne['produit'])}"
+                f" — {dom.dose_affichee(ligne) or 'sans dose'}"
+            )
             for ligne in modifiables
         }
         choix = st.selectbox(
