@@ -35,6 +35,7 @@ from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr
 from ..services import affectations as affectations_service
 from ..services import constantes as constantes_service
+from ..services import evolution as evolution_service
 from . import theme
 
 
@@ -48,20 +49,49 @@ def bloc_du_jour(base, sejour_id: str, date_jour: str, *, titre: str | None = No
         )
         return
     heures = dom_vacations.heures_du_jour()
+    # Les recueils de CE patient : la diurèse, et chacun de ses drains. La clé
+    # d'un drain porte l'identifiant du dispositif — elle ne peut donc pas
+    # être écrite d'avance, on prend celles que la journée a vues (demande du
+    # service, 10 septembre).
+    recueils = _recueils_releves(grille)
     sorties = {
         cle: constantes_service.sorties_du_jour(base, sejour_id, date_jour, cle)
-        for cle in constantes_service.CLES_NIVEAU
+        for cle in recueils
     }
+    noms = _noms_des_recueils(base, sejour_id, date_jour)
     theme.bloc_html(
         titre or f"Surveillance horaire du {format_date_fr(date_jour)}",
-        _tableau(grille, heures, sorties)
-        + _reserves(sorties)
+        _tableau(grille, heures, sorties, recueils, noms)
+        + _reserves(sorties, noms)
         + _signatures(base, sejour_id, date_jour),
         theme.BLEU,
     )
 
 
-def _reserves(sorties: dict) -> str:
+def _recueils_releves(grille: dict) -> list[str]:
+    """Les clés de recueil qui portent au moins un relevé, dans l'ordre du
+    papier : la diurèse d'abord, les drains ensuite."""
+    vues = {cle for mesures in grille.values() for cle in mesures}
+    fixes = [cle for cle in constantes_service.CLES_NIVEAU if cle in vues]
+    drains = sorted(
+        cle for cle in vues if cle.startswith(constantes_service.PREFIXE_DRAIN)
+    )
+    return fixes + drains
+
+
+def _noms_des_recueils(base, sejour_id: str, date_jour: str) -> dict[str, str]:
+    """Clé de recueil -> le nom sous lequel on le désigne au lit du malade.
+
+    « drain:8f3a-… » ne se lit pas. Les drains portent le nom que le service
+    leur donne, numéroté quand il y en a deux au même endroit.
+    """
+    noms = {cle: libelle for cle, libelle, _u in constantes_service.SORTIES}
+    for drain in evolution_service.drains_du_jour(base, sejour_id, date_jour):
+        noms[constantes_service.cle_drain(drain["dispositif_id"])] = drain["libelle"]
+    return noms
+
+
+def _reserves(sorties: dict, noms: dict[str, str]) -> str:
     """Ce qui empêche de lire un total comme une mesure — dit, pas caché.
 
     Un niveau en baisse sans sac déclaré jeté, une heure sans relevé de
@@ -72,7 +102,7 @@ def _reserves(sorties: dict) -> str:
         for sortie in par_heure.values():
             if sortie.anomalie:
                 messages.append(
-                    f"{constantes_service.libelle(cle)} à "
+                    f"{noms.get(cle, constantes_service.libelle(cle))} à "
                     f"{sortie.instant.hour:02d} h — {sortie.anomalie}"
                 )
     if not messages:
@@ -83,10 +113,11 @@ def _reserves(sorties: dict) -> str:
     )
 
 
-def _tableau(grille: dict, heures, sorties: dict) -> str:
+def _tableau(grille: dict, heures, sorties: dict, recueils: list[str],
+             noms: dict[str, str]) -> str:
     bornes = _bornes_de_vacation()
     entetes = "".join(
-        f"<th style='padding:.15rem .3rem;font-weight:600{_bord(h, bornes)}'>"
+        f"<th style='padding:.3rem .45rem;font-weight:600{_bord(h, bornes)}'>"
         f"{h:02d}</th>"
         for h in heures
     )
@@ -97,7 +128,9 @@ def _tableau(grille: dict, heures, sorties: dict) -> str:
             continue
         lignes += _rangee(libelle, _extremes(valeurs, unite), valeurs, heures, bornes)
 
-    for cle, libelle, unite in constantes_service.SORTIES:
+    for cle in recueils:
+        libelle = noms.get(cle, cle)
+        unite = "mL"
         par_heure = sorties.get(cle, {})
         niveaux = [grille.get(h, {}).get(cle) for h in heures]
         if not any(v is not None for v in niveaux):
@@ -121,7 +154,7 @@ def _tableau(grille: dict, heures, sorties: dict) -> str:
             for h, v in zip(heures, niveaux)
         ]
         lignes += _rangee(
-            f"{libelle} — niveau du sac", "", marques, heures, bornes,
+            f"{libelle} — niveau", "", marques, heures, bornes,
             couleur="#94a3b8", brut=True,
         )
     # Le résumé **avant** les heures, et non après. Vingt-quatre colonnes ne
@@ -130,10 +163,10 @@ def _tableau(grille: dict, heures, sorties: dict) -> str:
     # vient lire est justement celle-là — les extrêmes de la nuit, le total de
     # la diurèse. Les heures, elles, se déroulent quand on les cherche.
     return (
-        "<div style='overflow-x:auto'><table style='font-size:.78rem;"
+        "<div style='overflow-x:auto'><table style='font-size:.95rem;"
         "border-collapse:collapse'>"
         f"<tr style='color:#64748b'><th></th>"
-        "<th style='padding:.15rem .5rem;border-right:1px solid #94a3b8;"
+        "<th style='padding:.3rem .6rem;border-right:1px solid #94a3b8;"
         "font-weight:600'>Journée</th>"
         f"{entetes}</tr>{lignes}</table></div>"
     )
@@ -157,16 +190,16 @@ def _rangee(libelle, resume, valeurs, heures, bornes, *, couleur="", brut=False)
     # doubler la hauteur de toute la rangée pour une seule heure.
     cases = "".join(
         f"<td style='text-align:center;white-space:nowrap;"
-        f"padding:.15rem .3rem{_bord(h, bornes)}"
+        f"padding:.3rem .45rem{_bord(h, bornes)}"
         f"{';color:' + couleur if couleur else ''}'>"
         f"{v if brut else _nombre(v)}</td>"
         for h, v in zip(heures, valeurs)
     )
     return (
         "<tr>"
-        f"<td style='padding:.15rem .4rem;white-space:nowrap{style}'>"
+        f"<td style='padding:.3rem .55rem;white-space:nowrap;font-weight:600{style}'>"
         f"{html.escape(libelle)}</td>"
-        f"<td style='padding:.15rem .5rem;white-space:nowrap;"
+        f"<td style='padding:.3rem .6rem;white-space:nowrap;"
         f"border-right:1px solid #94a3b8'>{resume}</td>"
         f"{cases}</tr>"
     )

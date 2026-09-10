@@ -587,25 +587,64 @@ L'interne vérifie, modifie, ajoute, imprime.
 Calcul automatique du **volume total des entrées sur 24 h** :
 
 ```
-Σ (perfusions : vitesse cc/h × 24)
-+ Σ (PSE : vitesse cc/h × 24)
+Σ (perfusions : volume réellement passé, réglage par réglage)
++ Σ (PSE : volume réellement passé, réglage par réglage)
 + Σ (médicaments IV : volume de dilution × nombre de prises)
-+ nutrition entérale (volume/j)
-+ nutrition parentérale (volume/j)
++ nutrition entérale et parentérale
 ```
 
-Les **sorties** restent manuscrites sur la pancarte par les infirmiers. Le
-logiciel fournit donc les entrées, pas le bilan complet. C'est déjà l'essentiel
-du travail de calcul évité.
+**Une entrée se chiffre de deux façons, et l'une n'est pas plus vraie que
+l'autre** : un volume sur 24 h (« 1 500 mL de Kabiven ») ou une vitesse
+(« Kabiven à 80 cc/h »), qui est ce qu'on règle sur la pompe. Le logiciel
+prend le volume s'il est renseigné, la vitesse sinon. On lisait le volume
+pour la nutrition et la vitesse pour les perfusions : une nutrition
+parentérale réglée en cc/h ne comptait donc **nulle part**, et l'écran
+affichait « 0 mL » devant une poche qui coulait *(relevé par le service le
+10 septembre 2026, corrigé le jour même)*.
+
+Une ligne d'entrées sans vitesse **ni** volume ne peut pas être chiffrée. Le
+formulaire la refuse, et si une base en porte une, le total se déclare
+**incomplet** en la nommant : un total qui ignore une perfusion ressemble
+quand même à un total, et une perfusion qu'on a oublié de chiffrer se lit
+alors comme une perfusion qui ne coule pas.
+
+✅ *Les sorties ne sont plus manuscrites (§5.7). Le bilan est complet :
+entrées, diurèse, drains, pertes insensibles, net.*
 
 ## 5.7 Surveillance infirmière
 
-**Pas de saisie numérique.** Les infirmiers écrivent à la main sur la pancarte
-imprimée. La pancarte doit donc réserver des zones manuscrites suffisantes :
-constantes horaires, diurèse, drains, observations.
+*Version 1 : pas de saisie numérique, les infirmiers écrivaient à la main sur
+la pancarte imprimée. Revenu depuis — les infirmiers ouvrent leur poste sur
+leur téléphone (§2.4), et une feuille jetée à la sortie du patient emportait
+vingt-quatre valeurs par constante et par jour.*
 
-Cette décision simplifie considérablement le projet et supprime toute la
-phase 3 initialement prévue.
+Ce qui se relève heure par heure : constantes (T°, FC, pressions, FR, SpO₂,
+Glasgow, dextro), **diurèse**, et **chaque drain du patient**.
+
+**Ce qui s'écrit dans une case de recueil est le niveau lu**, pas ce qui est
+sorti pendant l'heure. C'est ce que l'infirmier voit sur la graduation ; lui
+demander la soustraction au lit du malade, de nuit, avec des gants, serait lui
+demander de se tromper une fois par garde. Le logiciel fait les différences
+(`domaine/recueil.py`), et une case « j'ai vidé » dit que le niveau qu'on vient
+d'écrire est le dernier de ce sac-là — sans quoi un sac changé se lirait comme
+une diurèse qui s'effondre.
+
+**Les drains** n'ont pas de clé fixe : ils n'existent que si on les a posés, et
+un patient peut en porter quatre. La clé de recueil porte donc l'identifiant du
+dispositif (`drain:<id>`), et un drain de plus se relève sans rien changer au
+schéma. Deux drains **du même type au même endroit** sont numérotés — « Redon
+(abdomen) 1 », « Redon (abdomen) 2 » — dans l'ordre de pose, celui dans lequel
+le chirurgien en parle ; le numéro n'apparaît que s'il y a de quoi confondre,
+sinon le « 1 » donnerait à chercher le « 2 ».
+
+Un drain abdominal déclare aussi **sa nature** (`referentiels/natures_drain.json`,
+à compléter avec un chirurgien) : un transcystique qui donne 400 mL de bile ne
+se surveille pas comme un drain de Douglas qui donne 400 mL de sérosités.
+
+**Deux sources pour le volume d'un drain, et l'une prime** : le relevé horaire
+de l'infirmier est une mesure, le chiffre repris par le médecin dans son
+observation est une reprise. Dès qu'une heure a été relevée, c'est le relevé
+qui compte — sinon le volume changerait selon l'écran qu'on regarde.
 
 ---
 

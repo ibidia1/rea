@@ -110,6 +110,12 @@ SPECIALITES_AVIS = _charger("specialites_avis")
 MOTIFS_NON_ADMINISTRATION = _charger("motifs_non_administration")
 MOTIFS_NON_PRELEVEMENT = _charger("motifs_non_prelevement")
 
+# Ce qu'un drain abdominal draine réellement : un transcystique qui donne
+# 400 mL de bile ne se surveille pas comme un drain de Douglas qui donne
+# 400 mL de sérosités (demande du service, 10 septembre). Liste de départ, à
+# compléter avec un chirurgien.
+NATURES_DRAIN = _charger("natures_drain")
+
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
 ADDITIFS_PERFUSION = _charger("additifs_perfusion")

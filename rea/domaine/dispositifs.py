@@ -211,6 +211,53 @@ def pose_le_jour(ligne: dict, a_la_date: str | date | None = None) -> bool:
     return parse_date(ligne["date_pose"]) == (parse_date(a_la_date) or date.today())
 
 
+# --------------------------------------------------------------------------
+# Nommer deux drains posés au même endroit (demande du service, 10 septembre)
+# --------------------------------------------------------------------------
+
+def libelles_distincts(etats_en_place: list[EtatDispositif]) -> dict[str, str]:
+    """id du dispositif -> le nom sous lequel on le désigne au lit du malade.
+
+    Un patient peut avoir deux redons dans l'abdomen. « Redon (abdomen) »
+    pour les deux, c'est un volume noté sur le mauvais, et deux courbes qui
+    se mélangent : on les numérote — « Redon (abdomen) 1 », « Redon
+    (abdomen) 2 » — dans l'ordre où ils ont été posés, celui dans lequel le
+    chirurgien en parle.
+
+    Le numéro n'apparaît **que** s'il y a de quoi confondre : un redon seul
+    reste « Redon (abdomen) ». Numéroter systématiquement ferait lire
+    « Drain thoracique (droit) 1 » à un patient qui n'en a qu'un, et le 1
+    donnerait à chercher le 2.
+
+    Le rang d'épisode ne convient pas ici : il compte les poses successives
+    sur tout le séjour, si bien qu'un redon retiré lundi ferait appeler
+    « Redon 2 » celui qu'on pose mardi — seul en place, et pourtant numéroté.
+    Il sert en revanche à départager deux drains posés **le même jour** : la
+    date ne les sépare pas, mais lui suit l'ordre de saisie, qui est celui du
+    bloc. Sans ce départage, on retombait sur l'identifiant — un UUID, donc
+    un ordre tiré au sort, et le premier redon appelé « 2 ».
+    """
+    par_place: dict[tuple[str, str], list[EtatDispositif]] = {}
+    for etat_ in etats_en_place:
+        par_place.setdefault((etat_.type, etat_.site or ""), []).append(etat_)
+
+    libelles: dict[str, str] = {}
+    for groupe in par_place.values():
+        ordonnes = sorted(
+            groupe, key=lambda e: (e.date_pose or "", e.rang, e.id or "")
+        )
+        for numero, etat_ in enumerate(ordonnes, start=1):
+            if etat_.id is None:
+                continue
+            nom = etat_.libelle_type
+            if etat_.site:
+                nom += f" ({etat_.site.lower()})"
+            if len(ordonnes) > 1:
+                nom += f" {numero}"
+            libelles[etat_.id] = nom
+    return libelles
+
+
 def duree_totale_jours(lignes: list[dict], type_: str, a_la_date: str | date | None = None) -> int:
     """Somme des jours pour un type donné, épisodes multiples compris —
     c'est la durée de ventilation ou d'épuration du socle de recherche

@@ -44,6 +44,7 @@ from ..domaine.dates import format_date_fr
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import constantes as constantes_service
+from ..services import evolution as evolution_service
 from ..services import prelevements as prelevements_service
 from ..services import prescriptions as prescriptions_service
 from ..services import supervision as supervision_service
@@ -455,10 +456,12 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
     saisies = grille.get(heure, {})
     jetes = constantes_service.sacs_jetes_du_jour(base, patient["sejour_id"], jour)
 
+    recueils = _recueils_du_patient(base, patient, jour)
+
     with st.form(f"constantes_{patient['sejour_id']}_{heure}"):
         valeurs = {}
         _rangees(constantes_service.VITALES, patient, heure, saisies, valeurs)
-        sacs = _recueils(patient, heure, saisies, valeurs, jetes)
+        sacs = _recueils(patient, heure, saisies, valeurs, jetes, recueils)
         if st.form_submit_button(f"Enregistrer le relevé de {heure:02d} h",
                                  type="primary", use_container_width=True):
             constantes_service.enregistrer(
@@ -468,10 +471,28 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
             st.success(f"Relevé de {heure:02d} h enregistré.")
             st.rerun()
 
-    _grille_du_jour(base, patient, jour, grille, heures, jetes)
+    _grille_du_jour(base, patient, jour, grille, heures, jetes, recueils)
 
 
-def _recueils(patient, heure, saisies, valeurs, jetes) -> set[str]:
+def _recueils_du_patient(base, patient, jour) -> list[tuple[str, str, str]]:
+    """Ce qui se recueille chez CE patient-là : la diurèse, et ses drains.
+
+    La diurèse est de tous les patients ; les drains sont de celui-ci — un
+    redon abdominal, deux, un drain thoracique, aucun. Ils s'ajoutent donc à
+    la liste fixe au lieu d'y être écrits, et disparaissent le jour du
+    retrait sans qu'on ait à y penser (demande du service, 10 septembre).
+
+    Deux redons dans le même abdomen arrivent numérotés — « Redon (abdomen) 1 »
+    et « 2 » — sans quoi le volume se noterait sur le mauvais.
+    """
+    drains = evolution_service.drains_du_jour(base, patient["sejour_id"], jour)
+    return list(constantes_service.SORTIES) + [
+        (constantes_service.cle_drain(drain["dispositif_id"]), drain["libelle"], "mL")
+        for drain in drains
+    ]
+
+
+def _recueils(patient, heure, saisies, valeurs, jetes, recueils) -> set[str]:
     """Le niveau lu sur le sac, et le geste « je viens de le jeter ».
 
     L'infirmier n'a **rien à soustraire**. Il écrit ce qu'il lit sur la
@@ -486,19 +507,19 @@ def _recueils(patient, heure, saisies, valeurs, jetes) -> set[str]:
     """
     st.markdown(
         f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
-        f"color:{theme.BLEU}'>Recueils — niveau lu sur le sac</div>",
+        f"color:{theme.BLEU}'>Recueils — niveau lu sur le sac ou le bocal</div>",
         unsafe_allow_html=True,
     )
     sacs: set[str] = set()
-    for cle, libelle, unite in constantes_service.SORTIES:
+    for cle, libelle, unite in recueils:
         valeurs[cle] = _lire(st.text_input(
-            f"{libelle} — niveau du sac ({unite})",
+            f"{libelle} — niveau ({unite})",
             value="" if saisies.get(cle) is None else _nombre(saisies[cle]),
             key=f"cst_{patient['sejour_id']}_{heure}_{cle}",
             placeholder="ce qui est écrit sur la graduation",
         ))
         if st.checkbox(
-            f"J'ai jeté le sac après ce relevé ({libelle.lower()})",
+            f"J'ai vidé après ce relevé ({libelle.lower()})",
             value=(heure, cle) in jetes,
             key=f"jete_{patient['sejour_id']}_{heure}_{cle}",
         ):
@@ -533,7 +554,7 @@ def _rangees(champs_constantes, patient, heure, saisies, valeurs) -> None:
             valeurs[cle] = _lire(brut)
 
 
-def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes) -> None:
+def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes, recueils) -> None:
     """Le relevé du poste en tableau — et, pour les recueils, **deux lignes**.
 
     Celle des niveaux, telle qu'elle a été écrite, pour se relire. Et celle
@@ -556,7 +577,7 @@ def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes) -> None:
             continue
         lignes += _rangee(libelle, [_nombre(v) for v in valeurs], "")
 
-    for cle, libelle, unite in constantes_service.SORTIES:
+    for cle, libelle, unite in recueils:
         niveaux = [grille.get(h, {}).get(cle) for h in heures]
         if not any(v is not None for v in niveaux):
             continue

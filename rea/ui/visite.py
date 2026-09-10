@@ -27,11 +27,12 @@ from ..services import avis as avis_service
 from ..services import bilans as bilans_service
 from ..services import dispositifs as dispositifs_service
 from ..services import evolution as evolution_service
+from ..services import explorations as explorations_service
 from ..services import medicaments as medicaments_service
 from ..services import microbiologie as micro_service
 from ..services import prescriptions as prescriptions_service
 from ..services import vitesses as vitesses_service
-from . import contexte, surveillance, theme
+from . import contexte, prescrit, surveillance, theme
 
 #: Ce qu'on regarde à la visite, dans cet ordre. Pas tout le catalogue : une
 #: page de trente valeurs ne se lit pas debout, et ces huit-là décident de la
@@ -53,10 +54,19 @@ def onglet_visite(sejour: dict) -> None:
     gauche, droite = st.columns([1.15, 1], gap="medium")
     with gauche:
         _traitements(sejour, date_jour_str)
+        _bilan_entrees_sorties(sejour, date_jour_str)
     with droite:
         _etat_du_jour(sejour, date_jour_str)
         _biologie(sejour, date_jour_str)
+        # Le bilan infectieux est de la biologie : une CRP et une hémoculture
+        # se lisent l'une contre l'autre, et les séparer obligeait à monter
+        # et descendre l'écran pour les rapprocher. Les avis, eux, n'ont rien
+        # d'infectieux — un avis de chirurgie ou de néphrologie se perdait
+        # sous un titre qui parlait de germes (demande du service,
+        # 10 septembre).
         _infectieux(sejour, date_jour_str)
+        _explorations(sejour, date_jour_str)
+        _avis(sejour, date_jour_str)
         _plans(sejour, date_jour_str)
 
     st.divider()
@@ -108,18 +118,28 @@ def _traitements(sejour: dict, date_jour_str: str) -> None:
     )
     vitesses_jour = _vitesses_du_jour(sejour, pancarte, date_jour_str)
     par_voie = pancarte["lignes_par_voie"]
+    # La sédation est posée comme dispositif et non prescrite en ligne : sans
+    # cette reprise, la seule vitesse qu'un infirmier règle sur une pompe
+    # n'apparaissait pas sur la pancarte à l'écran — elle était sur le
+    # prescrit et sur la feuille imprimée, mais pas là où le médecin visite
+    # (demande du service, 10 septembre).
+    sedation = prescrit.ligne_sedation(sejour, date_jour_str)
 
     for code_voie in listes.ORDRE_VOIES:
         lignes = par_voie.get(code_voie, [])
-        if not lignes:
+        synthetique = sedation if code_voie == "PSE" else None
+        if not lignes and not synthetique:
             continue
         couleur = theme.COULEUR_VOIE.get(code_voie, theme.GRIS)
-        corps = "".join(
+        corps = ""
+        if synthetique:
+            corps += f'<div class="rea-v-texte">{synthetique}</div>'
+        corps += "".join(
             _ligne_traitement(ligne, date_jour_str, vitesses_jour) for ligne in lignes
         )
         _bloc(listes.VOIES[code_voie]["titre"], corps, couleur)
 
-    if not any(par_voie.values()):
+    if not any(par_voie.values()) and not sedation:
         st.info("Aucun traitement prescrit ce jour-là.")
 
 
@@ -370,6 +390,12 @@ def _biologie(sejour: dict, date_jour_str: str) -> None:
 
 
 def _infectieux(sejour: dict, date_jour_str: str) -> None:
+    """Les prélèvements et leurs germes, juste sous la biologie.
+
+    Une CRP et une hémoculture se lisent l'une contre l'autre : les séparer
+    obligeait à monter et descendre l'écran pour les rapprocher (demande du
+    service, 10 septembre).
+    """
     lignes = []
     for m in micro_service.du_sejour(contexte.base(), sejour["id"])[:6]:
         resultat = listes.libelle(listes.RESULTATS_MICROBIO, m["resultat"])
@@ -384,10 +410,97 @@ def _infectieux(sejour: dict, date_jour_str: str) -> None:
             f'<span class="rea-v-dose">{html.escape(resultat)}</span>'
             "</div>"
         )
-    for a in avis_service.lignes_imprimees(contexte.base(), sejour["id"]):
-        lignes.append(f'<div class="rea-v-texte">{html.escape(a)}</div>')
     if lignes:
-        _bloc("Infectieux et avis", "".join(lignes), theme.ORANGE)
+        _bloc("Bilan infectieux", "".join(lignes), theme.ORANGE)
+
+
+def _avis(sejour: dict, date_jour_str: str) -> None:
+    """Les avis spécialisés, sous leur propre titre.
+
+    Ils étaient rangés avec l'infectieux : un avis de chirurgie ou de
+    néphrologie se lisait alors sous un titre qui parlait de germes, et se
+    cherchait là où personne n'aurait l'idée de le chercher (demande du
+    service, 10 septembre).
+    """
+    lignes = [
+        f'<div class="rea-v-texte">{html.escape(a)}</div>'
+        for a in avis_service.lignes_imprimees(contexte.base(), sejour["id"])
+    ]
+    if lignes:
+        _bloc("Avis spécialisés", "".join(lignes), theme.VIOLET)
+
+
+def _explorations(sejour: dict, date_jour_str: str) -> None:
+    """Ce qui a été fait — imageries, échographies, dopplers — et ce qu'on y a vu.
+
+    À la visite, la question « la TDM a-t-elle été faite ? » se pose avant
+    « qu'a-t-elle montré ? ». Les deux se répondaient jusqu'ici en changeant
+    d'onglet (demande du service, 10 septembre).
+    """
+    faites = explorations_service.du_sejour(contexte.base(), sejour["id"])
+    if not faites:
+        return
+    lignes = []
+    for exploration in faites[:8]:
+        titre = listes.TYPES_EXPLORATION.get(
+            exploration["type"], {}
+        ).get("libelle", exploration["type"])
+        jour = format_date_fr(exploration["date_heure"][:10])[:5]
+        conclusion = (exploration["conclusion"] or "").strip()
+        lignes.append(
+            '<div class="rea-v-ligne">'
+            f'<span class="rea-v-produit">{html.escape(titre)} '
+            f'<span class="rea-v-detail">{html.escape(jour)}</span></span>'
+            f'<span class="rea-v-dose">{html.escape(conclusion[:60])}</span>'
+            "</div>"
+        )
+    _bloc(f"Explorations faites ({len(faites)})", "".join(lignes), theme.BLEU)
+
+
+def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
+    """Ce qui est entré, ce qui est sorti, ce qui reste — sous les traitements.
+
+    Sous les traitements et non ailleurs : les entrées viennent d'eux, et le
+    médecin qui vient de lire « Ringer 60 cc/h » veut savoir ce que ça donne
+    sur la journée. Chaque drain a sa ligne : deux redons qui donnent 90 et
+    410 ne se lisent pas comme deux qui donnent 250 chacun, et c'est le genre
+    de chiffre qui fait rappeler le chirurgien.
+
+    Ce qui manque manque : sans diurèse ni poids, le bilan le dit au lieu
+    d'afficher un chiffre faux.
+    """
+    bilan = evolution_service.bilan_hydrique(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    lignes = [_mesure("Entrées", f"{bilan.entrees_ml:.0f} mL", None)]
+    for libelle_entree, volume in bilan.detail_entrees:
+        lignes.append(
+            f'<div class="rea-v-texte" style="color:{theme.GRIS}">'
+            f"{html.escape(libelle_entree)} — {volume:.0f} mL</div>"
+        )
+    lignes.append(_mesure(
+        "Diurèse",
+        f"{bilan.diurese_ml:.0f} mL" if bilan.diurese_ml is not None else "—",
+        None,
+    ))
+    for libelle_drain, volume in bilan.detail_drains:
+        lignes.append(_mesure(libelle_drain, f"{volume:.0f} mL", None))
+    if bilan.pertes_insensibles_ml is not None:
+        lignes.append(_mesure(
+            "Pertes insensibles", f"{bilan.pertes_insensibles_ml:.0f} mL", None
+        ))
+    if bilan.net_ml is not None:
+        signe = "+" if bilan.net_ml >= 0 else ""
+        lignes.append(_mesure(
+            "Bilan", f"{signe}{bilan.net_ml:.0f} mL", None,
+            alerte="haut" if abs(bilan.net_ml) > 2000 else None,
+        ))
+    elif bilan.motif_indisponible:
+        lignes.append(
+            f'<div class="rea-v-texte" style="color:{theme.GRIS}">'
+            f"{html.escape(bilan.motif_indisponible)}</div>"
+        )
+    _bloc("Bilan entrées / sorties", "".join(lignes), theme.BLEU)
 
 
 def _plans(sejour: dict, date_jour_str: str) -> None:
