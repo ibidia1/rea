@@ -43,12 +43,29 @@ class Medicament:
     code: str
     libelle: str
     unite: str | None = None
+    #: Le nom commercial, **à part** des synonymes parce qu'il s'affiche : le
+    #: prescrit écrit « Imipénème (Tienam) ». Les synonymes, eux, ne servent
+    #: qu'à chercher — sans cette séparation on lirait « Imipénème
+    #: (carbapeneme) », ce qui est une famille et non un produit qu'on demande
+    #: à la pharmacie.
+    marque: str | None = None
     synonymes: tuple[str, ...] = ()
     #: Ajoutée par le service en la prescrivant, plutôt que livrée avec le
     #: logiciel. L'écran des référentiels les montre à part : ce sont celles
     #: qu'un senior voudra relire.
     locale: bool = False
     _recherche: str = field(default="", repr=False, compare=False)
+
+    @property
+    def nom_affiche(self) -> str:
+        """« Imipénème (Tienam) » — la DCI, et la marque pour la reconnaître.
+
+        Ce qui est **enregistré** reste la seule DCI : la parenthèse est
+        ajoutée à l'affichage. L'écrire dans la base ramènerait le problème
+        qu'on vient de résoudre — « Imipénème (Tienam) » et « Imipénème » ne
+        se compteraient plus ensemble.
+        """
+        return f"{self.libelle} ({self.marque})" if self.marque else self.libelle
 
     def correspond(self, requete: str) -> bool:
         return normaliser(requete) in self._recherche
@@ -86,11 +103,12 @@ def _du_referentiel() -> list[Medicament]:
     molecules = []
     for entree in referentiels.charger("medicaments"):
         code, libelle, unite = entree[0], entree[1], entree[2]
-        synonymes = tuple(entree[3]) if len(entree) > 3 else ()
+        marque = entree[3] if len(entree) > 3 else None
+        synonymes = tuple(entree[4]) if len(entree) > 4 else ()
         molecules.append(Medicament(
             code=code, libelle=libelle, unite=unite or None,
-            synonymes=synonymes,
-            _recherche=normaliser(" ".join((libelle, *synonymes))),
+            marque=marque or None, synonymes=synonymes,
+            _recherche=normaliser(" ".join((libelle, marque or "", *synonymes))),
         ))
     return molecules
 
@@ -154,6 +172,17 @@ def chercher(base: Base, requete: str, limite: int = 12) -> list[Medicament]:
 def par_libelle(base: Base, libelle: str) -> Medicament | None:
     cle = normaliser(libelle)
     return next((m for m in catalogue(base) if normaliser(m.libelle) == cle), None)
+
+
+def nom_affiche(base: Base, produit: str) -> str:
+    """Le nom d'un produit tel qu'il doit se lire : « Imipénème (Tienam) ».
+
+    Rend le produit **inchangé** s'il n'est pas au catalogue — une ligne
+    ancienne, une molécule ajoutée à la main. Un écran ne doit jamais perdre
+    ce qui a été écrit sous prétexte qu'il ne le reconnaît pas.
+    """
+    molecule = par_libelle(base, produit)
+    return molecule.nom_affiche if molecule else produit
 
 
 def apprendre(
