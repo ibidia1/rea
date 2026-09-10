@@ -109,11 +109,27 @@ python -m streamlit run rea_app.py
 ```
 
 Le navigateur s'ouvre sur `http://localhost:8501`. À la toute première
-ouverture, le logiciel demande de créer le **compte administrateur** : c'est
-lui qui créera ensuite tous les autres. Mettre un code d'accès dès
-maintenant, six chiffres au minimum.
+ouverture, le logiciel propose le **compte administrateur de départ** :
 
-**Vérification.** Le tableau des douze lits s'affiche.
+| | |
+|---|---|
+| Nom | **Slah** |
+| Code de départ | **`rea123`** |
+
+Un clic sur *Créer le compte Slah et entrer*, et vous y êtes. C'est ce compte
+qui créera ensuite tous les autres.
+
+**Ce code ne protège rien** : il est écrit dans le logiciel, donc lisible par
+quiconque ouvre le dépôt. Aussi le compte n'ouvre-t-il aucun écran avant d'en
+recevoir un vrai — il le réclame à la première entrée, et rien d'autre ne
+s'affiche tant qu'il n'est pas posé. Six caractères au minimum, et pas
+`rea123`.
+
+Le volet *Ou choisir un autre nom et son code tout de suite* fait la même
+chose sous le nom de votre choix.
+
+**Vérification.** Le tableau des douze lits s'affiche, et le bouton **Admin**
+est en haut à droite.
 
 ### 1.6 Créer les comptes du service
 
@@ -122,6 +138,14 @@ Barre latérale → **Administration** → **Comptes**.
 Créer un compte par personne, avec son rôle et **son code d'accès**. Le
 téléphone est facultatif mais utile : il s'affiche au médecin dans le
 Prescrit, pour appeler directement l'infirmier du patient.
+
+Le code que vous tapez pour quelqu'un d'autre est **provisoire** — la case
+est cochée d'avance. Vous le lui dites de vive voix ; à sa première entrée,
+la personne en choisit un que personne d'autre ne connaîtra, et elle pourra
+le changer quand elle veut par *Mon code d'accès*, dans la barre latérale.
+C'est aussi la seule façon d'ouvrir un compte une fois le logiciel sur le
+Wi-Fi (§2) : un compte sans code y est refusé à l'entrée, il ne pourrait donc
+jamais entrer pour poser le sien.
 
 | Rôle | Ce qu'il peut faire |
 |---|---|
@@ -352,17 +376,26 @@ port 8501 sur le profil Privé ?
 redémarrer l'application (les compteurs sont en mémoire).
 
 **Un code d'accès est perdu.** Un administrateur en pose un nouveau :
-Administration → Comptes → Modifier.
+Administration → Comptes → Modifier. Le laisser marqué *provisoire* : la
+personne en choisira un autre en entrant, et vous cesserez de le connaître.
 
-**Aucun compte n'a accès à Administration → Comptes.** L'écran des comptes
-demande le droit `comptes`, que seul le rôle **Administrateur** possède. Trois
-cas mènent à l'impasse : une base qui porte des comptes mais aucun
-administrateur, le seul administrateur désactivé, ou son code perdu. Le
-logiciel refuse bien de *retirer* le dernier administrateur — mais cela ne
-couvre pas ces trois cas-là.
+**Le bouton Admin n'apparaît pas.** Ce n'est pas une panne : il demande le
+droit `comptes`, que seul le rôle **Administrateur** possède — un senior, même
+chef de service, ne le voit pas. Un administrateur change votre rôle dans
+Administration → Comptes.
 
-La porte de secours se lance **sur le PC serveur**, jamais depuis un
-téléphone :
+**Aucun compte n'a accès à Administration → Comptes.** Trois cas mènent à
+l'impasse : une base qui porte des comptes mais aucun administrateur, le seul
+administrateur désactivé, ou son code perdu. Le logiciel refuse bien de
+*retirer* le dernier administrateur — mais cela ne couvre pas ces trois cas-là.
+
+L'écran d'ouverture propose alors *« Aucun compte administrateur — en désigner
+un »* : on y choisit un compte existant et on donne **son** code. Si aucun
+compte de la base n'a de code — rien n'y est donc protégé — il propose en plus
+de créer le compte **Slah** directement.
+
+Si cela ne suffit pas, la porte de secours se lance **sur le PC serveur**,
+jamais depuis un téléphone :
 
 ```
 cd C:\rea

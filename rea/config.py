@@ -74,6 +74,20 @@ BLOCAGE_MINUTES = 10
 #: Longueur minimale d'un code quand l'authentification est exigée.
 LONGUEUR_CODE_MINIMALE = 6
 
+#: Le compte administrateur de départ, pour qu'un service qui installe le
+#: logiciel un matin ne reste pas devant un écran sans porte : sans
+#: administrateur, personne ne peut créer de compte — et le bouton qui le
+#: permettrait est justement celui qui manque.
+#:
+#: Le code est provisoire au sens strict : il est écrit ici, donc public, donc
+#: il ne protège rien. Le logiciel le sait — il marque le compte
+#: `code_provisoire`, réclame un vrai code à la première entrée et n'ouvre
+#: aucun écran avant qu'il soit posé. Et il ne crée ce compte que sur une base
+#: où **aucun compte n'a de code** : là, rien n'était protégé de toute façon.
+#: Sur une base déjà protégée, la porte reste celle qui demande un code connu.
+COMPTE_INITIAL_NOM = "Slah"
+CODE_INITIAL = "rea123"
+
 # --------------------------------------------------------------------------
 # Sauvegardes (SPEC §2.2)
 # --------------------------------------------------------------------------

@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS utilisateur (
     -- que le jour du multi-postes ne demande pas une migration sur des données
     -- cliniques déjà là (§2.4 — évolutions possibles, non décidées).
     pin         TEXT,
+    -- Le code posé est-il celui, public, du premier démarrage ? Tant qu'il
+    -- l'est, ce compte ne protège rien : le logiciel refuse alors d'ouvrir un
+    -- écran avant qu'un vrai code soit choisi (config.CODE_INITIAL).
+    code_provisoire INTEGER NOT NULL DEFAULT 0,
     -- Pour joindre la personne sans faire le tour des chambres : le médecin
     -- qui prescrit voit qui s'occupe du patient, et son numéro (demande du
     -- service, 10 septembre).

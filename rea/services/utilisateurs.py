@@ -170,9 +170,19 @@ def creer(
     role: str,
     *,
     code: str | None = None,
+    code_provisoire: bool = False,
     telephone: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
+    """Crée un compte.
+
+    `code_provisoire` marque un code que l'administrateur a choisi pour
+    quelqu'un d'autre et lui dit de vive voix. C'est le seul moyen de donner
+    la main à un infirmier quand l'application est sur le réseau : un compte
+    sans code y est refusé à l'entrée, il ne pourrait donc jamais entrer pour
+    poser le sien. Le compte réclame un vrai code à sa première ouverture, et
+    ce code-là n'est plus connu que de son propriétaire.
+    """
     nom = (nom or "").strip()
     if not nom:
         raise ValueError("Le nom du compte est obligatoire.")
@@ -184,6 +194,7 @@ def creer(
         "utilisateur",
         {"nom": nom, "role": role,
          "pin": chiffrer_code(code) if code else None,
+         "code_provisoire": 1 if (code and code_provisoire) else 0,
          "telephone": (telephone or "").strip() or None},
         utilisateur_id=utilisateur_id,
     )
@@ -200,12 +211,21 @@ def modifier_role(
 
 
 def definir_code(
-    base: Base, cible_id: str, code: str | None, *, utilisateur_id: str | None = None
+    base: Base, cible_id: str, code: str | None, *,
+    provisoire: bool = False, utilisateur_id: str | None = None,
 ) -> None:
-    """Pose ou retire le code d'accès d'un compte."""
+    """Pose ou retire le code d'accès d'un compte.
+
+    `provisoire` distingue les deux gestes qui se ressemblent : un code que
+    l'on choisit pour soi n'est connu que de soi ; un code qu'un
+    administrateur pose pour quelqu'un d'autre — un code oublié qu'on
+    réinitialise, un compte qu'on ouvre — est connu de deux personnes, et
+    le compte le sait : il en réclamera un vrai à la prochaine entrée.
+    """
     base.mettre_a_jour(
         "utilisateur", cible_id,
-        {"pin": chiffrer_code(code) if code else None},
+        {"pin": chiffrer_code(code) if code else None,
+         "code_provisoire": 1 if (code and provisoire) else 0},
         utilisateur_id=utilisateur_id,
     )
 
@@ -278,6 +298,68 @@ def sans_administrateur(base: Base) -> bool:
     réservé à l'administrateur qui n'existe pas.
     """
     return bool(actifs(base)) and not administrateurs(base)
+
+
+def rien_n_est_protege(base: Base) -> bool:
+    """Aucun compte actif n'a de code : la base est ouverte à qui l'ouvre.
+
+    C'est la seule situation où créer un administrateur au code public ne
+    retire rien à personne — il n'y avait pas de serrure à forcer.
+    """
+    comptes = actifs(base)
+    return not any(u["pin"] for u in comptes)
+
+
+def comptes_a_code_provisoire(base: Base) -> list[dict]:
+    """Les comptes qui portent encore le code écrit dans `config.py`."""
+    return [u for u in actifs(base) if u["code_provisoire"]]
+
+
+def creer_compte_initial(base: Base) -> str:
+    """Le compte administrateur du premier démarrage (`config.CODE_INITIAL`).
+
+    Il ouvre la porte d'un service qui installe le logiciel un matin : sans
+    administrateur, personne ne peut créer de compte. Son code est écrit dans
+    le code source, donc public : il est marqué provisoire, et l'application
+    n'ouvre aucun écran tant qu'un vrai code n'a pas été posé.
+
+    Deux refus, pour que cette commodité ne devienne pas une porte dérobée :
+    une base qui a déjà un administrateur n'en a pas besoin, et une base dont
+    un seul compte porte un code est **protégée** — y ajouter un compte au
+    code public rendrait cette protection illusoire, et quiconque lit le
+    dépôt entrerait administrateur. Là, la porte reste `designer_administrateur`,
+    qui exige un code déjà connu.
+    """
+    if administrateurs(base):
+        raise ValueError(
+            "Cette base a déjà un administrateur : c'est à lui de créer les "
+            "comptes, dans Administration → Comptes."
+        )
+    if not rien_n_est_protege(base):
+        raise ValueError(
+            "Des comptes de cette base ont un code d'accès : ajouter un "
+            "administrateur au code public les laisserait sans protection. "
+            "Désigner plutôt un compte existant, avec son code."
+        )
+    with base.transaction():
+        cible = par_nom(base, config.COMPTE_INITIAL_NOM)
+        if cible:
+            identifiant = cible["id"]
+            base.mettre_a_jour(
+                "utilisateur", identifiant,
+                {"role": "admin", "actif": 1,
+                 "pin": chiffrer_code(config.CODE_INITIAL),
+                 "code_provisoire": 1},
+                utilisateur_id=identifiant,
+            )
+        else:
+            identifiant = base.inserer(
+                "utilisateur",
+                {"nom": config.COMPTE_INITIAL_NOM, "role": "admin",
+                 "pin": chiffrer_code(config.CODE_INITIAL),
+                 "code_provisoire": 1},
+            )
+    return identifiant
 
 
 def designer_administrateur(

@@ -1516,6 +1516,22 @@ anonymes des années de prescriptions. Et l'on refuse de retirer le dernier
 compte capable de gérer les comptes — on ne se ferme pas la porte de
 l'extérieur.
 
+*Le code provisoire.* Un code qu'un administrateur choisit pour quelqu'un
+d'autre est connu de deux personnes : ce n'est pas encore le sien. Le compte
+porte alors la marque `code_provisoire` et **n'ouvre aucun écran** avant d'en
+recevoir un vrai — la demande n'est pas un rappel qu'on remet à plus tard,
+c'est la porte. Poser son propre code lève la marque.
+
+C'est aussi ce qui permet d'ouvrir un compte quand l'application est sur le
+réseau : un compte sans code y est refusé à l'entrée, il ne pourrait donc
+jamais entrer pour poser le sien. Et c'est ce qui rend acceptable le compte
+administrateur de départ (`config.COMPTE_INITIAL_NOM` / `CODE_INITIAL`), sans
+lequel un service qui installe le logiciel un matin resterait devant un écran
+sans porte : son code est écrit dans le dépôt, donc public, donc il ne sert
+qu'à entrer une fois. Le logiciel ne le crée que sur une base où **aucun
+compte n'a de code** — là, il n'y avait pas de serrure à forcer. Sur une base
+déjà protégée, la seule porte est celle qui exige un code déjà connu.
+
 *L'écran de l'infirmier.* Trois vacations : 7 h – 13 h, 13 h – 19 h,
 19 h – 7 h. L'infirmier choisit ses malades en prenant son poste, et voit
 **ce qu'il va donner sur ces heures-là** — pas la pancarte des vingt-quatre

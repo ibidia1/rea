@@ -64,6 +64,7 @@ with st.sidebar:
     st.caption(dom_droits.libelle(utilisateur_ui.role_courant()))
     if st.button("Changer d'utilisateur"):
         utilisateur_ui.changer_utilisateur()
+    utilisateur_ui.mon_code(base)
     st.divider()
 
     if utilisateur_ui.peut("administrations"):
