@@ -55,11 +55,24 @@ def _creer(base, utilisateur_id) -> None:
                 help="Affiché au médecin dans le Prescrit, pour appeler "
                      "directement la personne qui s'occupe du patient.",
             )
+            # Un code qu'on choisit pour quelqu'un d'autre, on le lui dit :
+            # deux personnes le connaissent, et ce n'est donc pas encore le
+            # sien. C'est aussi le seul moyen d'ouvrir un compte quand
+            # l'application est sur le réseau — un compte sans code y est
+            # refusé à l'entrée, il ne pourrait jamais entrer poser le sien.
+            provisoire = st.checkbox(
+                "Code provisoire — la personne en choisira un à sa première "
+                "entrée",
+                value=True,
+                help="À laisser coché : le code tapé ici, vous le lui direz. "
+                     "Le sien, personne d'autre ne le connaîtra.",
+            )
             st.caption(_description_du_role(role))
             if st.form_submit_button("Créer le compte", type="primary"):
                 try:
                     utilisateurs_service.creer(
                         base, nom, role, code=code or None,
+                        code_provisoire=provisoire,
                         telephone=telephone or None,
                         utilisateur_id=utilisateur_id,
                     )
@@ -88,7 +101,12 @@ def _description_du_role(role: str) -> str:
 def _liste(base, comptes, utilisateur_id) -> None:
     for compte in comptes:
         etat = "actif" if compte["actif"] else "désactivé"
-        code = "code d'accès posé" if compte["pin"] else "**sans code d'accès**"
+        if not compte["pin"]:
+            code = "**sans code d'accès**"
+        elif compte["code_provisoire"]:
+            code = "**code provisoire** — pas encore changé"
+        else:
+            code = "code d'accès posé"
         tel = compte["telephone"] or "pas de numéro"
         c1, c2, c3, c4 = st.columns([3, 2, 1.6, 1.4])
         c1.markdown(
@@ -117,9 +135,16 @@ def _liste(base, comptes, utilisateur_id) -> None:
         with c3.popover("Modifier", use_container_width=True):
             saisi = st.text_input("Nouveau code", type="password",
                                   key=f"code_{compte['id']}")
+            provisoire = st.checkbox(
+                "Provisoire — à changer à la prochaine entrée",
+                value=True, key=f"prov_{compte['id']}",
+                help="Un code réinitialisé se dit à voix haute : deux "
+                     "personnes le connaissent tant qu'il n'est pas changé.",
+            )
             if st.button("Enregistrer le code", key=f"code_ok_{compte['id']}"):
                 utilisateurs_service.definir_code(
-                    base, compte["id"], saisi or None, utilisateur_id=utilisateur_id
+                    base, compte["id"], saisi or None, provisoire=provisoire,
+                    utilisateur_id=utilisateur_id,
                 )
                 st.rerun()
             numero = st.text_input("Téléphone", value=compte["telephone"] or "",

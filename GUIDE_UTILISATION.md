@@ -361,25 +361,71 @@ porte le droit « comptes » : un senior, même chef de service, ne le voit pas.
 Si le bouton manque, ce n'est pas une panne — c'est que le compte avec lequel
 vous êtes entré n'est pas administrateur.
 
-Pour le devenir, trois cas :
+Pour le devenir, quatre cas :
 
+* **le logiciel s'ouvre pour la première fois** — il propose le compte
+  **Slah**, avec le code de départ `rea123`. Un clic, et vous entrez
+  administrateur ;
+* **la base a des comptes, mais aucun n'a de code** — l'écran d'ouverture
+  propose le même compte Slah, sous *« Aucun compte administrateur — en
+  désigner un »*. Rien n'y était protégé, ce raccourci ne retire donc rien à
+  personne ; il disparaît dès qu'un seul compte a un code ;
+* **la base a des comptes protégés, mais pas d'administrateur** — le même
+  volet demande alors de choisir un compte existant et **de donner son code
+  d'accès**. On ne promeut que le compte dans lequel on sait déjà entrer ;
 * **quelqu'un est déjà administrateur** — il ouvre Administration →
-  **Comptes** et change votre rôle ;
-* **personne ne l'est** (une base qui tournait avant que les rôles
-  n'existent) — l'écran d'ouverture propose alors, sous la liste des noms,
-  *« Aucun compte administrateur — en désigner un »*. On y choisit un compte
-  existant et **on donne son code d'accès** : on ne promeut donc que le compte
-  dans lequel on sait déjà entrer, et un compte sans code doit en recevoir un
-  au passage. Le volet disparaît dès qu'un administrateur existe ;
-* **depuis le poste où le logiciel est installé**, en dernier recours :
+  **Comptes** et change votre rôle. C'est le cas normal, une fois le service
+  installé.
 
-  ```
-  python outils\administrateur.py --lister
-  python outils\administrateur.py --promouvoir "Dr Karaa"
-  ```
+Depuis le poste où le logiciel tourne, il reste un dernier recours :
 
-  Le code est demandé à l'écran, jamais tapé dans la ligne de commande — il y
-  resterait inscrit dans l'historique du terminal.
+```
+python outils\administrateur.py --lister
+python outils\administrateur.py --promouvoir "Dr Karaa"
+```
+
+Le code est demandé à l'écran, jamais tapé dans la ligne de commande — il y
+resterait inscrit dans l'historique du terminal.
+
+### Le code de départ ne protège rien, et le logiciel le sait
+
+`rea123` est écrit dans le logiciel : il est dans le dépôt, tout le monde peut
+le lire. Il sert à ouvrir la porte une fois, pas à la fermer.
+
+Aussi le compte Slah **n'ouvre aucun écran** : à sa première entrée, il
+réclame un vrai code, et rien d'autre ne s'affiche tant qu'il n'est pas posé.
+Tant qu'un compte porte ce code, un bandeau le signale sur l'écran
+d'ouverture, et la liste des comptes l'écrit noir sur blanc.
+
+### Créer les comptes du service
+
+Administration → **Comptes**. Un nom, un rôle, un code — et un numéro de
+téléphone, qui s'affichera au médecin dans le Prescrit pour joindre la
+personne qui s'occupe du patient.
+
+Les rôles : **administrateur** (gère les comptes), **senior** (signe les
+protocoles), **résident**, **interne**, **surveillant** (l'écran de
+supervision, les administrations), **infirmier** (son poste, les
+administrations, la surveillance horaire). Le rôle se change à tout moment
+dans la liste, sans refaire le compte.
+
+**Le code que vous tapez pour quelqu'un d'autre est provisoire** — la case
+est cochée d'avance. Vous le lui dites de vive voix ; à sa première entrée,
+la personne en choisit un que personne d'autre ne connaîtra. C'est la seule
+façon d'ouvrir un compte quand le logiciel est sur le Wi-Fi du service : un
+compte sans code y est refusé à l'entrée, il ne pourrait donc jamais entrer
+pour poser le sien.
+
+La même case sert à réinitialiser un code oublié : vous en posez un le temps
+que la personne revienne, et il redevient le sien dès qu'elle entre.
+
+### Mon code d'accès
+
+Dans la barre latérale, sous son nom — pour tout le monde, pas seulement pour
+l'administrateur. Chacun y change le sien, l'ancien étant demandé, sans
+passer par personne : un infirmier qui prend son poste à 7 h n'a personne à
+chercher. Tant qu'un compte n'a pas de code, le bouton le dit :
+« ⚠️ Poser mon code d'accès ».
 
 ### Essayer un rôle
 

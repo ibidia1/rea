@@ -34,6 +34,15 @@ def selecteur(base: Base) -> str | None:
     """Affiche l'ouverture. Retourne l'id de l'utilisateur courant, ou None
     tant qu'aucun n'est entré — l'appelant doit alors bloquer la suite."""
     if "utilisateur_id" in st.session_state:
+        courant = utilisateurs_service.par_id(base, st.session_state["utilisateur_id"])
+        if courant and courant["code_provisoire"]:
+            # Le code de `config.py` est public : tant qu'il sert, ce compte
+            # n'est pas protégé. On ne laisse donc pas passer vers un dossier
+            # — la demande de code n'est pas un rappel qu'on peut remettre à
+            # plus tard, c'est la porte elle-même.
+            st.title("Réanimation polyvalente")
+            _remplacer_le_code_provisoire(base, courant)
+            return None
         return st.session_state["utilisateur_id"]
 
     st.title("Réanimation polyvalente")
@@ -41,6 +50,18 @@ def selecteur(base: Base) -> str | None:
 
     if not utilisateurs:
         return _premier_compte(base)
+
+    provisoires = utilisateurs_service.comptes_a_code_provisoire(base)
+    if provisoires:
+        noms_provisoires = ", ".join(f"« {u['nom']} »" for u in provisoires)
+        st.error(
+            f"**Code de départ encore en place** sur {noms_provisoires}. Ce "
+            f"code (`{config.CODE_INITIAL}`) est écrit dans le logiciel : "
+            "tout le monde peut le lire. Entrer avec ce compte demandera d'en "
+            "choisir un autre, et c'est seulement à ce moment-là que le "
+            "compte protège quelque chose.",
+            icon="🔓",
+        )
 
     sans_code = utilisateurs_service.comptes_sans_code(base)
     if config.AUTH_EXIGEE and sans_code:
@@ -120,7 +141,7 @@ def _designer_un_administrateur(base: Base, utilisateurs: list[dict]) -> None:
     l'on promeut, et un compte sans code doit en recevoir un au passage.
     """
     st.divider()
-    with st.expander("Aucun compte administrateur — en désigner un"):
+    with st.expander("Aucun compte administrateur — en désigner un", expanded=True):
         st.warning(
             "Cette base n'a aucun compte capable de gérer les comptes : "
             "personne ne peut donc créer un compte, poser un code, ni ouvrir "
@@ -128,6 +149,25 @@ def _designer_un_administrateur(base: Base, utilisateurs: list[dict]) -> None:
             "son code d'accès est demandé, et un compte qui n'en a pas doit "
             "en recevoir un ici."
         )
+        if utilisateurs_service.rien_n_est_protege(base):
+            # Aucun compte n'a de code : il n'y a pas de serrure à forcer, et
+            # créer l'administrateur de départ ne retire donc rien à personne.
+            # Le raccourci disparaît dès qu'un seul compte est protégé.
+            st.caption(
+                f"Aucun compte de cette base n'a de code d'accès. Le compte "
+                f"**{config.COMPTE_INITIAL_NOM}** peut donc être créé "
+                "administrateur directement — il demandera un vrai code dès "
+                "la première entrée."
+            )
+            if st.button(f"Créer le compte {config.COMPTE_INITIAL_NOM}",
+                         key="creer_admin_initial"):
+                try:
+                    identifiant = utilisateurs_service.creer_compte_initial(base)
+                except ValueError as erreur:
+                    st.error(str(erreur))
+                else:
+                    _entrer(utilisateurs_service.par_id(base, identifiant))
+            st.divider()
         noms = [u["nom"] for u in utilisateurs]
         with st.form("designer_administrateur"):
             nom = st.selectbox("Quel compte devient administrateur ?", noms,
@@ -163,26 +203,129 @@ def _premier_compte(base: Base) -> str | None:
     pour en créer — et le seul recours serait d'ouvrir la base à la main.
     """
     st.info(
-        "**Première ouverture.** Créons le compte administrateur : c'est lui "
-        "qui créera ensuite les comptes du service. Le code d'accès est "
-        "facultatif, mais fortement conseillé pour ce compte-là."
+        "**Première ouverture.** Il faut un compte administrateur : c'est lui "
+        "qui créera ensuite les comptes du service — médecins, infirmiers, "
+        "surveillants — et qui leur donnera leur rôle."
     )
-    with st.form("premier_compte"):
-        nom = st.text_input("Nom", placeholder="ex. Dr Karaa")
-        code = st.text_input("Code d'accès", type="password")
-        if st.form_submit_button("Créer et entrer", type="primary"):
-            if config.AUTH_EXIGEE:
-                refus = utilisateurs_service.code_acceptable(code)
-                if refus:
-                    st.error(refus)
+    st.markdown(
+        f"Le plus simple : le compte **{config.COMPTE_INITIAL_NOM}**, avec le "
+        f"code de départ `{config.CODE_INITIAL}`. Ce code est écrit dans le "
+        "logiciel, donc connu de tous : le compte demandera d'en choisir un "
+        "vrai dès la première entrée, et n'ouvrira rien avant."
+    )
+    if st.button(f"Créer le compte {config.COMPTE_INITIAL_NOM} et entrer",
+                 type="primary", key="premier_compte_initial"):
+        try:
+            identifiant = utilisateurs_service.creer_compte_initial(base)
+        except ValueError as erreur:
+            st.error(str(erreur))
+            return None
+        _entrer(utilisateurs_service.par_id(base, identifiant))
+
+    with st.expander("Ou choisir un autre nom et son code tout de suite"):
+        with st.form("premier_compte"):
+            nom = st.text_input("Nom", placeholder="ex. Dr Karaa")
+            code = st.text_input("Code d'accès", type="password")
+            if st.form_submit_button("Créer et entrer", type="primary"):
+                if config.AUTH_EXIGEE:
+                    refus = utilisateurs_service.code_acceptable(code)
+                    if refus:
+                        st.error(refus)
+                        return None
+                try:
+                    uid = utilisateurs_service.creer(base, nom, "admin",
+                                                     code=code or None)
+                except ValueError as erreur:
+                    st.error(str(erreur))
                     return None
-            try:
-                uid = utilisateurs_service.creer(base, nom, "admin", code=code or None)
-            except ValueError as erreur:
-                st.error(str(erreur))
-                return None
-            _entrer(utilisateurs_service.par_id(base, uid))
+                _entrer(utilisateurs_service.par_id(base, uid))
     return None
+
+
+def _remplacer_le_code_provisoire(base: Base, compte: dict) -> None:
+    """La porte du compte créé avec le code public : en choisir un vrai.
+
+    Elle n'est pas contournable et ne se remet pas à plus tard — c'est tout
+    l'intérêt d'un code de départ dont on assume qu'il ne protège rien. Rien
+    d'autre ne s'affiche tant qu'il n'est pas remplacé.
+    """
+    st.warning(
+        f"Bonjour **{compte['nom']}**. Ce compte porte encore le code de "
+        f"départ `{config.CODE_INITIAL}`, qui est écrit dans le logiciel et "
+        "que tout le monde peut lire. Choisir un vrai code avant d'ouvrir un "
+        "dossier — c'est la seule chose qui protège ce compte, et il "
+        "administre tous les autres.",
+        icon="🔓",
+    )
+    with st.form("remplacer_code_provisoire"):
+        code = st.text_input("Nouveau code d'accès", type="password")
+        confirmation = st.text_input("Le retaper", type="password")
+        if st.form_submit_button("Enregistrer et continuer", type="primary"):
+            refus = utilisateurs_service.code_acceptable(code)
+            if refus:
+                st.error(refus)
+                return
+            if code == config.CODE_INITIAL:
+                st.error("C'est le code de départ : en choisir un autre.")
+                return
+            if code != confirmation:
+                st.error("Les deux codes saisis sont différents.")
+                return
+            utilisateurs_service.definir_code(
+                base, compte["id"], code, utilisateur_id=compte["id"]
+            )
+            st.rerun()
+
+    if st.button("Sortir sans changer le code"):
+        st.session_state.pop("utilisateur_id", None)
+        st.session_state.pop("utilisateur_nom", None)
+        st.session_state.pop("utilisateur_role", None)
+        st.rerun()
+
+
+def mon_code(base: Base) -> None:
+    """Chacun pose et change son propre code, sans passer par personne.
+
+    Un administrateur peut poser un code pour quelqu'un — il le lui dit alors
+    de vive voix, et le connaît. Un code que son propriétaire choisit lui-même
+    n'est connu que de lui : c'est la différence entre un rôle qui organise
+    l'écran et une identité qui signe. Un infirmier qui prend son poste à 7 h
+    n'a pas non plus à chercher un administrateur pour entrer.
+    """
+    identifiant = st.session_state.get("utilisateur_id")
+    compte = utilisateurs_service.par_id(base, identifiant)
+    if not compte:
+        return
+    etiquette = "Mon code d'accès" if compte["pin"] else "⚠️ Poser mon code d'accès"
+    with st.popover(etiquette, use_container_width=True):
+        if compte["pin"]:
+            actuel = st.text_input("Code actuel", type="password", key="mc_actuel")
+        else:
+            st.caption(
+                "Ce compte n'a pas encore de code : n'importe qui peut choisir "
+                "votre nom à l'ouverture, et signer à votre place."
+            )
+            actuel = ""
+        nouveau = st.text_input("Nouveau code", type="password", key="mc_nouveau")
+        confirmation = st.text_input("Le retaper", type="password", key="mc_bis")
+        if st.button("Enregistrer mon code", key="mc_ok", type="primary"):
+            if compte["pin"] and not utilisateurs_service.code_correct(
+                actuel, compte["pin"]
+            ):
+                st.error("Code actuel incorrect.")
+                return
+            refus = utilisateurs_service.code_acceptable(nouveau)
+            if refus:
+                st.error(refus)
+                return
+            if nouveau != confirmation:
+                st.error("Les deux codes saisis sont différents.")
+                return
+            utilisateurs_service.definir_code(
+                base, compte["id"], nouveau, utilisateur_id=compte["id"]
+            )
+            st.success("Code enregistré.")
+            st.rerun()
 
 
 def _entrer(compte: dict) -> None:
