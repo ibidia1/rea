@@ -288,11 +288,6 @@ def test_les_bonnes_constantes_vitales_sont_etiquetees(base, dossier):
     assert libelles_sorties == [
         "Diurèse (ml/h)", "Bandelette urinaire",
         "Drain 1 (ml)", "Drain 2 (ml)", "Drain 3 (ml)",
-        # Ce qui est recueilli puis jeté au lieu d'être réinjecté — le liquide
-        # gastrique aspiré, avant tout (demande du service, 10 septembre).
-        # Sans cette ligne, un patient qui perd 800 mL par la sonde gastrique
-        # se lit en bilan positif.
-        "Jetés (ml)",
         # Le total des pertes ferme le bloc : devant un redon qui donne, on
         # veut savoir combien le patient a perdu, pas additionner trois
         # colonnes de tête (demande du service, 9 septembre).

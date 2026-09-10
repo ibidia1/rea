@@ -80,23 +80,26 @@ heure, en deux groupes.
 
 **Les constantes** : température, FC, pressions, FR, SpO₂, Glasgow, dextro.
 
-**Les sorties de l'heure**, sous leur titre : la diurèse et les **jetés**.
-Les jetés sont ce qui est recueilli puis jeté au lieu d'être réinjecté — le
-liquide gastrique aspiré avant tout, les vomissements recueillis. Ce n'est
-pas un détail comptable : sans cette ligne, un patient qui perd huit cents
-millilitres par la sonde gastrique a une diurèse correcte, des drains qui ne
-donnent pas, et un bilan hydrique qui le déclare en excès de deux litres
-pendant qu'il se déshydrate.
+**Les recueils**, sous leur titre : la diurèse. Et là, une seule chose à
+retenir — **écrivez le niveau que vous lisez sur le sac**, pas ce qui est
+sorti pendant l'heure. 120, puis 210, puis 300. Le logiciel fait les
+soustractions ; vous n'avez aucun calcul à faire au lit du malade.
+
+**Quand vous jetez le sac**, cochez « j'ai jeté le sac après ce relevé ».
+C'est la case la plus importante de l'écran. Elle dit que le niveau que vous
+venez d'écrire est le dernier de ce sac-là, et que le prochain repart de
+zéro. Sans elle, un sac changé se lit comme une diurèse qui s'effondre — de
+900 à 40 — et la journée perd tout ce que le sac contenait. Avec elle, rien
+n'est perdu : jeter le sac ne change pas d'un millilitre le total du jour.
 
 - l'heure en cours est proposée d'abord ;
 - les autres heures du poste restent accessibles pour rattraper un relevé ;
-- une case laissée vide **efface** la mesure — elle ne la met pas à zéro, et
-  pour les sorties elle veut dire « rien de relevé », jamais « rien de
-  perdu » ;
-- le relevé de la vacation s'affiche en tableau dessous, avec une colonne
-  **Total** au bout : le cumul de diurèse et de jetés du poste, celui qu'on
-  donne à la relève. Les constantes n'ont pas de total — la somme des six
-  températures d'une vacation ne serait pas une température.
+- une case laissée vide **efface** la mesure — elle ne la met pas à zéro ;
+- le relevé de la vacation s'affiche en tableau dessous, sur **deux lignes**
+  pour la diurèse : le niveau que vous avez écrit, en gris, avec un ↺ là où
+  le sac a été jeté ; et en dessous, ce que le logiciel en déduit heure par
+  heure, avec le **Total** du poste au bout — celui qu'on donne à la relève.
+  Vous pouvez donc vérifier le calcul d'un coup d'œil.
 
 Ce relevé n'est plus pour vous seul : le médecin le voit, heure par heure,
 dans ses écrans *Visite* et *Évolution*, avec votre nom et votre numéro en
@@ -176,9 +179,20 @@ les vingt-quatre heures, dans l'ordre où elles se sont vécues (7 h → 6 h) et
 séparées par vacation. La colonne **Journée**, placée avant les heures pour
 qu'elle reste visible sans faire défiler, donne ce qu'on vient chercher : les
 extrêmes pour les constantes — une PA moyenne à 75 ne dit pas qu'on a passé
-la nuit à 55 — et le total pour la diurèse et les jetés. En bas du tableau,
-qui a relevé, vacation par vacation, avec son numéro : un chiffre surprenant
-se vérifie en une conversation.
+la nuit à 55 — et, pour la diurèse, ce qui est **réellement sorti** sur les
+24 h. Ce n'est pas la somme des cases : l'infirmier y note le niveau du sac,
+et l'additionner recompterait la même urine à chaque heure. Le logiciel fait
+les différences, sacs jetés compris. La ligne grise en dessous montre les
+niveaux tels qu'ils ont été écrits, avec un ↺ à chaque sac jeté — c'est là
+qu'on vérifie un chiffre qui surprend.
+
+Quand quelque chose empêche de lire le total comme une mesure — une heure
+sans relevé de référence, un niveau qui baisse sans sac déclaré jeté — c'est
+**écrit sous le tableau**. Un total amputé qui se présente comme complet est
+pire qu'un total absent : il se recopie dans l'observation.
+
+En bas du tableau, qui a relevé, vacation par vacation, avec son numéro : un
+chiffre surprenant se vérifie en une conversation.
 
 ### Identité
 
@@ -222,10 +236,11 @@ n'est pas un réglage : une évolution se documente après coup, et un bilan des
 cours, le bilan hydrique le dit au lieu d'afficher un chiffre faux.
 
 Le relevé horaire des infirmiers est repliable en haut de l'écran, pour le
-consulter en rédigeant. Sous la diurèse et sous les jetés des 24 h, une
-légende dit ce qu'ils ont relevé — *« Relevé infirmier : 2 129 mL sur 24 h »*.
-C'est une proposition, pas une valeur écrite à votre place : le relevé peut
-avoir des trous, et c'est votre chiffre qui entre dans le bilan hydrique.
+consulter en rédigeant. Sous la diurèse des 24 h, une légende dit ce que le
+logiciel a calculé à partir de leurs relevés — *« Relevé infirmier :
+1 956 mL sur 24 h »*, et *« incomplet »* si quelque chose manque. C'est une
+proposition, pas une valeur écrite à votre place : c'est votre chiffre qui
+entre dans le bilan hydrique.
 
 Quatre plans, les avis spécialisés en section propre, et un bouton **Copier
 le compte rendu du jour** en bas — le texte ne s'affiche plus à l'écran, il

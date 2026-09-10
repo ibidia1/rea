@@ -302,35 +302,62 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
 
     grille = constantes_service.du_jour(base, patient["sejour_id"], jour)
     saisies = grille.get(heure, {})
+    jetes = constantes_service.sacs_jetes_du_jour(base, patient["sejour_id"], jour)
 
     with st.form(f"constantes_{patient['sejour_id']}_{heure}"):
         valeurs = {}
         _rangees(constantes_service.VITALES, patient, heure, saisies, valeurs)
-        # Les sorties à part, sous leur titre : on ne les remplit pas du même
-        # geste (on vide un bocal, on ne lit pas un moniteur), et surtout ce
-        # sont les seules valeurs de cet écran qui s'additionnent sur la
-        # journée pour devenir le total des pertes.
-        st.markdown(
-            f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
-            f"color:{theme.BLEU}'>Sorties de l'heure</div>",
-            unsafe_allow_html=True,
-        )
-        _rangees(constantes_service.SORTIES, patient, heure, saisies, valeurs)
-        st.caption(
-            "Jetés : ce qui est recueilli puis jeté au lieu d'être réinjecté "
-            "— liquide gastrique aspiré, vomissements recueillis. Une case "
-            "vide veut dire « rien de relevé », pas « rien de perdu »."
-        )
+        sacs = _recueils(patient, heure, saisies, valeurs, jetes)
         if st.form_submit_button(f"Enregistrer le relevé de {heure:02d} h",
                                  type="primary", use_container_width=True):
             constantes_service.enregistrer(
                 base, patient["sejour_id"], jour, heure, valeurs,
-                utilisateur_id=utilisateur_id,
+                sacs_jetes=sacs, utilisateur_id=utilisateur_id,
             )
             st.success(f"Relevé de {heure:02d} h enregistré.")
             st.rerun()
 
-    _grille_du_jour(grille, heures)
+    _grille_du_jour(base, patient, jour, grille, heures, jetes)
+
+
+def _recueils(patient, heure, saisies, valeurs, jetes) -> set[str]:
+    """Le niveau lu sur le sac, et le geste « je viens de le jeter ».
+
+    L'infirmier n'a **rien à soustraire**. Il écrit ce qu'il lit sur la
+    graduation — 120, puis 210, puis 300 — et le logiciel en déduit ce qui est
+    sorti. Lui demander le calcul au lit du malade, de nuit, avec des gants,
+    ce serait lui demander de se tromper une fois par garde.
+
+    La case à cocher n'est pas un détail : sans elle, un sac changé fait
+    retomber le niveau de 900 à 40, et la journée perdrait tout ce que le sac
+    contenait. Cochée, elle dit « ce niveau-là est le dernier de ce sac » — et
+    le relevé suivant repart de zéro.
+    """
+    st.markdown(
+        f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
+        f"color:{theme.BLEU}'>Recueils — niveau lu sur le sac</div>",
+        unsafe_allow_html=True,
+    )
+    sacs: set[str] = set()
+    for cle, libelle, unite in constantes_service.SORTIES:
+        valeurs[cle] = _lire(st.text_input(
+            f"{libelle} — niveau du sac ({unite})",
+            value="" if saisies.get(cle) is None else _nombre(saisies[cle]),
+            key=f"cst_{patient['sejour_id']}_{heure}_{cle}",
+            placeholder="ce qui est écrit sur la graduation",
+        ))
+        if st.checkbox(
+            f"J'ai jeté le sac après ce relevé ({libelle.lower()})",
+            value=(heure, cle) in jetes,
+            key=f"jete_{patient['sejour_id']}_{heure}_{cle}",
+        ):
+            sacs.add(cle)
+    st.caption(
+        "Écrire le niveau, pas ce qui est sorti : le logiciel fait la "
+        "soustraction. En cochant « j'ai jeté », le prochain relevé repart "
+        "de zéro et rien n'est perdu du compte."
+    )
+    return sacs
 
 
 def _rangees(champs_constantes, patient, heure, saisies, valeurs) -> None:
@@ -355,41 +382,48 @@ def _rangees(champs_constantes, patient, heure, saisies, valeurs) -> None:
             valeurs[cle] = _lire(brut)
 
 
-def _grille_du_jour(grille: dict, heures) -> None:
-    """Le relevé du poste en tableau : c'est la courbe qu'on lit d'un coup
-    d'œil pour voir si quelque chose se dégrade.
+def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes) -> None:
+    """Le relevé du poste en tableau — et, pour les recueils, **deux lignes**.
 
-    Une colonne de plus au bout pour les sorties : leur **cumul du poste**.
-    C'est le chiffre qu'on donne à la relève et qu'on additionne sinon de
-    tête, six bocaux à la suite. Il ne s'affiche que sur les lignes où une
-    somme veut dire quelque chose — la somme des six températures d'une
-    vacation ne serait pas une température.
+    Celle des niveaux, telle qu'elle a été écrite, pour se relire. Et celle
+    des volumes que ces niveaux impliquent, calculée : c'est elle qui compte,
+    et l'infirmier doit pouvoir la vérifier d'un coup d'œil avant la relève.
+    Une seule ligne de niveaux laisserait croire que 900 à 13 h est une
+    diurèse de 900 pour cette heure-là.
+
+    Les sacs jetés portent un ↺ : un niveau qui retombe à 40 après 900 doit
+    s'expliquer de lui-même, sinon c'est le relevé qu'on soupçonne.
     """
     if not grille:
         return
     entetes = "".join(f"<th style='padding:.2rem .35rem'>{h:02d}</th>" for h in heures)
     entetes += "<th style='padding:.2rem .5rem;border-left:1px solid #e2e8f0'>Total</th>"
     lignes = ""
-    for cle, libelle, _unite in constantes_service.CLES:
+    for cle, libelle, _unite in constantes_service.VITALES:
         valeurs = [grille.get(h, {}).get(cle) for h in heures]
         if not any(v is not None for v in valeurs):
             continue
-        cases = "".join(
-            f"<td style='text-align:center;padding:.2rem .35rem'>{_nombre(v)}</td>"
-            for v in valeurs
+        lignes += _rangee(libelle, [_nombre(v) for v in valeurs], "")
+
+    for cle, libelle, unite in constantes_service.SORTIES:
+        niveaux = [grille.get(h, {}).get(cle) for h in heures]
+        if not any(v is not None for v in niveaux):
+            continue
+        marques = [
+            _nombre(v) + (" ↺" if (h, cle) in jetes else "")
+            for h, v in zip(heures, niveaux)
+        ]
+        lignes += _rangee(f"{libelle} — niveau", marques, "",
+                          couleur="#94a3b8")
+        sorties = constantes_service.sorties_du_jour(
+            base, patient["sejour_id"], jour, cle
         )
-        if cle in constantes_service.CLES_SOMMABLES:
-            total = sum(v for v in valeurs if v is not None)
-            cumul = f"<b>{_nombre(total)}</b>"
-        else:
-            cumul = ""
-        cases += (
-            f"<td style='text-align:center;padding:.2rem .5rem;"
-            f"border-left:1px solid #e2e8f0'>{cumul}</td>"
-        )
-        lignes += (
-            f"<tr><td style='padding:.2rem .4rem;white-space:nowrap'>"
-            f"{libelle}</td>{cases}</tr>"
+        volumes = [sorties[h].volume_ml if h in sorties else None for h in heures]
+        total = sum(v for v in volumes if v is not None)
+        lignes += _rangee(
+            f"{libelle} sortie ({unite})",
+            [_nombre(v) for v in volumes],
+            f"<b>{_nombre(total)}</b>",
         )
     if not lignes:
         return
@@ -398,6 +432,20 @@ def _grille_du_jour(grille: dict, heures) -> None:
         "<div style='overflow-x:auto'><table style='font-size:.8rem'>"
         f"<tr style='color:#64748b'><th></th>{entetes}</tr>{lignes}</table></div>",
         theme.BLEU,
+    )
+
+
+def _rangee(libelle: str, cases: list[str], total: str, couleur: str = "") -> str:
+    style = f";color:{couleur}" if couleur else ""
+    corps = "".join(
+        f"<td style='text-align:center;padding:.2rem .35rem{style}'>{c}</td>"
+        for c in cases
+    )
+    return (
+        f"<tr><td style='padding:.2rem .4rem;white-space:nowrap{style}'>"
+        f"{libelle}</td>{corps}"
+        f"<td style='text-align:center;padding:.2rem .5rem;"
+        f"border-left:1px solid #e2e8f0'>{total}</td></tr>"
     )
 
 

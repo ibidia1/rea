@@ -48,14 +48,42 @@ def bloc_du_jour(base, sejour_id: str, date_jour: str, *, titre: str | None = No
         )
         return
     heures = dom_vacations.heures_du_jour()
+    sorties = {
+        cle: constantes_service.sorties_du_jour(base, sejour_id, date_jour, cle)
+        for cle in constantes_service.CLES_NIVEAU
+    }
     theme.bloc_html(
         titre or f"Surveillance horaire du {format_date_fr(date_jour)}",
-        _tableau(grille, heures) + _signatures(base, sejour_id, date_jour),
+        _tableau(grille, heures, sorties)
+        + _reserves(sorties)
+        + _signatures(base, sejour_id, date_jour),
         theme.BLEU,
     )
 
 
-def _tableau(grille: dict, heures) -> str:
+def _reserves(sorties: dict) -> str:
+    """Ce qui empêche de lire un total comme une mesure — dit, pas caché.
+
+    Un niveau en baisse sans sac déclaré jeté, une heure sans relevé de
+    référence : le total reste affiché, mais il ne se recopie pas dans une
+    observation sans qu'on sache ce qu'il vaut."""
+    messages: list[str] = []
+    for cle, par_heure in sorties.items():
+        for sortie in par_heure.values():
+            if sortie.anomalie:
+                messages.append(
+                    f"{constantes_service.libelle(cle)} à "
+                    f"{sortie.instant.hour:02d} h — {sortie.anomalie}"
+                )
+    if not messages:
+        return ""
+    lignes = "".join(f"<div>⚠ {html.escape(m)}</div>" for m in messages)
+    return (
+        f"<div style='margin-top:.4rem;font-size:.75rem;color:#b45309'>{lignes}</div>"
+    )
+
+
+def _tableau(grille: dict, heures, sorties: dict) -> str:
     bornes = _bornes_de_vacation()
     entetes = "".join(
         f"<th style='padding:.15rem .3rem;font-weight:600{_bord(h, bornes)}'>"
@@ -63,22 +91,38 @@ def _tableau(grille: dict, heures) -> str:
         for h in heures
     )
     lignes = ""
-    for cle, libelle, unite in constantes_service.CLES:
+    for cle, libelle, unite in constantes_service.VITALES:
         valeurs = [grille.get(h, {}).get(cle) for h in heures]
         if not any(v is not None for v in valeurs):
             continue
-        cases = "".join(
-            f"<td style='text-align:center;padding:.15rem .3rem{_bord(h, bornes)}'>"
-            f"{_nombre(v)}</td>"
-            for h, v in zip(heures, valeurs)
+        lignes += _rangee(libelle, _extremes(valeurs, unite), valeurs, heures, bornes)
+
+    for cle, libelle, unite in constantes_service.SORTIES:
+        par_heure = sorties.get(cle, {})
+        niveaux = [grille.get(h, {}).get(cle) for h in heures]
+        if not any(v is not None for v in niveaux):
+            continue
+        # Le volume d'abord, le niveau ensuite et en gris : c'est le volume
+        # qu'on vient lire, le niveau n'est là que pour qu'on puisse le
+        # vérifier. L'ordre inverse ferait prendre 900 à 13 h pour une diurèse
+        # horaire de 900 mL.
+        volumes = [
+            par_heure[h].volume_ml if h in par_heure else None for h in heures
+        ]
+        connus = [v for v in volumes if v is not None]
+        total = (
+            f"<b>{_nombre(sum(connus))}</b> {html.escape(unite)} "
+            f"<span style='color:#94a3b8'>/ {len(connus)} h</span>"
+            if connus else ""
         )
-        lignes += (
-            "<tr>"
-            f"<td style='padding:.15rem .4rem;white-space:nowrap;font-weight:600'>"
-            f"{html.escape(libelle)}</td>"
-            f"<td style='padding:.15rem .5rem;white-space:nowrap;"
-            f"border-right:1px solid #94a3b8'>{_resume(cle, valeurs, unite)}</td>"
-            f"{cases}</tr>"
+        lignes += _rangee(libelle, total, volumes, heures, bornes)
+        marques = [
+            (_nombre(v) + (" ↺" if h in par_heure and par_heure[h].sac_jete else ""))
+            for h, v in zip(heures, niveaux)
+        ]
+        lignes += _rangee(
+            f"{libelle} — niveau du sac", "", marques, heures, bornes,
+            couleur="#94a3b8", brut=True,
         )
     # Le résumé **avant** les heures, et non après. Vingt-quatre colonnes ne
     # tiennent pas dans la moitié droite d'un écran de visite : le tableau
@@ -95,25 +139,37 @@ def _tableau(grille: dict, heures) -> str:
     )
 
 
-def _resume(cle: str, valeurs, unite: str) -> str:
-    """Min-max pour ce qui se surveille, total pour ce qui se perd.
-
-    C'est la seule colonne que le médecin regarde vraiment quand il remplit
-    son évolution, et se tromper de résumé la rendrait fausse : additionner
-    des Glasgow ou moyenner une diurèse ne veut rien dire.
-    """
+def _extremes(valeurs, unite: str) -> str:
+    """Les deux chiffres qui décident, pour une constante : le plus bas et le
+    plus haut. Une PA moyenne à 75 ne dit pas qu'on a passé la nuit à 55."""
     connues = [v for v in valeurs if v is not None]
     if not connues:
         return ""
-    if cle in constantes_service.CLES_SOMMABLES:
-        return (
-            f"<b>{_nombre(sum(connues))}</b> {html.escape(unite)} "
-            f"<span style='color:#94a3b8'>/ {len(connues)} h</span>"
-        )
     bas, haut = min(connues), max(connues)
     if bas == haut:
         return f"<b>{_nombre(bas)}</b> {html.escape(unite)}"
     return f"<b>{_nombre(bas)} – {_nombre(haut)}</b> {html.escape(unite)}"
+
+
+def _rangee(libelle, resume, valeurs, heures, bornes, *, couleur="", brut=False) -> str:
+    style = f";color:{couleur}" if couleur else ";font-weight:600"
+    # `nowrap` sur les cases : le ↺ du sac jeté passait à la ligne et faisait
+    # doubler la hauteur de toute la rangée pour une seule heure.
+    cases = "".join(
+        f"<td style='text-align:center;white-space:nowrap;"
+        f"padding:.15rem .3rem{_bord(h, bornes)}"
+        f"{';color:' + couleur if couleur else ''}'>"
+        f"{v if brut else _nombre(v)}</td>"
+        for h, v in zip(heures, valeurs)
+    )
+    return (
+        "<tr>"
+        f"<td style='padding:.15rem .4rem;white-space:nowrap{style}'>"
+        f"{html.escape(libelle)}</td>"
+        f"<td style='padding:.15rem .5rem;white-space:nowrap;"
+        f"border-right:1px solid #94a3b8'>{resume}</td>"
+        f"{cases}</tr>"
+    )
 
 
 def _signatures(base, sejour_id: str, date_jour: str) -> str:

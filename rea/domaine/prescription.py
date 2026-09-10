@@ -646,13 +646,6 @@ class BilanHydrique:
     diurese_ml: float | None
     drains_ml: float
     detail_drains: list[tuple[str, float]]
-    #: Ce qui est recueilli puis jeté au lieu d'être réinjecté — le liquide
-    #: gastrique aspiré, avant tout. Absent veut dire « rien de relevé », et
-    #: compte alors pour zéro : contrairement à la diurèse, qui est mesurée
-    #: chez tout le monde, la plupart des patients n'ont rien à jeter. Exiger
-    #: la case pour calculer un bilan priverait de bilan les trois quarts du
-    #: service ; la remplir de force écrirait un zéro qui n'a pas été constaté.
-    jetes_ml: float | None = None
     poids_kg: float | None
     temperature_c: float | None
     pertes_base_ml: float | None
@@ -673,8 +666,7 @@ class BilanHydrique:
 
     @property
     def sorties_ml(self) -> float | None:
-        """Le **total des pertes** : diurèse, jetés, drains et pertes
-        insensibles.
+        """Le **total des pertes** : diurèse, drains et pertes insensibles.
 
         Il s'affiche désormais tel quel (demande du service, 9 septembre).
         Auparavant on ne montrait que les trois composantes et le net : pour
@@ -684,12 +676,11 @@ class BilanHydrique:
         """
         if self.diurese_ml is None or self.pertes_insensibles_ml is None:
             return None
-        return (
-            self.diurese_ml
-            + (self.jetes_ml or 0)
-            + self.drains_ml
-            + self.pertes_insensibles_ml
-        )
+        # Ce que le sac a recueilli est **déjà** la diurèse : le compter une
+        # seconde fois sous un autre nom — « jetés » — doublait l'urine du
+        # patient dans le total des pertes. Jeter un sac est un geste de
+        # comptage, pas une perte de plus (correction du 10 septembre).
+        return self.diurese_ml + self.drains_ml + self.pertes_insensibles_ml
 
     @property
     def texte_drains(self) -> str:
@@ -797,7 +788,6 @@ def bilan_hydrique(
     lignes_actives: list[dict],
     *,
     diurese_ml: float | None,
-    jetes_ml: float | None = None,
     drains: list[tuple[str, float]] | None = None,
     poids_kg: float | None,
     temperature_c: float | None,
@@ -807,7 +797,7 @@ def bilan_hydrique(
 ) -> BilanHydrique:
     """Le bilan des 24 h, tel que le service l'a défini (8 septembre 2026) :
 
-        entrées − (diurèse + jetés + drains + pertes insensibles)
+        entrées − (diurèse + drains + pertes insensibles)
 
     Les entrées viennent du prescrit — c'est déjà ce que calcule
     `volume_entrees_24h`. Les sorties se saisissent dans le plan
@@ -828,7 +818,6 @@ def bilan_hydrique(
         entrees_ml=entrees.total_ml,
         detail_entrees=entrees.detail,
         diurese_ml=diurese_ml,
-        jetes_ml=jetes_ml,
         drains_ml=sum(v for _l, v in drains),
         detail_drains=drains,
         poids_kg=poids_kg,

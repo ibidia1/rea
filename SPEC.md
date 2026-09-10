@@ -926,6 +926,61 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.25 — 10 septembre 2026 — la diurèse se calcule, elle ne s'additionne plus**
+
+*L'erreur, d'abord.* La version du matin additionnait les cases horaires de la
+diurèse. Ce n'est juste que si chaque case contient ce qui est sorti pendant
+l'heure. Or l'infirmier y note **ce qu'il lit sur le sac** : un patient qui
+fait 100 mL/h pendant douze heures produit 1 200 mL, et la somme des niveaux
+lus en annonce **7 800**. L'erreur grandissait avec le nombre d'heures
+relevées, pas avec ce que le patient produit — l'équipe la plus
+consciencieuse aurait faussé le plus le bilan.
+
+*La deuxième erreur.* La ligne « Jetés », livrée le matin même comme une
+perte supplémentaire, se trompait de sens : jeter un sac est un **geste de
+comptage**, et ce qu'il contient est déjà la diurèse. L'ajouter au total des
+pertes doublait l'urine du patient. La ligne est retirée du bilan, de la
+feuille imprimée et du plan hémodynamique.
+
+*Ce qui la remplace.* La case horaire porte le **niveau lu**, et une case à
+cocher dit « j'ai jeté le sac après ce relevé ». `domaine/recueil.py` fait la
+soustraction que personne ne doit faire au lit du malade :
+
+    sortie(h) = niveau(h) − niveau du relevé précédent dans le même sac
+
+et, après un sac jeté, le relevé suivant se compte à partir de zéro. Jeter un
+sac ne change alors pas d'un millilitre le total du jour — c'est le test qui
+tient cette propriété.
+
+*Le piège de 8 h.* « À 8 h on jette celui de la nuit. » Attribuer le sac
+entier au jour du changement donnerait au 10 l'urine du 9, et un bilan faux
+les deux jours. En comptant les différences heure par heure, chaque heure
+reste dans sa journée. C'est aussi pourquoi le calcul ne se coupe pas à 7 h :
+le premier relevé d'un jour se compare à celui de la veille au soir, sinon
+une heure sur vingt-quatre serait perdue tous les jours. Les relevés sont
+donc datés en horodatage réel — un relevé de 3 h rangé sous le 9 a eu lieu le
+10 — sans quoi 23 h et 1 h se compareraient à l'envers et la diurèse de la
+nuit serait négative.
+
+*Deux règles de sûreté.* Le **premier relevé d'un séjour n'est pas une
+sortie** : le sac contenait déjà quelque chose, l'attribuer à l'heure où on a
+commencé à regarder inventerait une diurèse. Et un **niveau qui baisse sans
+sac déclaré jeté** n'est jamais compté en négatif : quelqu'un a vidé le sac
+sans le dire, on compte le niveau lu — le minimum certain — et on le signale
+sous le tableau. Un total amputé qui se présente comme complet est pire qu'un
+total absent : le médecin le recopie.
+
+*À l'écran.* L'infirmier voit deux lignes dans sa grille : les niveaux qu'il a
+écrits, en gris, avec un ↺ à chaque sac jeté ; et en dessous les volumes que
+le logiciel en déduit, avec le total du poste. Le médecin voit la même chose
+dans Visite et Évolution. Personne n'a de soustraction à faire, et tout le
+monde peut vérifier celle du logiciel.
+
+**Vérifications.** 1 028 tests passent, pyflakes propre. Recette navigateur
+rejouée sur les cinq rôles : aucun écran en erreur. Vérifié à l'écran sur un
+sac qui court d'un jour sur l'autre : niveaux 873 puis 943 à 8 h, sac jeté,
+85 à 9 h — le logiciel compte 70 puis 85, et 1 956 mL sur les 24 h.
+
 **v3.24 — 10 septembre 2026 — les seuils de fièvre du service, les jetés, et le relevé infirmier ouvert au médecin**
 
 *Trois états thermiques, aux seuils du service.* Les bornes provisoires
