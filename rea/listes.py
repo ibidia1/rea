@@ -108,6 +108,7 @@ SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
 MODES_VENTILATOIRES = _charger("modes_ventilatoires")
 SPECIALITES_AVIS = _charger("specialites_avis")
 MOTIFS_NON_ADMINISTRATION = _charger("motifs_non_administration")
+MOTIFS_NON_PRELEVEMENT = _charger("motifs_non_prelevement")
 
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")

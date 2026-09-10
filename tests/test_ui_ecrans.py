@@ -24,7 +24,8 @@ from rea.ui import champs
 ECRANS = [
     "champs", "contexte", "lits", "admission", "identite", "prescrit",
     "bilans", "evolution", "actes", "sortie", "visite", "fiche",
-    "infirmier", "surveillant", "surveillance", "comptes", "utilisateur",
+    "infirmier", "surveillant", "surveillance", "bandeau", "comptes",
+    "utilisateur",
     "recherche", "administration",
 ]
 

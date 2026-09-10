@@ -21,6 +21,7 @@ import unicodedata
 
 from .. import aides, config, listes, protocoles, referentiels
 from ..db import Base, inspecter_fichier_base
+from ..domaine import droits as dom_droits
 from ..domaine import regles as regles_dom
 from ..domaine.dates import format_date_fr
 from ..services import medicaments as medicaments_service
@@ -55,6 +56,8 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
     vues["Fiches imprimées"] = lambda: _fiches_imprimees(base)
     vues["Référentiels"] = _referentiels
     vues["Molécules"] = lambda: _molecules(base, utilisateur_id)
+    if utilisateur_ui.peut("comptes"):
+        vues["Essayer un rôle"] = _essayer_un_role
     if utilisateur_ui.peut("protocoles"):
         vues["Protocoles"] = _protocoles
         vues["Règles d'aide"] = _regles
@@ -370,6 +373,72 @@ def _referentiels() -> None:
         "<th>Référentiel</th><th style='text-align:right'>Valeurs</th><th>Version</th>"
         "</tr></thead><tbody>" + corps + "</tbody></table>",
         unsafe_allow_html=True,
+    )
+
+
+def _essayer_un_role() -> None:
+    """Voir l'application comme un infirmier, sans connaître son code.
+
+    Un administrateur qui met le service en route veut vérifier ce que chacun
+    trouve à son écran — et jusqu'ici le seul moyen était de créer un compte
+    d'essai par rôle, ou de demander son code à quelqu'un. Les deux sont
+    mauvais : le premier encombre la liste d'ouverture de comptes qui ne
+    soignent personne, le second apprend au service à se prêter les codes.
+
+    **L'identité qui signe ne change pas.** Tout ce qui s'écrit pendant
+    l'essai reste signé par l'administrateur : une observation signée du nom
+    d'un infirmier qui ne l'a pas écrite serait un faux dans un dossier
+    médical. Un bandeau le rappelle en haut de chaque écran, en permanence —
+    un message qui passe se serait oublié.
+
+    Et l'essai ne peut que **retirer** des droits : seul un administrateur
+    l'ouvre, et il les a déjà tous.
+    """
+    st.caption(
+        "Pour vérifier ce que chaque métier voit à son écran, sans créer de "
+        "compte d'essai ni demander son code à personne."
+    )
+    actuel = utilisateur_ui.role_essaye()
+    if actuel:
+        st.info(
+            f"Essai en cours : **{dom_droits.libelle(actuel)}**. Le bandeau en "
+            "haut de l'écran le rappelle tant qu'il dure."
+        )
+    roles = [r for r in dom_droits.roles() if r != "admin"]
+    choix = st.radio(
+        "Voir l'application comme", roles,
+        index=roles.index(actuel) if actuel in roles else None,
+        format_func=dom_droits.libelle, horizontal=True, key="choix_role_essai",
+    )
+    c1, c2 = st.columns(2)
+    if c1.button("Commencer l'essai", type="primary", use_container_width=True,
+                 disabled=not choix or choix == actuel):
+        utilisateur_ui.essayer_role(choix)
+        st.rerun()
+    if c2.button("Revenir à mon rôle", use_container_width=True,
+                 disabled=not actuel):
+        utilisateur_ui.essayer_role(None)
+        st.rerun()
+
+    st.divider()
+    st.markdown("#### Ce que chaque rôle peut faire")
+    lignes = ""
+    for role in dom_droits.roles():
+        droits = ", ".join(sorted(dom_droits.droits_du_role(role))) or "aucun"
+        lignes += (
+            f"<tr><td style='padding:.2rem .5rem;white-space:nowrap'>"
+            f"<b>{dom_droits.libelle(role)}</b></td>"
+            f"<td style='padding:.2rem .5rem;color:#64748b'>{droits}</td></tr>"
+        )
+    st.markdown(
+        "<table style='font-size:.82rem;border-collapse:collapse'>"
+        + lignes + "</table>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Cette table est dans `referentiels/roles.json` : déplacer un droit "
+        "d'un rôle à l'autre est une décision de service, pas une "
+        "modification de programme."
     )
 
 

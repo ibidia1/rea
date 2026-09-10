@@ -73,6 +73,26 @@ du traitement.
 Écrire « rupture » dans la case de précision **ne suffit pas** : c'est le
 motif choisi dans la liste qui remonte.
 
+### Les bilans et les radios de mon poste
+
+Onglet **À prélever**. Les examens demandés par le médecin qui tombent dans
+vos heures, groupés par heure. L'équipe du matin voit les prélèvements du
+matin, pas ceux des vingt-quatre heures.
+
+**Les radios y sont**, avec l'ECG et l'échographie : ils sont demandés dans la
+même liste et portent la même heure. Une radio de 8 h oubliée coûte la même
+visite qu'une NFS oubliée.
+
+Un examen se coche comme une prise : un appui, il est prélevé ; un second
+appui, il redevient « pas encore ». Et s'il n'a pas pu être fait, le volet
+*Noter un non-prélevé* demande **pourquoi**, dans une liste — patient au bloc,
+pas de voie, tube manquant, appareil en panne. Ce n'est pas la même liste que
+pour un médicament : un bilan ne se rate pas pour rupture de stock.
+
+C'est ce qui manquait le plus : un bilan demandé la veille au soir et jamais
+prélevé ne laissait aucune trace, et personne ne s'en apercevait avant que le
+résultat manque à la visite.
+
 ### La surveillance horaire
 
 Onglet **Surveillance**. C'est ce que la feuille porte au verso, heure par
@@ -308,6 +328,26 @@ antibiotique), croisements et délai d'apyrexie. Voir la section du senior.
 ## Médecin senior
 
 Tout ce qui précède, plus deux responsabilités.
+
+### L'accès Admin, en haut à droite
+
+Le bouton **Admin** est en haut à droite de **chaque** écran. La barre
+latérale se replie sur un téléphone et se referme d'un clic par erreur ;
+l'administration, elle, doit rester à portée.
+
+### Essayer un rôle
+
+Administration → **Essayer un rôle**. Pour vérifier ce que chaque métier voit
+à son écran, sans créer de compte d'essai ni demander son code à personne.
+
+**L'identité qui signe ne change pas.** Tout ce qui s'écrit pendant l'essai
+reste signé de votre nom : une observation signée du nom d'un infirmier qui ne
+l'a pas écrite serait un faux dans un dossier médical. Un bandeau le rappelle
+en haut de chaque écran tant que l'essai dure, et « Quitter l'essai » y est
+toujours.
+
+L'essai ne peut que **retirer** des droits — seul un administrateur l'ouvre,
+et il les a tous.
 
 ### Signer les protocoles
 

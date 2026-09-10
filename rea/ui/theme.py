@@ -73,6 +73,13 @@ CSS = f"""
     padding: 2.6rem 1.4rem 2rem 1.4rem !important;
     max-width: 100% !important;
 }}
+
+/* ---- La barre d'outils de Streamlit ----------------------------------
+   Retirée, et pour deux raisons. Elle propose « Deploy », qui n'a aucun sens
+   dans un service — le logiciel tourne déjà sur le PC de la réanimation. Et
+   elle occupe le coin en haut à droite, précisément là où se trouve notre
+   accès Admin : le bouton passait dessous et n'était plus cliquable. */
+div[data-testid="stToolbar"] {{ display: none !important; }}
 div[data-testid="stVerticalBlock"] {{ gap: .4rem; }}
 div[data-testid="stHorizontalBlock"] {{ gap: .7rem; }}
 

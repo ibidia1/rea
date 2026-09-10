@@ -44,6 +44,7 @@ from ..domaine.dates import format_date_fr
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import constantes as constantes_service
+from ..services import prelevements as prelevements_service
 from ..services import prescriptions as prescriptions_service
 from ..services import supervision as supervision_service
 from . import theme
@@ -71,6 +72,7 @@ def ecran(base, utilisateur_id: str | None = None) -> None:
 
     vues = {
         "À donner": lambda: _traitements(base, patient, jour, vacation, utilisateur_id),
+        "À prélever": lambda: _prelevements(base, patient, jour, vacation, utilisateur_id),
         "Surveillance": lambda: _constantes(base, patient, jour, vacation, utilisateur_id),
     }
     cle_vue = f"vue_poste_{patient['sejour_id']}"
@@ -274,6 +276,155 @@ def _volet_exceptions(base, patient, jour, heure, lignes_heure, notees,
                 base, sejour_id=patient["sejour_id"],
                 ligne_id=produits[choix]["id"], date_jour=jour,
                 heure_prevue=heure, statut=adm_service.NON_DONNE,
+                motif_code=motif_code, motif=precision,
+                utilisateur_id=utilisateur_id,
+            )
+            st.rerun()
+
+
+# --------------------------------------------------------------------------
+# Ce que je prélève
+# --------------------------------------------------------------------------
+
+def _prelevements(base, patient, jour, vacation, utilisateur_id) -> None:
+    """Les bilans et les examens de ce poste-là, dans l'ordre des heures.
+
+    L'équipe du matin prépare les tubes du matin. Lui montrer les examens des
+    vingt-quatre heures reviendrait à lui demander de retrouver les siens dans
+    une liste dont les deux tiers ne la concernent pas — le même raisonnement
+    que pour les prises de traitement.
+
+    **Les radios sont dedans**, avec l'ECG et l'échographie : ils sont demandés
+    dans la même liste et portent la même heure, et une radio de 8 h oubliée
+    coûte la même visite qu'une NFS oubliée. Rien ne justifierait de les
+    ranger ailleurs sous prétexte qu'il n'y a pas de tube à remplir.
+    """
+    demandes = prelevements_service.de_la_vacation(
+        base, patient["sejour_id"], jour, vacation)
+    notes = prelevements_service.du_jour(base, patient["sejour_id"], jour)
+
+    restants = sum(
+        1 for d in demandes if (d["examen_code"], d["heure"]) not in notes)
+    st.caption(
+        f"{len(demandes)} examen(s) sur ce poste · "
+        + ("tout est noté" if not restants else f"{restants} pas encore noté(s)")
+    )
+    if not demandes:
+        st.info(
+            "Rien à prélever sur cette vacation. Les examens se demandent "
+            "dans l'écran Prescrit du médecin, avec leur heure."
+        )
+        return
+
+    par_heure: dict[int, list] = {}
+    for demande in demandes:
+        par_heure.setdefault(demande["heure"], []).append(demande)
+
+    for heure, examens in par_heure.items():
+        st.markdown(
+            f"<div style='margin:.7rem 0 .1rem;font-weight:700;color:{theme.BLEU}'>"
+            f"{heure:02d} h</div>",
+            unsafe_allow_html=True,
+        )
+        for examen in examens:
+            _bouton_de_prelevement(base, patient, jour, examen,
+                                   notes.get((examen["examen_code"], heure)),
+                                   utilisateur_id)
+        _volet_non_preleve(base, patient, jour, heure, examens, utilisateur_id)
+
+
+def _bouton_de_prelevement(base, patient, jour, examen, note, utilisateur_id) -> None:
+    """Un examen, un bouton pleine largeur — comme une prise.
+
+    L'état est écrit dans le libellé et pas seulement porté par la couleur :
+    « Prélevé — NFS » se lit en plein soleil et par quelqu'un qui distingue
+    mal le rouge du gris.
+    """
+    statut = (note or {}).get("statut")
+    prefixe = {
+        prelevements_service.FAIT: "Prélevé — ",
+        prelevements_service.NON_FAIT: "Non prélevé — ",
+    }.get(statut, "")
+    cle = f"prel_{examen['examen_code']}_{examen['heure']}_{patient['sejour_id']}"
+    if st.button(
+        prefixe + examen["libelle"], key=cle,
+        type="primary" if statut == prelevements_service.FAIT else "secondary",
+        use_container_width=True,
+    ):
+        # Un seul geste, deux sens : ce qui n'est pas noté devient prélevé, ce
+        # qui est noté redevient « pas encore ».
+        if statut is None:
+            prelevements_service.noter(
+                base, sejour_id=patient["sejour_id"], date_jour=jour,
+                examen_code=examen["examen_code"], heure_prevue=examen["heure"],
+                statut=prelevements_service.FAIT, utilisateur_id=utilisateur_id,
+            )
+        else:
+            prelevements_service.effacer(
+                base, sejour_id=patient["sejour_id"], date_jour=jour,
+                examen_code=examen["examen_code"], heure_prevue=examen["heure"],
+                utilisateur_id=utilisateur_id,
+            )
+        st.rerun()
+
+    if note:
+        detail = prelevements_service.STATUTS[note["statut"]]
+        if note.get("motif_code"):
+            detail += f" — {prelevements_service.libelle_motif(note['motif_code'])}"
+        if note.get("motif"):
+            detail += f" ({note['motif']})"
+        if note.get("soignant"):
+            detail += f" · {note['soignant']}"
+        if note.get("date_heure_reelle"):
+            detail += f" · {note['date_heure_reelle'][11:16]}"
+        st.markdown(
+            f"<div style='font-size:.75rem;color:#94a3b8;margin:-.3rem 0 .35rem .2rem'>"
+            f"{detail}</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def _volet_non_preleve(base, patient, jour, heure, examens, utilisateur_id) -> None:
+    """Pourquoi un examen n'a pas été prélevé — dans une liste, pas en texte
+    libre.
+
+    Un bilan ne se rate pas pour les mêmes raisons qu'un médicament : il ne
+    manque pas en pharmacie, il se rate parce que le patient était au bloc ou
+    parce qu'il n'y avait pas de voie. D'où une liste de motifs à part
+    (`referentiels/motifs_non_prelevement.json`).
+    """
+    codes = listes.codes(listes.MOTIFS_NON_PRELEVEMENT)
+    with st.expander(f"Noter un non-prélevé de {heure:02d} h"):
+        par_libelle = {e["libelle"]: e for e in examens}
+        choix = st.selectbox(
+            "Quel examen ?", list(par_libelle), index=None, placeholder="Choisir",
+            key=f"np_ex_{heure}_{patient['sejour_id']}",
+        )
+        motif_code = st.selectbox(
+            "Pourquoi ?", codes, index=None, placeholder="Choisir un motif",
+            format_func=lambda c: listes.libelle(listes.MOTIFS_NON_PRELEVEMENT, c),
+            key=f"np_motif_{heure}_{patient['sejour_id']}",
+        )
+        if motif_code:
+            action = prelevements_service.action_du_motif(motif_code)
+            if action:
+                st.caption(
+                    "Ce motif remonte au médecin : "
+                    f"{prelevements_service.ACTIONS[action]}."
+                )
+        precision = st.text_input(
+            "Précision (facultatif)",
+            key=f"np_prec_{heure}_{patient['sejour_id']}",
+            placeholder="ex. patient au scanner de 7 h 30 à 9 h",
+        )
+        if st.button("Enregistrer le non-prélevé", type="primary",
+                     use_container_width=True,
+                     disabled=not (choix and motif_code),
+                     key=f"np_ok_{heure}_{patient['sejour_id']}"):
+            prelevements_service.noter(
+                base, sejour_id=patient["sejour_id"], date_jour=jour,
+                examen_code=par_libelle[choix]["examen_code"],
+                heure_prevue=heure, statut=prelevements_service.NON_FAIT,
                 motif_code=motif_code, motif=precision,
                 utilisateur_id=utilisateur_id,
             )

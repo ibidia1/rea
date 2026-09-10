@@ -538,6 +538,40 @@ CREATE TABLE IF NOT EXISTS analyte_local (
 -- `cle` est la forme normalisée du nom — sans accents, sans casse, sans
 -- espaces superflus. C'est elle qui empêche « tienam », « Tienam » et
 -- « TIENAM  » de devenir trois molécules qui ne se comptent jamais ensemble.
+-- Un prélèvement fait, ou pas fait et pourquoi (SPEC §5.8).
+--
+-- `bilan_demande` dit ce qu'il faut prélever et à quelle heure ; celle-ci dit
+-- si ça a été fait. Les deux ne se confondent pas : un bilan demandé la
+-- veille au soir et jamais prélevé n'a laissé aucune trace jusqu'ici, et
+-- personne ne s'en apercevait avant que le résultat manque à la visite
+-- (demande du service, 10 septembre).
+--
+-- Même forme que `administration`, et pour la même raison : ce qui n'a pas
+-- été fait doit dire pourquoi, dans une liste et non en texte libre, sinon
+-- « tube cassé » tapé à la main ne se compte pas et ne remonte à personne.
+CREATE TABLE IF NOT EXISTS prelevement (
+    id                TEXT PRIMARY KEY,
+    sejour_id         TEXT NOT NULL REFERENCES sejour(id),
+    date_jour         TEXT NOT NULL,
+    examen_code       TEXT NOT NULL,
+    heure_prevue      INTEGER NOT NULL,
+    statut            TEXT NOT NULL,   -- fait / non_fait
+    motif_code        TEXT,
+    motif             TEXT,
+    date_heure_reelle TEXT,
+    cree_le           TEXT NOT NULL,
+    cree_par          TEXT REFERENCES utilisateur(id),
+    modifie_le        TEXT,
+    modifie_par       TEXT REFERENCES utilisateur(id),
+    supprime          INTEGER NOT NULL DEFAULT 0,
+    version           INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_prelevement_jour
+    ON prelevement(sejour_id, date_jour, supprime);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_prelevement_unique
+    ON prelevement(sejour_id, date_jour, examen_code, heure_prevue)
+    WHERE supprime = 0;
+
 CREATE TABLE IF NOT EXISTS medicament_local (
     id           TEXT PRIMARY KEY,
     cle          TEXT NOT NULL UNIQUE,

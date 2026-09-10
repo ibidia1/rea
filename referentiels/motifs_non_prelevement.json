@@ -1,0 +1,64 @@
+{
+  "nom": "motifs_non_prelevement",
+  "libelle": "Motifs de non-prélèvement",
+  "version": "2026-09-10.1",
+  "date": "2026-09-10",
+  "note": "Format : [code, libellé, action attendue]. Mêmes raisons d'être que les motifs de non-administration : « tube cassé » tapé à la main ne se compte pas et ne remonte à personne, un motif choisi dans la liste dit à qui d'agir. L'action nomme qui doit bouger — « laboratoire » pour ce qui se règle avec le labo, « abord » pour ce qui demande une voie, « medical » pour ce qui demande une décision, « aucune » quand il n'y a rien à faire que le savoir. Ce ne sont pas les mêmes motifs qu'un médicament non donné : un bilan ne se rate pas pour rupture de stock, il se rate parce que le patient était au bloc.",
+  "valeurs": [
+    [
+      "patient_absent",
+      "Patient absent (bloc, imagerie, transfert)",
+      "aucune"
+    ],
+    [
+      "pas_de_voie",
+      "Pas de voie de prélèvement disponible",
+      "abord"
+    ],
+    [
+      "prelevement_echoue",
+      "Prélèvement tenté sans succès",
+      "abord"
+    ],
+    [
+      "tube_manquant",
+      "Tube ou matériel manquant",
+      "laboratoire"
+    ],
+    [
+      "labo_ferme",
+      "Laboratoire fermé ou non acheminable",
+      "laboratoire"
+    ],
+    [
+      "appareil_indisponible",
+      "Appareil indisponible (radio, échographe)",
+      "laboratoire"
+    ],
+    [
+      "annule_medecin",
+      "Annulé par le médecin",
+      "aucune"
+    ],
+    [
+      "etat_clinique",
+      "État clinique ne le permettant pas",
+      "medical"
+    ],
+    [
+      "refus_patient",
+      "Refus du patient",
+      "medical"
+    ],
+    [
+      "deja_fait",
+      "Déjà prélevé par ailleurs",
+      "aucune"
+    ],
+    [
+      "autre",
+      "Autre — préciser",
+      "aucune"
+    ]
+  ]
+}
