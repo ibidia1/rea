@@ -120,14 +120,17 @@ def effacer(
     Nécessaire parce qu'on coche parfois la mauvaise ligne, et qu'un logiciel
     qui ne sait pas revenir en arrière se fait contourner sur le papier.
     """
-    existante = base.une_ligne(
-        "SELECT id FROM administration WHERE ligne_id = ? AND date_jour = ? "
-        "AND heure_prevue = ? AND supprime = 0",
-        (ligne_id, date_jour, heure_prevue),
-    )
-    if existante:
-        base.supprimer_logiquement("administration", existante["id"],
-                                   utilisateur_id=utilisateur_id)
+    # Lire puis effacer n'est atomique que dans une transaction : deux doigts
+    # sur le même bouton effaceraient sinon deux fois la même ligne.
+    with base.transaction():
+        existante = base.une_ligne(
+            "SELECT id FROM administration WHERE ligne_id = ? AND date_jour = ? "
+            "AND heure_prevue = ? AND supprime = 0",
+            (ligne_id, date_jour, heure_prevue),
+        )
+        if existante:
+            base.supprimer_logiquement("administration", existante["id"],
+                                       utilisateur_id=utilisateur_id)
 
 
 def du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[tuple[str, int], dict]:

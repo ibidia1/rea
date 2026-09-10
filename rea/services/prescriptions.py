@@ -376,16 +376,22 @@ def pancarte_du_jour(base: Base, sejour_id: str, date_jour: str) -> dict:
 def obtenir_ou_creer_journee(
     base: Base, sejour_id: str, date_jour: str, *, utilisateur_id: str | None = None
 ) -> dict:
-    existante = base.une_ligne(
-        "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
-        (sejour_id, date_jour),
-    )
-    if existante:
-        return existante
-    id_ = base.inserer(
-        "journee", {"sejour_id": sejour_id, "date_jour": date_jour}, utilisateur_id=utilisateur_id
-    )
-    return base.une_ligne("SELECT * FROM journee WHERE id = ?", (id_,))
+    # Get-or-create dans une transaction. `journee` porte un index unique sur
+    # (séjour, date) : sans elle, deux fils créent tous les deux, le second
+    # échoue, et c'est toute la préparation de pancarte qui tombe avec lui —
+    # deux internes qui préparent le lendemain au même moment suffisent.
+    with base.transaction():
+        existante = base.une_ligne(
+            "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
+            (sejour_id, date_jour),
+        )
+        if existante:
+            return existante
+        id_ = base.inserer(
+            "journee", {"sejour_id": sejour_id, "date_jour": date_jour},
+            utilisateur_id=utilisateur_id,
+        )
+        return base.une_ligne("SELECT * FROM journee WHERE id = ?", (id_,))
 
 
 def definir_bilans_demandes(
@@ -467,16 +473,22 @@ def valider_pancarte_de_demain(
     lendemain reste bloquée tant que cette étape n'a pas eu lieu.
     """
     demain = str(lendemain(aujourdhui))
-    journee = base.une_ligne(
-        "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
-        (sejour_id, demain),
-    )
-    if journee is None:
-        raise ValueError("La pancarte du lendemain n'a pas encore été préparée.")
-    base.mettre_a_jour(
-        "journee", journee["id"], {"validee_le": _maintenant(), "validee_par": utilisateur_id},
-        utilisateur_id=utilisateur_id, action="validation_pancarte",
-    )
+    # Lire puis valider dans une transaction : deux relecteurs simultanés
+    # inscriraient sinon deux validations, dont une seule resterait — et le
+    # journal montrerait un valideur qui n'est pas celui qu'on lit sur la
+    # pancarte.
+    with base.transaction():
+        journee = base.une_ligne(
+            "SELECT * FROM journee WHERE sejour_id = ? AND date_jour = ? AND supprime = 0",
+            (sejour_id, demain),
+        )
+        if journee is None:
+            raise ValueError("La pancarte du lendemain n'a pas encore été préparée.")
+        base.mettre_a_jour(
+            "journee", journee["id"],
+            {"validee_le": _maintenant(), "validee_par": utilisateur_id},
+            utilisateur_id=utilisateur_id, action="validation_pancarte",
+        )
     return pancarte_du_jour(base, sejour_id, demain)
 
 

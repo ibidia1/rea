@@ -472,26 +472,34 @@ def definir_etat_antecedents(
 ) -> None:
     if etat not in ("absent", "non_renseigne"):
         raise ValueError("etat doit être 'absent' ou 'non_renseigne'")
-    existante = base.une_ligne(
-        "SELECT id FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
-        "AND supprime = 0",
-        (patient_id,),
-    )
-    if existante:
-        base.mettre_a_jour(
-            "antecedent", existante["id"], {"statut": etat}, utilisateur_id=utilisateur_id
+    # Get-or-create dans une transaction, sinon deux fils créent tous les deux :
+    # là où un index unique existe, le second échoue et l'écriture est perdue ;
+    # là où il n'y en a pas, le doublon passe **en silence**, ce qui est pire.
+    # `antecedent` ne porte **aucun** index unique sur (patient, evaluation) :
+    # deux évaluations créées en même temps se seraient rangées côte à côte
+    # sans que rien ne le signale.
+    with base.transaction():
+        existante = base.une_ligne(
+            "SELECT id FROM antecedent WHERE patient_id = ? AND categorie = 'evaluation' "
+            "AND supprime = 0",
+            (patient_id,),
         )
-    else:
-        base.inserer(
-            "antecedent",
-            {
-                "patient_id": patient_id,
-                "categorie": "evaluation",
-                "libelle": "Interrogatoire des antécédents",
-                "statut": etat,
-            },
-            utilisateur_id=utilisateur_id,
-        )
+        if existante:
+            base.mettre_a_jour(
+                "antecedent", existante["id"], {"statut": etat},
+                utilisateur_id=utilisateur_id,
+            )
+        else:
+            base.inserer(
+                "antecedent",
+                {
+                    "patient_id": patient_id,
+                    "categorie": "evaluation",
+                    "libelle": "Interrogatoire des antécédents",
+                    "statut": etat,
+                },
+                utilisateur_id=utilisateur_id,
+            )
 
 
 def etat_antecedents(base: Base, patient_id: str) -> str:
