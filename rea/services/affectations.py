@@ -32,19 +32,23 @@ def affecter(
     qu'une affectation : on reprend celle qui existe."""
     if vacation not in dom.codes():
         raise ValueError(f"Vacation inconnue : {vacation}")
-    existante = base.une_ligne(
-        "SELECT id FROM affectation WHERE sejour_id = ? AND utilisateur_id = ? "
-        "AND date_jour = ? AND vacation = ? AND supprime = 0",
-        (sejour_id, soignant_id, date_jour, vacation),
-    )
-    if existante:
-        return existante["id"]
-    return base.inserer(
-        "affectation",
-        {"sejour_id": sejour_id, "utilisateur_id": soignant_id,
-         "date_jour": date_jour, "vacation": vacation},
-        utilisateur_id=utilisateur_id,
-    )
+    # Lire puis écrire n'est atomique que dans une transaction : sans elle, deux
+    # fils lisent tous les deux « rien » et insèrent tous les deux — le second
+    # heurte l'index unique (mesuré sur seize écrivains simultanés, 10 septembre).
+    with base.transaction():
+        existante = base.une_ligne(
+            "SELECT id FROM affectation WHERE sejour_id = ? AND utilisateur_id = ? "
+            "AND date_jour = ? AND vacation = ? AND supprime = 0",
+            (sejour_id, soignant_id, date_jour, vacation),
+        )
+        if existante:
+            return existante["id"]
+        return base.inserer(
+            "affectation",
+            {"sejour_id": sejour_id, "utilisateur_id": soignant_id,
+             "date_jour": date_jour, "vacation": vacation},
+            utilisateur_id=utilisateur_id,
+        )
 
 
 def retirer(base: Base, affectation_id: str, *, utilisateur_id: str | None = None) -> None:

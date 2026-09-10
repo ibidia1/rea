@@ -129,26 +129,33 @@ def noter(
         raise ValueError(f"Statut inconnu : {statut}")
     if statut == NON_FAIT and not motif_code:
         raise ValueError("Un examen non prélevé doit dire pourquoi.")
-    existante = base.une_ligne(
-        "SELECT id FROM prelevement WHERE sejour_id = ? AND date_jour = ? "
-        "AND examen_code = ? AND heure_prevue = ? AND supprime = 0",
-        (sejour_id, date_jour, examen_code, heure_prevue),
-    )
-    valeurs = {
-        "statut": statut, "motif_code": motif_code or None,
-        "motif": (motif or "").strip() or None,
-        "date_heure_reelle": datetime.now().isoformat(timespec="minutes"),
-    }
-    if existante:
-        base.mettre_a_jour("prelevement", existante["id"], valeurs,
-                           utilisateur_id=utilisateur_id)
-        return existante["id"]
-    return base.inserer(
-        "prelevement",
-        {"sejour_id": sejour_id, "date_jour": date_jour,
-         "examen_code": examen_code, "heure_prevue": heure_prevue, **valeurs},
-        utilisateur_id=utilisateur_id,
-    )
+    # Lire puis écrire n'est atomique que dans une transaction. Sans elle, deux
+    # fils — deux téléphones, ou un seul doigt qui appuie deux fois sur un
+    # réseau lent — lisent tous les deux « rien de noté » et insèrent tous les
+    # deux : le second heurte l'index unique et la note est perdue. Mesuré sur
+    # seize écrivains simultanés (10 septembre) : onze échecs sur trente-six
+    # mille écritures, tous de cette forme.
+    with base.transaction():
+        existante = base.une_ligne(
+            "SELECT id FROM prelevement WHERE sejour_id = ? AND date_jour = ? "
+            "AND examen_code = ? AND heure_prevue = ? AND supprime = 0",
+            (sejour_id, date_jour, examen_code, heure_prevue),
+        )
+        valeurs = {
+            "statut": statut, "motif_code": motif_code or None,
+            "motif": (motif or "").strip() or None,
+            "date_heure_reelle": datetime.now().isoformat(timespec="minutes"),
+        }
+        if existante:
+            base.mettre_a_jour("prelevement", existante["id"], valeurs,
+                               utilisateur_id=utilisateur_id)
+            return existante["id"]
+        return base.inserer(
+            "prelevement",
+            {"sejour_id": sejour_id, "date_jour": date_jour,
+             "examen_code": examen_code, "heure_prevue": heure_prevue, **valeurs},
+            utilisateur_id=utilisateur_id,
+        )
 
 
 def effacer(
