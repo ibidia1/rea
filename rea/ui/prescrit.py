@@ -12,7 +12,9 @@ import streamlit as st
 
 from .. import config, listes
 from ..domaine import coherence, prescription as dom
+from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr, lendemain
+from ..services import affectations as affectations_service
 from ..services import dispositifs as dispositifs_service
 from ..services import pancarte as pancarte_service
 from ..services import prescriptions as prescriptions_service
@@ -63,9 +65,54 @@ def _pancarte_de_demain(sejour: dict, date_jour_str: str) -> None:
         st.success(f"Feuille de demain enregistrée — version {snap['version']}.")
 
 
+def _soignants_du_patient(sejour: dict) -> None:
+    """Qui s'occupe de ce patient, et à quel numéro l'appeler.
+
+    Le médecin qui change une prescription veut prévenir la personne qui va
+    la donner. Jusqu'ici il fallait faire le tour des chambres, ou demander
+    au surveillant. L'information existe — l'infirmier la crée en prenant son
+    poste — elle manquait seulement à l'endroit où l'on prescrit (demande du
+    service, 10 septembre).
+
+    La vacation en cours d'abord, en gras : c'est celle qu'on appelle
+    maintenant. Les autres suivent, en petit, parce qu'un traitement de
+    ce soir concerne l'équipe de ce soir.
+    """
+    vacation_courante, jour = affectations_service.poste_courant()
+    affectations = affectations_service.du_sejour(contexte.base(), sejour["id"], jour)
+    if not affectations:
+        st.caption(
+            "Aucun infirmier n'a encore pris ce patient pour aujourd'hui — "
+            "l'affectation se fait à la prise de poste, ou depuis l'écran de "
+            "surveillance."
+        )
+        return
+
+    morceaux = []
+    for a in sorted(affectations, key=lambda x: x["vacation"] != vacation_courante):
+        courante = a["vacation"] == vacation_courante
+        nom = f"<b>{a['soignant']}</b>" if courante else a["soignant"]
+        numero = (
+            f" · <a href='tel:{a['telephone'].replace(' ', '')}'>{a['telephone']}</a>"
+            if a.get("telephone") else ""
+        )
+        couleur = theme.BLEU if courante else "#94a3b8"
+        libelle = dom_vacations.libelle(a["vacation"])
+        morceaux.append(
+            f"<span style='color:{couleur}'>{libelle} : {nom}{numero}</span>"
+        )
+    st.markdown(
+        "<div style='font-size:.85rem;margin:-.3rem 0 .5rem'>"
+        + " &nbsp;·&nbsp; ".join(morceaux)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def onglet_prescrit(sejour: dict) -> None:
     date_jour = st.date_input("Jour affiché", value=date.today(), key="date_prescrit")
     date_jour_str = str(date_jour)
+    _soignants_du_patient(sejour)
 
     pancarte = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], date_jour_str)
 
@@ -628,10 +675,17 @@ def _actions_prescrit(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
         demain = date_jour_str
         journee_bilans = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], demain)["bilans_demandes"]
         deja_coches = {b["examen_code"] for b in journee_bilans}
+        codes_examens = listes.codes(listes.EXAMENS_A_DEMANDER)
+        oubliés = champs.valeurs_oubliees(codes_examens, deja_coches)
+        if oubliés:
+            st.caption(
+                "Examens enregistrés autrefois et absents du référentiel "
+                "actuel, donc non recochés : " + ", ".join(oubliés) + "."
+            )
         with st.form("bilans_demandes"):
             choisis = st.multiselect(
-                "Examens", listes.codes(listes.EXAMENS_A_DEMANDER),
-                default=list(deja_coches),
+                "Examens", codes_examens,
+                default=champs.valeurs_connues(codes_examens, deja_coches),
                 format_func=lambda c: listes.libelle(listes.EXAMENS_A_DEMANDER, c),
                 placeholder="Aucun",
             )

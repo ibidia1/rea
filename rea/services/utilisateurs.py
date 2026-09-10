@@ -25,9 +25,55 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+from datetime import datetime
 
+from .. import config
 from ..db import Base
 from ..domaine import droits as dom_droits
+
+#: Les essais ratés, par compte, en mémoire du processus : nom -> (nombre,
+#: heure du dernier essai). En mémoire et non en base, délibérément — un
+#: redémarrage du logiciel remet les compteurs à zéro, ce qui est acceptable
+#: (il faut un accès au serveur pour le provoquer) et évite d'écrire dans le
+#: dossier à chaque code mal tapé à six heures du matin.
+_ESSAIS: dict[str, tuple[int, datetime]] = {}
+
+
+def blocage_restant(nom: str) -> int:
+    """Minutes restantes avant de pouvoir réessayer. 0 si le compte est libre.
+
+    Sans ce verrou, un code à quatre chiffres tombe en huit minutes d'essais
+    automatiques — mesuré sur ce poste, pas supposé. Le jour où l'application
+    écoute sur le Wi-Fi du service, c'est n'importe quel téléphone du couloir
+    qui peut les enchaîner.
+    """
+    essais = _ESSAIS.get(_cle(nom))
+    if not essais:
+        return 0
+    nombre, dernier = essais
+    if nombre < config.ESSAIS_AVANT_BLOCAGE:
+        return 0
+    ecoule = (datetime.now() - dernier).total_seconds() / 60
+    reste = config.BLOCAGE_MINUTES - ecoule
+    if reste <= 0:
+        _ESSAIS.pop(_cle(nom), None)
+        return 0
+    return max(1, int(reste + 0.999))
+
+
+def noter_echec(nom: str) -> None:
+    nombre, _dernier = _ESSAIS.get(_cle(nom), (0, datetime.now()))
+    _ESSAIS[_cle(nom)] = (nombre + 1, datetime.now())
+
+
+def oublier_echecs(nom: str) -> None:
+    """Une entrée réussie efface l'ardoise."""
+    _ESSAIS.pop(_cle(nom), None)
+
+
+def _cle(nom: str) -> str:
+    return (nom or "").strip().lower()
+
 
 #: Coût du calcul d'empreinte. Assez haut pour qu'essayer les dix mille codes
 #: à quatre chiffres coûte cher, assez bas pour que l'ouverture reste
@@ -124,6 +170,7 @@ def creer(
     role: str,
     *,
     code: str | None = None,
+    telephone: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     nom = (nom or "").strip()
@@ -135,7 +182,9 @@ def creer(
         raise ValueError(f"Un compte « {nom} » existe déjà.")
     return base.inserer(
         "utilisateur",
-        {"nom": nom, "role": role, "pin": chiffrer_code(code) if code else None},
+        {"nom": nom, "role": role,
+         "pin": chiffrer_code(code) if code else None,
+         "telephone": (telephone or "").strip() or None},
         utilisateur_id=utilisateur_id,
     )
 
@@ -157,6 +206,17 @@ def definir_code(
     base.mettre_a_jour(
         "utilisateur", cible_id,
         {"pin": chiffrer_code(code) if code else None},
+        utilisateur_id=utilisateur_id,
+    )
+
+
+def definir_telephone(
+    base: Base, cible_id: str, telephone: str | None, *,
+    utilisateur_id: str | None = None,
+) -> None:
+    base.mettre_a_jour(
+        "utilisateur", cible_id,
+        {"telephone": (telephone or "").strip() or None},
         utilisateur_id=utilisateur_id,
     )
 
@@ -202,3 +262,34 @@ def _refuser_dernier_administrateur(
             "C'est le dernier compte capable de gérer les comptes : en créer "
             "un autre d'abord, sinon plus personne ne pourra en créer."
         )
+
+
+def comptes_sans_code(base: Base) -> list[dict]:
+    """Les comptes actifs qu'aucun code ne protège.
+
+    Sur un poste isolé, c'est un choix de confort. Dès que l'application
+    écoute sur le réseau, c'est une porte ouverte : l'écran d'ouverture les
+    refuse et l'administrateur est renvoyé vers l'écran des comptes.
+    """
+    return [u for u in actifs(base) if not u["pin"]]
+
+
+def code_acceptable(code: str) -> str | None:
+    """Le motif de refus d'un code, ou None s'il convient.
+
+    Six chiffres et non quatre : à 47 ms l'essai, quatre chiffres tombent en
+    huit minutes, six en treize heures. Le verrou après cinq essais ratés est
+    la vraie protection, mais les deux se complètent — le verrou se contourne
+    en changeant de compte, la longueur non.
+    """
+    code = (code or "").strip()
+    if not code:
+        return "Le code est obligatoire."
+    if len(code) < config.LONGUEUR_CODE_MINIMALE:
+        return (
+            f"Le code doit faire au moins {config.LONGUEUR_CODE_MINIMALE} "
+            "caractères."
+        )
+    if code in ("000000", "123456", "111111", "654321"):
+        return "Ce code est trop courant — en choisir un autre."
+    return None

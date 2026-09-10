@@ -166,7 +166,7 @@ def _antecedents_editeur(sejour: dict) -> None:
         "Le patient a-t-il des antécédents ?",
         valeurs,
         format_func=lambda v: {"oui": "Oui", "non": "Non", "inconnu": "Inconnu"}[v],
-        index=valeurs.index(defaut),
+        index=champs.index_ou_zero(valeurs, defaut),
         horizontal=True,
         key=f"{prefixe}_reponse",
     )
@@ -400,7 +400,8 @@ def _modifier_admission(sejour: dict) -> None:
         c_sexe, c_groupe = st.columns(2)
         sexe = c_sexe.selectbox(
             "Sexe", listes.codes(listes.SEXES),
-            index=listes.codes(listes.SEXES).index(sejour.get("sexe") or "non_renseigne"),
+            index=champs.index_ou_zero(
+                listes.codes(listes.SEXES), sejour.get("sexe") or "non_renseigne"),
             format_func=lambda c: listes.libelle(listes.SEXES, c),
             key=f"{prefixe}_sexe",
         )
@@ -408,7 +409,8 @@ def _modifier_admission(sejour: dict) -> None:
         codes_groupes = listes.codes(groupes)
         groupe_sanguin = c_groupe.selectbox(
             "Groupe sanguin", codes_groupes,
-            index=codes_groupes.index(sejour.get("groupe_sanguin") or "non_renseigne"),
+            index=champs.index_ou_zero(
+                codes_groupes, sejour.get("groupe_sanguin") or "non_renseigne"),
             format_func=lambda c: listes.libelle(groupes, c),
             key=f"{prefixe}_groupe",
         )

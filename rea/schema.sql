@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS utilisateur (
     -- que le jour du multi-postes ne demande pas une migration sur des données
     -- cliniques déjà là (§2.4 — évolutions possibles, non décidées).
     pin         TEXT,
+    -- Pour joindre la personne sans faire le tour des chambres : le médecin
+    -- qui prescrit voit qui s'occupe du patient, et son numéro (demande du
+    -- service, 10 septembre).
+    telephone   TEXT,
     cree_le     TEXT NOT NULL,
     supprime    INTEGER NOT NULL DEFAULT 0,
     version     INTEGER NOT NULL DEFAULT 1,

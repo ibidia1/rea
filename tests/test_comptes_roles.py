@@ -148,3 +148,64 @@ def test_poser_puis_retirer_un_code(base):
     assert utilisateurs.code_correct("9182", utilisateurs.par_id(base, uid)["pin"])
     utilisateurs.definir_code(base, uid, None)
     assert utilisateurs.par_id(base, uid)["pin"] is None
+
+
+# --- le verrou après plusieurs essais ratés --------------------------------
+#
+# Mesuré sur ce poste : un essai de code coûte 47 ms, donc les 10 000 codes à
+# quatre chiffres tombent en huit minutes. Tant que l'application n'écoutait
+# que la boucle locale, il fallait s'asseoir devant le clavier. Depuis qu'elle
+# est joignable sur le Wi-Fi du service, c'est n'importe quel téléphone du
+# couloir qui peut les enchaîner (demande du service, 10 septembre).
+
+def test_le_compte_se_bloque_apres_plusieurs_essais_rates(base):
+    from rea import config
+
+    utilisateurs.oublier_echecs("Dr Ben Salah")
+    for _ in range(config.ESSAIS_AVANT_BLOCAGE):
+        assert utilisateurs.blocage_restant("Dr Ben Salah") == 0
+        utilisateurs.noter_echec("Dr Ben Salah")
+    assert utilisateurs.blocage_restant("Dr Ben Salah") > 0
+    utilisateurs.oublier_echecs("Dr Ben Salah")
+
+
+def test_une_entree_reussie_efface_l_ardoise(base):
+    utilisateurs.noter_echec("Inf. Amel")
+    utilisateurs.noter_echec("Inf. Amel")
+    utilisateurs.oublier_echecs("Inf. Amel")
+    assert utilisateurs.blocage_restant("Inf. Amel") == 0
+
+
+def test_le_blocage_ne_depend_pas_de_la_casse(base):
+    """Sinon il suffit de taper le nom en majuscules pour repartir à zéro."""
+    from rea import config
+
+    utilisateurs.oublier_echecs("inf. amel")
+    for _ in range(config.ESSAIS_AVANT_BLOCAGE):
+        utilisateurs.noter_echec("Inf. Amel")
+    assert utilisateurs.blocage_restant("INF. AMEL") > 0
+    utilisateurs.oublier_echecs("inf. amel")
+
+
+# --- la solidité du code ---------------------------------------------------
+
+def test_un_code_trop_court_est_refuse():
+    assert utilisateurs.code_acceptable("1234")
+    assert utilisateurs.code_acceptable("") == "Le code est obligatoire."
+    assert utilisateurs.code_acceptable("492817") is None
+
+
+def test_les_codes_les_plus_evidents_sont_refuses():
+    for evident in ("000000", "123456", "111111"):
+        assert utilisateurs.code_acceptable(evident)
+
+
+# --- les comptes sans code -------------------------------------------------
+
+def test_les_comptes_sans_code_sont_reperables(base):
+    """C'est cette liste que l'ouverture affiche en rouge quand
+    l'application écoute sur le réseau."""
+    utilisateurs.creer(base, "Sans", "infirmier")
+    utilisateurs.creer(base, "Avec", "infirmier", code="492817")
+    sans = [u["nom"] for u in utilisateurs.comptes_sans_code(base)]
+    assert sans == ["Sans"]

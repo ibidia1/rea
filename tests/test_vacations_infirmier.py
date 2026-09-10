@@ -233,3 +233,14 @@ def test_une_vacation_inconnue_est_refusee(base):
     with pytest.raises(ValueError, match="Vacation inconnue"):
         affectations.affecter(base, sejour_id=sid, soignant_id=uid,
                               date_jour="2026-09-09", vacation="apres_minuit")
+
+
+def test_les_deux_pressions_tombent_sur_la_meme_rangee():
+    """L'écran affiche les constantes deux par rangée. Une systolique en haut
+    d'une rangée et la diastolique en bas de la suivante, c'est une inversion
+    par garde."""
+    from rea.services import constantes as cst
+
+    cles = [c for c, _l, _u in cst.CLES]
+    rangees = [cles[i:i + 2] for i in range(0, len(cles), 2)]
+    assert ["pas", "pad"] in rangees

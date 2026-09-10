@@ -926,6 +926,69 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.21 — 10 septembre 2026 — le poste dans la poche, et le réseau qui va avec**
+
+Les infirmiers ouvriront leur poste depuis leur téléphone, sur le Wi-Fi du
+service. Ce n'est pas un réglage : c'est ce qui décide de la forme de l'écran
+et de la sécurité du dossier, et les deux changent ensemble.
+
+*L'écran infirmier sur un téléphone.* Mesuré avant de corriger, à 390 px :
+**86 cibles sous 40 pixels** et trois lignes par médicament. La disposition en
+trois colonnes — case, produit, bouton — se dépliait sous 640 px : une
+pancarte de trente prises devenait quatre-vingt-dix lignes à faire défiler au
+pouce, avec des cases de seize pixels qu'on rate une fois sur trois.
+
+Une prise tient désormais sur **une ligne** : un bouton pleine largeur qu'on
+touche, dont le libellé porte l'état — « Donné — Tienam 1 g » se lit en plein
+soleil et par quelqu'un qui distingue mal le rouge du gris. Le cas rare — non
+donné, refusé — descend dans un volet replié sous chaque heure, au lieu
+d'occuper une place fixe sur toutes les lignes. Traitements et surveillance ne
+s'affichent plus côte à côte mais l'un ou l'autre : empilés sur un téléphone,
+il aurait fallu faire défiler trente traitements pour atteindre la case de la
+température. Après : **0 cible sous 40 px**.
+
+Deux détails qui n'en sont pas. Les champs de saisie passent à 16 px, sinon
+iOS zoome de lui-même à chaque case touchée et la page reste zoomée. Et les
+constantes se remplissent **rangée par rangée** : deux colonnes remplies
+verticalement, une fois empilées sur un téléphone, donnaient « FC, PA diast.,
+FR, Glasgow, Dextro, PA syst. » — les deux pressions séparées par quatre
+champs, c'est-à-dire une inversion par garde. L'ordre du catalogue les met
+maintenant côte à côte, et un test le vérifie.
+
+*Le réseau.* Le logiciel n'écoutait que la boucle locale, et c'était la seule
+chose qui protégeait le dossier. Il écoute désormais l'adresse donnée par
+`REA_HOTE` — et **dès que cette adresse n'est plus locale, le code d'accès
+devient obligatoire sur tous les comptes**. Ce n'est plus un commentaire dans
+un fichier de configuration, c'est une conséquence calculée (`AUTH_EXIGEE`)
+que deux tests vérifient sur les deux branches. Un compte sans code se voit
+refuser l'entrée, et l'écran d'ouverture dit pourquoi.
+
+Deux serrures de plus, parce que l'ouverture au réseau les rend nécessaires :
+**blocage après cinq essais ratés** pendant dix minutes — mesuré, un essai
+coûte 47 ms, donc un code à quatre chiffres tombait en huit minutes d'essais
+automatiques, et depuis le Wi-Fi c'est n'importe quel téléphone du couloir qui
+peut les enchaîner — et **six caractères minimum** quand l'authentification
+est exigée, les codes les plus évidents refusés.
+
+*Le médecin voit qui soigne son patient.* L'écran Prescrit affiche, sous la
+date, l'infirmier de la vacation en cours et son numéro, cliquable. L'ancienne
+façon de le savoir était de faire le tour des chambres. L'information existait
+déjà — l'infirmier la crée en prenant son poste — elle manquait à l'endroit où
+l'on prescrit.
+
+*Un écran qui tombait pour un référentiel qui change.* Trouvé en vérifiant le
+reste : un bilan enregistré sous le code `gaz_du_sang`, code disparu depuis du
+référentiel des examens, rendait **tout l'écran Prescrit inaccessible** pour
+ce patient — Streamlit refuse une valeur par défaut absente des options, et
+l'exception emporte l'écran entier. Le dossier était intact ; on ne pouvait
+plus prescrire.
+
+La correction est générale et non ponctuelle, parce qu'un référentiel *va*
+changer : `champs.index_ou_zero` et `champs.valeurs_connues` ignorent ce qui
+a disparu, `champs.valeurs_oubliees` le dit à l'écran plutôt que de le taire —
+une case qui se décoche toute seule entre deux ouvertures est pire qu'un
+message qui explique pourquoi. Quatre endroits corrigés.
+
 **v3.20 — 10 septembre 2026 — des comptes, des rôles, et le travail infirmier**
 
 Le logiciel avait un sélecteur d'ouverture qui ne servait qu'à signer les
