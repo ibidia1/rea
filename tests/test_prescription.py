@@ -134,6 +134,70 @@ def test_volume_entrees_24h_nutrition():
     assert p.volume_entrees_24h(lignes).total_ml == 1500.0
 
 
+def test_une_nutrition_reglee_en_vitesse_compte():
+    """Kabiven à 80 cc/h, c'est 1 920 mL — pas zéro.
+
+    Une entrée se chiffre de deux façons : un volume sur 24 h, ou la vitesse
+    qu'on règle sur la pompe. On ne lisait le volume que pour la nutrition et
+    la vitesse que pour les perfusions ; une nutrition parentérale réglée en
+    cc/h ne comptait donc nulle part, et l'écran affichait « 0 mL » devant une
+    poche qui coulait (relevé par le service, 10 septembre).
+    """
+    lignes = [
+        {"voie": "ENTREES", "sous_type": "nutrition_parenterale",
+         "produit": "Kabiven", "vitesse": 80},
+    ]
+    bilan = p.volume_entrees_24h(lignes)
+    assert bilan.total_ml == 1920.0
+    assert bilan.detail == [("Kabiven", 1920.0)]
+
+
+def test_le_volume_l_emporte_sur_la_vitesse():
+    """Les deux renseignés : le volume sur 24 h est la valeur prescrite, la
+    vitesse n'en est que la traduction sur la pompe. On ne les additionne
+    surtout pas."""
+    lignes = [
+        {"voie": "ENTREES", "sous_type": "nutrition_enterale",
+         "produit": "Fresubin", "vitesse": 80, "volume_24h": 1000},
+    ]
+    assert p.volume_entrees_24h(lignes).total_ml == 1000.0
+
+
+def test_une_entree_sans_debit_ni_volume_est_signalee():
+    """Le total ne peut pas l'inventer, mais il ne doit pas passer pour
+    complet : une perfusion qu'on oublie de chiffrer ressemble sinon à une
+    perfusion qui ne coule pas."""
+    lignes = [
+        {"voie": "ENTREES", "sous_type": "perfusion", "produit": "Sérum glucosé 5 %"},
+    ]
+    bilan = p.volume_entrees_24h(lignes)
+    assert bilan.total_ml == 0.0
+    assert bilan.sans_debit == ["Sérum glucosé 5 %"]
+    assert bilan.complet is False
+
+
+def test_un_bilan_entierement_chiffre_est_complet():
+    lignes = [
+        {"voie": "ENTREES", "sous_type": "perfusion", "produit": "Ringer", "vitesse": 40},
+    ]
+    bilan = p.volume_entrees_24h(lignes)
+    assert bilan.complet is True
+    assert bilan.sans_debit == []
+
+
+def test_la_capture_du_service_ne_donne_plus_zero():
+    """Le cas exact remonté : Kabiven 80 cc/h + un glucosé sans débit."""
+    lignes = [
+        {"voie": "ENTREES", "sous_type": "nutrition_parenterale",
+         "produit": "Kabiven", "vitesse": 80},
+        {"voie": "ENTREES", "sous_type": "perfusion",
+         "produit": "Sérum glucosé 5 %", "additifs": "(1 KCl + 1 NaCl)"},
+    ]
+    bilan = p.volume_entrees_24h(lignes)
+    assert bilan.total_ml == 1920.0
+    assert bilan.sans_debit == ["Sérum glucosé 5 %"]
+
+
 def test_volume_entrees_24h_iv_avec_dilution():
     lignes = [
         {"voie": "IV", "produit": "Perfalgan", "volume_dilution": 100, "rythme": "x3/j"}

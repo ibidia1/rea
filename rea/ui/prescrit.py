@@ -152,7 +152,7 @@ def onglet_prescrit(sejour: dict) -> None:
     # cette reprise, la seule vitesse que l'infirmier règle sur une pompe
     # n'apparaissait nulle part sur l'écran du prescrit (demande du service,
     # 8 septembre). Elle est déjà reportée ainsi sur la feuille imprimée.
-    sedation = _ligne_sedation(sejour, date_jour_str)
+    sedation = ligne_sedation(sejour, date_jour_str)
     voies_remplies = [
         v for v in listes.ORDRE_VOIES
         if pancarte["lignes_par_voie"].get(v) or (v == "PSE" and sedation)
@@ -170,7 +170,20 @@ def onglet_prescrit(sejour: dict) -> None:
     }
 
     with zone_pancarte:
-        st.metric("Entrées calculées / 24 h", f"{pancarte['bilan_entrees'].total_ml:.0f} mL")
+        bilan_entrees = pancarte["bilan_entrees"]
+        st.metric("Entrées calculées / 24 h", f"{bilan_entrees.total_ml:.0f} mL")
+        if bilan_entrees.sans_debit:
+            # Un total qui ignore une perfusion ressemble quand même à un
+            # total. Le dire ici, sous le chiffre, plutôt que de laisser
+            # croire que la ligne ne coule pas : elle coule, on ne sait
+            # simplement pas à combien.
+            st.warning(
+                "Ce total est **incomplet** — "
+                + ", ".join(bilan_entrees.sans_debit)
+                + " : ni vitesse, ni volume sur 24 h. Compléter la ligne pour "
+                "que le bilan hydrique ait un sens.",
+                icon="⚠️",
+            )
         _afficher_pancarte(
             voies_remplies, pancarte, date_jour_str, sedation, vitesses_jour,
         )
@@ -263,7 +276,15 @@ def _sedation_en_place(sejour: dict, date_jour_str: str):
     return next((e for e in etats if e.type == "sedation" and e.en_place), None)
 
 
-def _ligne_sedation(sejour: dict, date_jour_str: str) -> str | None:
+def ligne_sedation(sejour: dict, date_jour_str: str) -> str | None:
+    """La sédation telle qu'elle se lit dans le bloc P.S.E.
+
+    Publique parce que le mode Visite l'affiche aussi : la sédation est
+    posée comme dispositif, pas prescrite en ligne, si bien qu'elle
+    n'apparaissait nulle part sur la pancarte à l'écran — la seule vitesse
+    qu'un infirmier règle sur une pompe manquait au médecin qui visite
+    (demande du service, 10 septembre).
+    """
     sedation = _sedation_en_place(sejour, date_jour_str)
     if sedation is None:
         return None
@@ -770,6 +791,16 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
         if st.form_submit_button("Ajouter à la pancarte", type="primary", use_container_width=True):
             if not produit:
                 st.error("Le produit est obligatoire.")
+            elif voie == "ENTREES" and not vitesse and not volume_24h:
+                # Sans l'un des deux, la ligne s'affiche sur la pancarte mais
+                # n'apporte rien au bilan hydrique : elle ressemble alors à
+                # une perfusion qui ne coule pas. Le refus ici coûte une
+                # seconde ; l'accepter coûte un bilan faux toute la journée.
+                st.error(
+                    "Indiquer une **vitesse** (cc/h) ou un **volume sur 24 h** "
+                    "— sans quoi cette entrée ne compterait pas dans le bilan "
+                    "hydrique."
+                )
             elif contexte.controle(
                 f"ligne_{voie}",
                 coherence.verifier_prescription(

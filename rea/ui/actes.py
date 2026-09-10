@@ -54,6 +54,36 @@ def _reglage_vitesse(ligne: dict, etat_disp) -> None:
             st.rerun()
 
 
+def _nature_de_drain(etiquette: str) -> str:
+    """Ce que le drain draine : une liste, mais qui ne se ferme pas.
+
+    « Drain abdominal » ne dit pas ce qu'on surveille — un transcystique qui
+    donne 400 mL de bile ne se lit pas comme un drain de Douglas qui donne
+    400 mL de sérosités (demande du service, 10 septembre). Une liste plutôt
+    qu'un champ libre, pour que « transcystique » et « trans-cystique » se
+    comptent ensemble le jour où l'on cherchera les fistules biliaires.
+
+    Elle reste ouverte : aucune liste de drains n'est complète, et un drain
+    qu'on ne peut pas nommer serait un drain qu'on ne note pas.
+    """
+    natures = listes.codes(listes.NATURES_DRAIN)
+    choix = st.selectbox(
+        etiquette, natures, index=None,
+        placeholder="Choisir la nature du drain",
+        format_func=lambda c: listes.libelle(listes.NATURES_DRAIN, c),
+    )
+    precision = st.text_input(
+        "Préciser", value="", key=f"precision_{etiquette}",
+        placeholder="obligatoire si « Autre » — sinon, pour compléter",
+    ).strip()
+    if not choix:
+        return precision
+    if choix == "autre":
+        return precision
+    nom = listes.libelle(listes.NATURES_DRAIN, choix)
+    return f"{nom} — {precision}" if precision else nom
+
+
 def onglet_actes(sejour: dict) -> None:
     lignes = dispositifs_service.du_sejour(contexte.base(), sejour["id"])
     etats = dispositifs_service.etats(contexte.base(), sejour["id"])
@@ -164,7 +194,9 @@ def onglet_actes(sejour: dict) -> None:
             for champ in config_type["champs"]:
                 libelle_champ, _prefixe, unite = listes.CHAMPS_DISPOSITIF[champ]
                 etiquette = f"{libelle_champ} ({unite})" if unite else libelle_champ
-                if champ in ("molecules", "technique"):
+                if champ == "nature_drain":
+                    details[champ] = _nature_de_drain(etiquette)
+                elif champ in ("molecules", "technique"):
                     details[champ] = st.text_input(etiquette)
                 else:
                     details[champ] = champs.nombre_saisi(st.text_input(etiquette, value=""))

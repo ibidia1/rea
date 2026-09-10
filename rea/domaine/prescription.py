@@ -656,11 +656,24 @@ def _nombre(valeur) -> str:
 class BilanEntrees:
     total_ml: float = 0.0
     detail: list[tuple[str, float]] = field(default_factory=list)
+    #: Les lignes d'entrées prescrites dont on ne sait pas ce qu'elles
+    #: apportent : ni vitesse, ni volume sur 24 h. Le total les ignore
+    #: forcément — il ne peut pas inventer — mais il ne doit pas passer pour
+    #: complet, parce qu'une perfusion qu'on oublie de chiffrer ressemble
+    #: alors à une perfusion qui ne coule pas.
+    sans_debit: list[str] = field(default_factory=list)
 
     def ajouter(self, libelle: str, volume_ml: float) -> None:
         if volume_ml:
             self.total_ml += volume_ml
             self.detail.append((libelle, volume_ml))
+
+    def signaler_sans_debit(self, libelle: str) -> None:
+        self.sans_debit.append(libelle)
+
+    @property
+    def complet(self) -> bool:
+        return not self.sans_debit
 
 
 # `kw_only` pour que les champs se lisent dans l'ordre du bilan — entrées,
@@ -904,13 +917,22 @@ def volume_entrees_24h(
         if voie == "PSE":
             bilan.ajouter(f"{ligne['produit']} (PSE)", continu(ligne))
         elif voie == "ENTREES":
-            sous_type = ligne.get("sous_type")
-            if sous_type == "perfusion":
+            # Une entrée se chiffre de deux façons, et l'une n'est pas plus
+            # vraie que l'autre : un volume sur 24 h (« 1500 mL de Kabiven »)
+            # ou une vitesse (« Kabiven à 80 cc/h »), qui est ce qu'on règle
+            # sur la pompe. On lisait le volume pour la nutrition et la
+            # vitesse pour les perfusions : une nutrition parentérale réglée
+            # en cc/h ne comptait donc nulle part, et le bilan affichait 0 mL
+            # devant une poche qui coulait (corrigé le 10 septembre).
+            volume = ligne.get("volume_24h")
+            if volume:
+                bilan.ajouter(ligne["produit"], float(volume))
+            elif ligne.get("vitesse"):
                 bilan.ajouter(ligne["produit"], continu(ligne))
-            elif sous_type in ("nutrition_enterale", "nutrition_parenterale"):
-                volume = ligne.get("volume_24h")
-                if volume:
-                    bilan.ajouter(ligne["produit"], float(volume))
+            else:
+                # Ni l'un ni l'autre : on ne devine pas, et on ne se tait pas
+                # non plus. Le bilan dira qu'il est incomplet.
+                bilan.signaler_sans_debit(str(ligne.get("produit") or "?"))
         elif voie == "IV":
             volume_dilution = ligne.get("volume_dilution")
             prises = nb_prises_par_jour(ligne.get("rythme"))

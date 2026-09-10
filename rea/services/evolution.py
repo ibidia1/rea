@@ -10,9 +10,11 @@ from __future__ import annotations
 from .. import config, listes
 from ..db import Base
 from ..domaine import calculs
+from ..domaine import dispositifs as dom_dispositifs
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from . import bilans as bilans_service
+from . import constantes as constantes_service
 from . import dispositifs as dispositifs_service
 from . import explorations as explorations_service
 from . import prescriptions as prescriptions_service
@@ -234,17 +236,37 @@ def drains_du_jour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     changerait chaque fois qu'on pose un drain.
     """
     valeurs = elements_du_jour(base, sejour_id, date_jour)
+    en_place = [
+        etat for etat in dispositifs_service.etats(base, sejour_id, date_jour)
+        if etat.en_place
+        and listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine")
+        and not (etat.date_pose and etat.date_pose > date_jour)
+    ]
+    # Deux redons dans le même abdomen se distinguent par un numéro, sinon
+    # c'est un volume noté sur le mauvais drain (demande du service).
+    noms = dom_dispositifs.libelles_distincts(en_place)
     drains = []
-    for etat in dispositifs_service.etats(base, sejour_id, date_jour):
-        if not etat.en_place or not listes.TYPES_DISPOSITIF.get(etat.type, {}).get("draine"):
-            continue
-        if etat.date_pose and etat.date_pose > date_jour:
-            continue
+    for etat in en_place:
         cle = f"{PREFIXE_VOLUME_DRAIN}{etat.id}"
+        # Le volume du jour vient de deux endroits, et l'un prime : ce que
+        # l'infirmier a relevé heure par heure est une mesure ; ce que le
+        # médecin reporte dans son observation est une reprise. Dès qu'une
+        # heure a été relevée, c'est le relevé qui compte — sinon le chiffre
+        # changerait selon l'écran qu'on regarde.
+        #
+        # « Dès qu'une heure a été relevée », et non « si le total est
+        # complet » : sans aucun relevé, `total_du_jour` rend un total vide
+        # qui se dit complet — il l'est, il ne manque rien à rien — et
+        # écraserait la valeur du médecin par un blanc.
+        releve = constantes_service.total_du_jour(
+            base, sejour_id, date_jour, constantes_service.cle_drain(etat.id)
+        )
+        du_chevet = releve.volume_ml if releve.heures_comptees else None
         drains.append({
             "cle": cle,
-            "libelle": etat.libelle_type + (f" ({etat.site.lower()})" if etat.site else ""),
-            "valeur": valeurs.get(cle),
+            "libelle": noms.get(etat.id, etat.libelle_type),
+            "valeur": du_chevet if du_chevet is not None else valeurs.get(cle),
+            "releve_infirmier": du_chevet,
             "dispositif_id": etat.id,
         })
     return drains

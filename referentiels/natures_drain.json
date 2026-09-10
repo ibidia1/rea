@@ -1,0 +1,19 @@
+{
+  "nom": "natures_drain",
+  "libelle": "Nature d'un drain abdominal",
+  "version": "2026-09-10.1",
+  "date": "2026-09-10",
+  "note": "À COMPLÉTER AVEC UN CHIRURGIEN. « Drain abdominal » ne dit pas ce qu'on surveille : un transcystique qui donne 400 mL de bile n'est pas un drain de Douglas qui donne 400 mL de sérosités, et la conduite à tenir n'est pas la même. Le service a demandé le détail le 10 septembre 2026 en citant le transcystique et le transcholédocien ; cette liste de départ vient de la pratique courante et n'a été relue par personne. Elle se complète ici, sans reprogrammer, et le champ reste libre — « Autre » ouvre une case pour ce qui n'y figure pas.",
+  "valeurs": [
+    ["transcystique", "Transcystique (drain de Kehr par le cystique)"],
+    ["transcholedocien", "Transcholédocien (drain de Kehr en T)"],
+    ["sous_hepatique", "Sous-hépatique"],
+    ["douglas", "Douglas"],
+    ["loge_splenique", "Loge splénique"],
+    ["loge_anastomotique", "Contact anastomotique"],
+    ["parietal", "Pariétal (sous-cutané)"],
+    ["lame", "Lame ondulée / Delbet"],
+    ["pancreatique", "Loge pancréatique"],
+    ["autre", "Autre — à préciser"]
+  ]
+}

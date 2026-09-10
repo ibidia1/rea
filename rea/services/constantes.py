@@ -63,6 +63,30 @@ CLES = VITALES + SORTIES
 #: s'additionnent jamais telles quelles : elles passent par `recueil`.
 CLES_NIVEAU = tuple(cle for cle, _l, _u in SORTIES)
 
+#: Préfixe des clés de recueil d'un drain : `drain:<id du dispositif>`.
+#:
+#: Un drain n'a pas de clé fixe comme la diurèse : il n'existe que si on l'a
+#: posé, et un patient peut en porter quatre. Sa clé porte donc l'identifiant
+#: du dispositif — la colonne `cle` étant du texte libre, un redon de plus se
+#: relève comme les autres sans rien changer au schéma (demande du service,
+#: 10 septembre).
+PREFIXE_DRAIN = "drain:"
+
+
+def cle_drain(dispositif_id: str) -> str:
+    return f"{PREFIXE_DRAIN}{dispositif_id}"
+
+
+def est_recueil(cle: str) -> bool:
+    """Cette case porte-t-elle un **niveau lu** plutôt qu'une quantité ?
+
+    Diurèse et drains : ce que l'infirmier voit, c'est le contenu du sac ou
+    du bocal, pas ce qui est sorti pendant l'heure. Le logiciel fait la
+    soustraction ; la lui demander au lit du malade, de nuit, avec des gants,
+    serait lui demander de se tromper.
+    """
+    return cle in CLES_NIVEAU or cle.startswith(PREFIXE_DRAIN)
+
 
 def libelle(cle: str) -> str:
     return next((l for c, l, _u in CLES if c == cle), cle)
@@ -240,8 +264,23 @@ def total_du_jour(
 
 def _verifier_niveau(cle: str) -> None:
     """La somme des températures d'une journée n'est pas une température."""
-    if cle not in CLES_NIVEAU:
+    if not est_recueil(cle):
         raise ValueError(f"{cle} n'est pas un recueil : rien à cumuler")
+
+
+def drains_du_jour(
+    base: Base, sejour_id: str, date_jour: str, dispositifs_ids: list[str]
+) -> dict[str, recueil.Total]:
+    """Ce que chaque drain a donné sur les 24 h — id du drain -> total.
+
+    Un drain par ligne et non un total unique : deux redons qui donnent 90 et
+    410 ne se lisent pas comme deux qui donnent 250 chacun, et c'est le genre
+    de chiffre qui fait rappeler le chirurgien.
+    """
+    return {
+        identifiant: total_du_jour(base, sejour_id, date_jour, cle_drain(identifiant))
+        for identifiant in dispositifs_ids
+    }
 
 
 def _fenetre(date_jour: str) -> tuple[datetime, datetime]:

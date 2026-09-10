@@ -100,12 +100,20 @@ heure, en deux groupes.
 
 **Les constantes** : température, FC, pressions, FR, SpO₂, Glasgow, dextro.
 
-**Les recueils**, sous leur titre : la diurèse. Et là, une seule chose à
-retenir — **écrivez le niveau que vous lisez sur le sac**, pas ce qui est
-sorti pendant l'heure. 120, puis 210, puis 300. Le logiciel fait les
-soustractions ; vous n'avez aucun calcul à faire au lit du malade.
+**Les recueils**, sous leur titre : la diurèse, **et chacun des drains du
+patient**. Et là, une seule chose à retenir — **écrivez le niveau que vous
+lisez sur le sac ou le bocal**, pas ce qui est sorti pendant l'heure. 120,
+puis 210, puis 300. Le logiciel fait les soustractions ; vous n'avez aucun
+calcul à faire au lit du malade.
 
-**Quand vous jetez le sac**, cochez « j'ai jeté le sac après ce relevé ».
+Les drains apparaissent tout seuls, dès qu'ils sont posés, et disparaissent
+au retrait : rien à ajouter à la main. Deux redons dans le même abdomen sont
+numérotés — **Redon (abdomen) 1** et **Redon (abdomen) 2** — dans l'ordre où
+le chirurgien les a posés, pour que le volume ne se note pas sur le mauvais.
+Ce que vous relevez part directement dans le bilan entrées/sorties que le
+médecin lit à la visite.
+
+**Quand vous videz le sac ou le bocal**, cochez « j'ai vidé après ce relevé ».
 C'est la case la plus importante de l'écran. Elle dit que le niveau que vous
 venez d'écrire est le dernier de ce sac-là, et que le prochain repart de
 zéro. Sans elle, un sac changé se lit comme une diurèse qui s'effondre — de
@@ -190,9 +198,23 @@ dossier, en sept écrans.
 ### Visite
 
 **Le seul écran qui n'écrit rien.** Fait pour être lu debout, au pied du lit,
-sur un portable posé sur le chariot : traitements par voie avec leur compteur
-de jours, constantes, bilan hydrique, dernier gaz du sang, biologie avec sa
-valeur précédente, bilan infectieux, avis, plans du jour.
+sur un portable posé sur le chariot.
+
+À gauche, **les traitements** par voie avec leur compteur de jours — dans
+l'ordre de la visite : entrées, PSE, IV, PO, S/C, aérosols, soins locaux,
+kiné. La **sédation** y figure dans le bloc P.S.E. avec sa vitesse, bien
+qu'elle soit posée comme dispositif et non prescrite en ligne. Puis le
+**bilan entrées / sorties** : les entrées avec leur détail, la diurèse,
+**chaque drain sur sa ligne** — deux redons qui donnent 90 et 410 ne se
+lisent pas comme deux qui donnent 250 chacun — les pertes insensibles et le
+net. Ce qui manque manque : sans diurèse ni poids, l'écran le dit au lieu
+d'afficher un chiffre faux.
+
+À droite, dans cet ordre : **état du jour**, abords et dispositifs, gaz du
+sang, **biologie**, **bilan infectieux** (juste sous la biologie — une CRP et
+une hémoculture se lisent l'une contre l'autre), **explorations faites** avec
+leur conclusion, **avis spécialisés** sous leur propre titre, et les plans du
+jour.
 
 **Gaz du sang** et **biologie** sont rendus sur **trois jours côte à côte**,
 le plus récent à droite et en gras. Une valeur seule ne dit pas si le rein
