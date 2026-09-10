@@ -174,8 +174,27 @@ sur un portable posé sur le chariot : traitements par voie avec leur compteur
 de jours, constantes, bilan hydrique, dernier gaz du sang, biologie avec sa
 valeur précédente, bilan infectieux, avis, plans du jour.
 
-Sous l'état du jour, la **surveillance horaire relevée par les infirmiers** :
-les vingt-quatre heures, dans l'ordre où elles se sont vécues (7 h → 6 h) et
+**Gaz du sang** et **biologie** sont rendus sur **trois jours côte à côte**,
+le plus récent à droite et en gras. Une valeur seule ne dit pas si le rein
+décroche ; deux ne disent pas s'il décroche ou s'il remonte. Une créatinine à
+152 après 196 rassure — après 196 puis 120, elle inquiète, et la conduite du
+jour n'est pas la même. Seule la colonne la plus récente porte les alertes en
+rouge : celle d'avant-hier n'appelle plus aucune conduite.
+
+Les trois jours sont ceux **qui portent un prélèvement**, pas les trois
+derniers du calendrier — on ne prélève pas tous les jours. Chaque colonne est
+donc datée : deux colonnes voisines séparées de quatre jours ne se lisent pas
+comme une cinétique. Pour les gaz, **un par jour**, le dernier, avec son
+heure : un gaz de 6 h et un gaz de 22 h ne se comparent pas.
+
+**En bas de l'écran**, sur toute la largeur, la **surveillance horaire
+relevée par les infirmiers** — avec **sa propre date**, indépendante de celle
+du haut. Les deux questions ne tombent pas le même jour : on regarde le
+prescrit d'aujourd'hui en se demandant comment s'est passée la nuit
+d'avant-hier. Changer la date du haut changerait aussi les traitements
+affichés, et on perdrait ce qu'on était en train de lire.
+
+Il montre les vingt-quatre heures, dans l'ordre où elles se sont vécues (7 h → 6 h) et
 séparées par vacation. La colonne **Journée**, placée avant les heures pour
 qu'elle reste visible sans faire défiler, donne ce qu'on vient chercher : les
 extrêmes pour les constantes — une PA moyenne à 75 ne dit pas qu'on a passé
