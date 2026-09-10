@@ -38,6 +38,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from .. import listes
 from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr
 from ..services import administrations as adm_service
@@ -186,7 +187,6 @@ def _bouton_de_prise(base, patient, jour, heure, ligne, notee, utilisateur_id) -
     prefixe = {
         adm_service.DONNE: "Donné — ",
         adm_service.NON_DONNE: "Non donné — ",
-        adm_service.REFUSE: "Refusé — ",
     }.get(statut, "")
 
     if st.button(
@@ -211,8 +211,10 @@ def _bouton_de_prise(base, patient, jour, heure, ligne, notee, utilisateur_id) -
 
     if notee:
         detail = adm_service.STATUTS[notee["statut"]]
+        if notee.get("motif_code"):
+            detail += f" — {adm_service.libelle_motif(notee['motif_code'])}"
         if notee.get("motif"):
-            detail += f" — {notee['motif']}"
+            detail += f" ({notee['motif']})"
         if notee.get("soignant"):
             detail += f" · {notee['soignant']}"
         if notee.get("date_heure_reelle"):
@@ -226,33 +228,56 @@ def _bouton_de_prise(base, patient, jour, heure, ligne, notee, utilisateur_id) -
 
 def _volet_exceptions(base, patient, jour, heure, lignes_heure, notees,
                       utilisateur_id) -> None:
-    """Non donné, refusé : le cas rare, replié.
+    """Pourquoi une prise n'a pas été donnée — dans une liste, pas en texte
+    libre.
 
-    Lui donner une place fixe sur chaque ligne coûtait un bouton par prise —
-    trente boutons pour une situation qui arrive deux fois par garde. Replié,
-    il ne coûte rien et reste à un geste.
+    Un « non donné » n'est pas qu'une case. Selon le motif, quelqu'un doit
+    agir : commander ce qui manque, poser la sonde absente, revoir une
+    contre-indication. « Rupture » tapé à la main ne se compte pas et ne
+    remonte à personne ; un motif choisi dans la liste arrive chez le
+    surveillant et sur le prescrit du médecin le jour même (demande du
+    service, 10 septembre).
+
+    Le texte libre reste, **à côté** et non à la place : il précise quelle
+    voie était obstruée, il ne remplace pas le motif.
     """
+    codes = listes.codes(listes.MOTIFS_NON_ADMINISTRATION)
     with st.expander(f"Noter un non-donné de {heure:02d} h"):
-        for ligne in lignes_heure:
-            st.markdown(f"**{ligne['produit']}**")
-            motif = st.text_input(
-                "Pourquoi ?", key=f"motif_{ligne['id']}_{heure}",
-                placeholder="ex. patient au bloc", label_visibility="collapsed",
+        produits = {ligne["produit"]: ligne for ligne in lignes_heure}
+        choix = st.selectbox(
+            "Quel traitement ?", list(produits), index=None,
+            placeholder="Choisir", key=f"nd_produit_{heure}_{patient['sejour_id']}",
+        )
+        motif_code = st.selectbox(
+            "Pourquoi ?", codes, index=None, placeholder="Choisir un motif",
+            format_func=lambda c: listes.libelle(
+                listes.MOTIFS_NON_ADMINISTRATION, c),
+            key=f"nd_motif_{heure}_{patient['sejour_id']}",
+        )
+        if motif_code:
+            action = adm_service.action_du_motif(motif_code)
+            if action:
+                st.caption(
+                    f"Ce motif remonte au surveillant et au médecin : "
+                    f"{adm_service.ACTIONS[action].lower()}."
+                )
+        precision = st.text_input(
+            "Précision (facultatif)",
+            key=f"nd_precision_{heure}_{patient['sejour_id']}",
+            placeholder="ex. voie jugulaire obstruée depuis 14 h",
+        )
+        if st.button("Enregistrer le non-donné", type="primary",
+                     use_container_width=True,
+                     disabled=not (choix and motif_code),
+                     key=f"nd_ok_{heure}_{patient['sejour_id']}"):
+            adm_service.noter(
+                base, sejour_id=patient["sejour_id"],
+                ligne_id=produits[choix]["id"], date_jour=jour,
+                heure_prevue=heure, statut=adm_service.NON_DONNE,
+                motif_code=motif_code, motif=precision,
+                utilisateur_id=utilisateur_id,
             )
-            c1, c2 = st.columns(2)
-            for colonne, statut, libelle in (
-                (c1, adm_service.NON_DONNE, "Non donné"),
-                (c2, adm_service.REFUSE, "Refusé"),
-            ):
-                if colonne.button(libelle, key=f"{statut}_{ligne['id']}_{heure}",
-                                  use_container_width=True):
-                    adm_service.noter(
-                        base, sejour_id=patient["sejour_id"], ligne_id=ligne["id"],
-                        date_jour=jour, heure_prevue=heure, statut=statut,
-                        motif=motif, utilisateur_id=utilisateur_id,
-                    )
-                    st.rerun()
-            st.divider()
+            st.rerun()
 
 
 # --------------------------------------------------------------------------

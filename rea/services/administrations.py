@@ -21,13 +21,44 @@ from ..db import Base
 
 DONNE = "donne"
 NON_DONNE = "non_donne"
-REFUSE = "refuse"
 
 STATUTS = {
     DONNE: "Donné",
     NON_DONNE: "Non donné",
-    REFUSE: "Refusé par le patient",
 }
+
+#: Motifs dont quelqu'un doit s'occuper, par destinataire. Un « non donné »
+#: pour rupture de stock n'est pas une case cochée : c'est une commande à
+#: passer, et si personne ne la voit, la prise suivante est ratée aussi.
+ACTIONS = {
+    "pharmacie": "À commander",
+    "abord": "Voie ou sonde à poser",
+    "medical": "Avis médical à prendre",
+}
+
+
+def libelle_motif(code: str | None) -> str:
+    from .. import listes
+
+    if not code:
+        return ""
+    return listes.libelle(listes.MOTIFS_NON_ADMINISTRATION, code)
+
+
+def action_du_motif(code: str | None) -> str | None:
+    """Qui doit agir : « pharmacie », « abord », « medical », ou rien.
+
+    C'est ce champ qui décide de ce qui remonte au surveillant et au médecin.
+    Il vient du référentiel : déplacer un motif d'une action à l'autre est une
+    décision de service, pas une modification de programme.
+    """
+    from .. import listes
+
+    for entree in listes.MOTIFS_NON_ADMINISTRATION:
+        if entree[0] == code:
+            action = entree[2] if len(entree) > 2 else "aucune"
+            return action if action in ACTIONS else None
+    return None
 
 
 def noter(
@@ -38,6 +69,7 @@ def noter(
     date_jour: str,
     heure_prevue: int,
     statut: str,
+    motif_code: str | None = None,
     motif: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
@@ -56,6 +88,7 @@ def noter(
     )
     valeurs = {
         "statut": statut,
+        "motif_code": motif_code or None,
         "motif": (motif or "").strip() or None,
         "date_heure_reelle": datetime.now().isoformat(timespec="minutes"),
     }
@@ -114,4 +147,59 @@ def manquantes(
     return [
         (heure, ligne) for heure, ligne in prises
         if (ligne["id"], heure) not in notees
+    ]
+
+
+def a_traiter(base: Base, date_jour: str) -> list[dict]:
+    """Les prises non données qui demandent que quelqu'un fasse quelque chose.
+
+    Un traitement sauté faute de produit ou faute de voie ne se règle pas
+    tout seul : sans cette liste, la prise suivante est ratée aussi, et
+    l'antibiotique du soir manque comme celui du matin. Le surveillant la lit
+    pour commander, le médecin la voit sur le prescrit de son patient.
+
+    Ce qui n'appelle aucune action — patient au bloc, à jeun — n'y figure
+    pas : une liste qui contient tout ne se lit plus.
+    """
+    lignes = base.requete(
+        "SELECT a.*, l.produit, l.voie, p.nom_affichage, p.matricule, "
+        "       s.lit_admission, u.nom AS soignant "
+        "FROM administration a "
+        "JOIN prescription_ligne l ON l.id = a.ligne_id "
+        "JOIN sejour s ON s.id = a.sejour_id "
+        "JOIN patient p ON p.id = s.patient_id "
+        "LEFT JOIN utilisateur u ON u.id = a.cree_par "
+        "WHERE a.date_jour = ? AND a.statut = ? AND a.supprime = 0 "
+        "AND s.supprime = 0 AND l.supprime = 0 "
+        "ORDER BY a.heure_prevue",
+        (date_jour, NON_DONNE),
+    )
+    resultat = []
+    for ligne in lignes:
+        action = action_du_motif(ligne["motif_code"])
+        if not action:
+            continue
+        resultat.append({**ligne, "action": action,
+                         "libelle_motif": libelle_motif(ligne["motif_code"])})
+    return resultat
+
+
+def non_donnees_du_sejour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+    """Ce qui n'a pas été donné à ce patient ce jour-là, motif compris.
+
+    Affiché au médecin sur le prescrit : prescrire à nouveau sans savoir que
+    la dose d'hier n'est pas passée, c'est croire à un échec du traitement.
+    """
+    return [
+        {**ligne, "libelle_motif": libelle_motif(ligne["motif_code"]),
+         "action": action_du_motif(ligne["motif_code"])}
+        for ligne in base.requete(
+            "SELECT a.*, l.produit, l.voie, u.nom AS soignant "
+            "FROM administration a "
+            "JOIN prescription_ligne l ON l.id = a.ligne_id "
+            "LEFT JOIN utilisateur u ON u.id = a.cree_par "
+            "WHERE a.sejour_id = ? AND a.date_jour = ? AND a.statut = ? "
+            "AND a.supprime = 0 AND l.supprime = 0 ORDER BY a.heure_prevue",
+            (sejour_id, date_jour, NON_DONNE),
+        )
     ]

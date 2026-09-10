@@ -21,6 +21,7 @@ import streamlit as st
 
 from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr
+from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import supervision as supervision_service
 from ..services import utilisateurs as utilisateurs_service
@@ -37,6 +38,7 @@ def ecran(base, utilisateur_id: str | None = None) -> None:
     )
 
     vues = {
+        "Non donnés à traiter": lambda: _a_traiter(base),
         "Nouveautés du prescrit": lambda: _nouveautes(base),
         "Qui s'occupe de qui": lambda: _affectations(base, utilisateur_id),
         "Médicaments à demander": lambda: _medicaments(base),
@@ -48,6 +50,53 @@ def ecran(base, utilisateur_id: str | None = None) -> None:
     ) or st.session_state.get("vue_surveillant", noms[0])
     st.session_state["vue_surveillant"] = choix
     vues[choix]()
+
+
+# --------------------------------------------------------------------------
+# Ce qui n'a pas été donné, et pourquoi
+# --------------------------------------------------------------------------
+
+def _a_traiter(base) -> None:
+    """Les traitements sautés qui demandent une action, groupés par action.
+
+    C'est la vue qui ouvre l'écran, parce que c'est celle qui a une heure de
+    validité : un antibiotique qui manque à 8 h manquera à 16 h si personne ne
+    le commande. Le reste — nouveautés, affectations — peut attendre midi.
+    """
+    jour = st.date_input("Journée", value=date.today(), key="surv_jour_traiter")
+    lignes = adm_service.a_traiter(base, str(jour))
+    if not lignes:
+        st.success(
+            "Rien à traiter : aucun traitement n'a été noté « non donné » "
+            "pour un motif qui demande une action."
+        )
+        st.caption(
+            "Les motifs sans action — patient au bloc, à jeun, suspendu par "
+            "le médecin — ne figurent pas ici : une liste qui contient tout "
+            "ne se lit plus."
+        )
+        return
+
+    par_action: dict[str, list] = {}
+    for ligne in lignes:
+        par_action.setdefault(ligne["action"], []).append(ligne)
+
+    for action, groupe in par_action.items():
+        contenu = "".join(
+            f"<div style='padding:.25rem 0;font-size:.88rem'>"
+            f"<b>{l['produit']}</b> ({l['voie']}) à {l['heure_prevue']:02d} h — "
+            f"{l['nom_affichage']}, matricule {l['matricule']}, "
+            f"lit {l['lit_admission']}"
+            f"<br><span style='color:#64748b'>{l['libelle_motif']}"
+            + (f" — {l['motif']}" if l.get("motif") else "")
+            + (f" · noté par {l['soignant']}" if l.get("soignant") else "")
+            + "</span></div>"
+            for l in groupe
+        )
+        theme.bloc_html(
+            f"{adm_service.ACTIONS[action]} ({len(groupe)})", contenu,
+            theme.ROUGE if action == "pharmacie" else theme.ORANGE,
+        )
 
 
 # --------------------------------------------------------------------------

@@ -244,3 +244,100 @@ def test_les_deux_pressions_tombent_sur_la_meme_rangee():
     cles = [c for c, _l, _u in cst.CLES]
     rangees = [cles[i:i + 2] for i in range(0, len(cles), 2)]
     assert ["pas", "pad"] in rangees
+
+
+# --- pourquoi une prise n'a pas été donnée ---------------------------------
+#
+# « Il arrive qu'il manque le médicament, ou qu'on ne puisse pas le donner —
+# pas encore de sonde pour le per os » (demande du service, 10 septembre).
+#
+# Le point qui compte : ces motifs-là ne sont pas des cases cochées, ce sont
+# des choses à faire. Un antibiotique qui manque à 8 h manquera à 16 h si
+# personne ne le commande.
+
+def test_un_motif_de_rupture_demande_une_action_de_la_pharmacie():
+    assert administrations.action_du_motif("rupture_stock") == "pharmacie"
+    assert administrations.action_du_motif("pas_de_sng") == "abord"
+    assert administrations.action_du_motif("etat_clinique") == "medical"
+
+
+def test_un_motif_qui_se_regle_seul_ne_remonte_a_personne():
+    """Patient au bloc, à jeun : rien à faire, et une liste qui contient tout
+    ne se lit plus."""
+    assert administrations.action_du_motif("patient_absent") is None
+    assert administrations.action_du_motif("a_jeun") is None
+    assert administrations.action_du_motif(None) is None
+    assert administrations.action_du_motif("motif_inconnu") is None
+
+
+def test_les_non_donnes_a_traiter_remontent_au_surveillant(base):
+    sid = _sejour(base, lit=4, nom="Ben Ali")
+    manquant = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                           produit="Tienam",
+                                           date_debut="2026-09-09")
+    au_bloc = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="PO",
+                                          produit="Amlodipine",
+                                          date_debut="2026-09-09")
+    administrations.noter(base, sejour_id=sid, ligne_id=manquant,
+                          date_jour="2026-09-09", heure_prevue=8,
+                          statut=administrations.NON_DONNE,
+                          motif_code="rupture_stock")
+    administrations.noter(base, sejour_id=sid, ligne_id=au_bloc,
+                          date_jour="2026-09-09", heure_prevue=8,
+                          statut=administrations.NON_DONNE,
+                          motif_code="patient_absent")
+
+    a_traiter = administrations.a_traiter(base, "2026-09-09")
+    assert [l["produit"] for l in a_traiter] == ["Tienam"], (
+        "seul ce qui demande une action remonte"
+    )
+    assert a_traiter[0]["action"] == "pharmacie"
+    assert a_traiter[0]["matricule"] == "M4"
+    assert a_traiter[0]["lit_admission"] == 4
+    assert "rupture" in a_traiter[0]["libelle_motif"].lower()
+
+
+def test_le_medecin_voit_tous_les_non_donnes_de_son_patient(base):
+    """Y compris ceux qui ne demandent aucune action : prescrire à nouveau
+    sans savoir que la dose n'est pas passée, c'est croire à un échec du
+    traitement."""
+    sid = _sejour(base)
+    ligne = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="PO",
+                                        produit="Amlodipine",
+                                        date_debut="2026-09-09")
+    administrations.noter(base, sejour_id=sid, ligne_id=ligne,
+                          date_jour="2026-09-09", heure_prevue=8,
+                          statut=administrations.NON_DONNE,
+                          motif_code="pas_de_sng",
+                          motif="SNG posée à 11 h")
+
+    vues = administrations.non_donnees_du_sejour(base, sid, "2026-09-09")
+    assert len(vues) == 1
+    assert vues[0]["libelle_motif"] == "Pas de sonde nasogastrique en place"
+    assert vues[0]["motif"] == "SNG posée à 11 h"
+    assert vues[0]["action"] == "abord"
+
+
+def test_le_texte_libre_ne_remplace_pas_le_motif(base):
+    """« Rupture » tapé à la main ne se compte pas et ne remonte à personne."""
+    sid = _sejour(base)
+    ligne = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                        produit="Tienam",
+                                        date_debut="2026-09-09")
+    administrations.noter(base, sejour_id=sid, ligne_id=ligne,
+                          date_jour="2026-09-09", heure_prevue=8,
+                          statut=administrations.NON_DONNE,
+                          motif="rupture de stock")
+    assert administrations.a_traiter(base, "2026-09-09") == []
+
+
+def test_tous_les_motifs_du_referentiel_ont_une_action_lisible():
+    """Une action mal orthographiée dans le fichier ferait disparaître le
+    motif de la vue du surveillant, sans erreur nulle part."""
+    from rea import listes
+
+    for entree in listes.MOTIFS_NON_ADMINISTRATION:
+        action = entree[2] if len(entree) > 2 else "aucune"
+        assert action in set(administrations.ACTIONS) | {"aucune"}, (
+            f"« {entree[0] } » porte l'action inconnue « {action} »"
+        )

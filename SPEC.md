@@ -926,6 +926,44 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.22 — 10 septembre 2026 — un « non donné » qui dit pourquoi, et qui arrive à qui doit agir**
+
+« Il arrive qu'il manque le médicament, ou qu'on ne puisse pas le donner —
+pas encore de sonde pour le per os » (remarque du service). Le motif était un
+champ de texte libre : il rendait service à qui relisait la garde, et à
+personne d'autre.
+
+Or ces motifs-là ne sont pas des cases cochées, ce sont des **choses à
+faire**. Un antibiotique qui manque à 8 h manquera à 16 h si personne ne le
+commande, et la sonde absente à midi le sera encore le soir. « Rupture » tapé
+à la main ne se compte pas et ne remonte nulle part.
+
+Douze motifs dans `referentiels/motifs_non_administration.json`, chacun
+portant **qui doit agir** : la pharmacie (rupture, dotation épuisée), l'abord
+(pas de SNG, pas de voie, voie obstruée), le médecin (contre-indication,
+refus, intolérance), ou personne (à jeun, au bloc, suspendu). Déplacer un
+motif d'une catégorie à l'autre est une décision de service, pas une
+modification de programme.
+
+Ce que ça change, et c'est tout l'intérêt :
+
+* **l'infirmier** choisit dans une liste, et l'écran lui dit tout de suite si
+  son motif va remonter. Le texte libre reste **à côté** et non à la place :
+  il précise quelle voie était obstruée, il ne remplace pas le motif ;
+* **le surveillant** ouvre sur « Non donnés à traiter », groupés par action,
+  avec le patient et son matricule — c'est la vue qui a une heure de
+  validité, les nouveautés et les affectations peuvent attendre midi. Ce qui
+  n'appelle aucune action n'y figure pas : une liste qui contient tout ne se
+  lit plus ;
+* **le médecin** voit sur le prescrit de son patient ce qui n'est pas passé
+  aujourd'hui, motif compris. Sans cela, on relit une courbe qui ne baisse
+  pas et on conclut à un échec du traitement, alors que la dose n'a
+  simplement pas été donnée.
+
+« Refusé » cesse d'être un statut pour devenir un motif : deux états
+suffisent — donné, non donné — et c'est le motif qui dit pourquoi. Un statut
+de plus se serait ajouté à chaque cas particulier.
+
 **v3.21 — 10 septembre 2026 — le poste dans la poche, et le réseau qui va avec**
 
 Les infirmiers ouvriront leur poste depuis leur téléphone, sur le Wi-Fi du

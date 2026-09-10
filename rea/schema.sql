@@ -885,7 +885,12 @@ CREATE TABLE IF NOT EXISTS administration (
     date_jour         TEXT NOT NULL,
     heure_prevue      INTEGER NOT NULL,
     statut            TEXT NOT NULL,   -- donne / non_donne / refuse
-    motif             TEXT,            -- pourquoi, si non donné
+    -- Le motif CODÉ (voir referentiels/motifs_non_administration.json) et,
+    -- à côté, la précision en texte libre. Les deux, pas l'un ou l'autre :
+    -- « rupture » écrit à la main ne se compte pas et ne remonte nulle part,
+    -- et un code seul ne dit pas quelle voie était obstruée.
+    motif_code        TEXT,
+    motif             TEXT,
     date_heure_reelle TEXT,
     cree_le           TEXT NOT NULL,
     cree_par          TEXT REFERENCES utilisateur(id),
