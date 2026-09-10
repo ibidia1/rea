@@ -316,6 +316,72 @@ def tableau_par_date(
     return sorted(dates), matrice
 
 
+def derniers_jours_avec_bilan(
+    base: Base, sejour_id: str, jusqu_au: str | None = None, nombre: int = 3
+) -> list[str]:
+    """Les derniers jours qui portent **vraiment** un prélèvement.
+
+    Pas « les trois derniers jours du calendrier » : en réanimation on ne
+    prélève pas tous les jours, et trois colonnes dont deux vides
+    n'apprennent rien. On rend les trois derniers jours **renseignés**, datés
+    — c'est la date qui dit s'ils se suivent ou non, et deux colonnes
+    voisines séparées de quatre jours ne se lisent pas comme une cinétique.
+    """
+    jours: list[str] = []
+    for date_heure in dates_de_prelevement(base, sejour_id):
+        jour = date_heure[:10]
+        if jusqu_au and jour > jusqu_au:
+            continue
+        if jour not in jours:
+            jours.append(jour)
+    return jours[-nombre:]
+
+
+def tableau_derniers_jours(
+    base: Base,
+    sejour_id: str,
+    ids_analytes: list[str],
+    jusqu_au: str | None = None,
+    nombre: int = 3,
+) -> tuple[list[str], dict[str, dict[str, float]]]:
+    """(jours, {analyte: {jour: valeur}}) sur les derniers jours renseignés.
+
+    Une valeur par jour : la **dernière** du jour, celle qu'on commente à la
+    visite. Les prélèvements multiples d'une même journée restent visibles
+    dans l'écran Bilans, qui les porte heure par heure.
+    """
+    jours = derniers_jours_avec_bilan(base, sejour_id, jusqu_au, nombre)
+    matrice: dict[str, dict[str, float]] = {}
+    for ligne in resultats_du_sejour(base, sejour_id):
+        jour = ligne["date_heure"][:10]
+        if jour not in jours or ligne["analyte"] not in ids_analytes:
+            continue
+        if ligne["valeur_num"] is None:
+            continue
+        matrice.setdefault(ligne["analyte"], {})[jour] = ligne["valeur_num"]
+    return jours, matrice
+
+
+def derniers_gaz_du_sang(
+    base: Base, sejour_id: str, jusqu_au: str | None = None, nombre: int = 3
+) -> list[dict]:
+    """Le dernier gaz de chacun des derniers jours qui en portent un.
+
+    Un par jour et non les trois derniers gaz : un patient qui en a quatre
+    dans la journée occuperait sinon toute la colonne, et on perdrait
+    justement ce qu'on vient chercher — comment il a bougé depuis avant-hier.
+    L'heure est rendue avec, parce qu'un gaz de 6 h et un gaz de 22 h ne se
+    comparent pas.
+    """
+    par_jour: dict[str, dict] = {}
+    for gaz in gaz_du_sang_du_sejour(base, sejour_id):
+        jour = gaz["date_heure"][:10]
+        if jusqu_au and jour > jusqu_au:
+            continue
+        par_jour[jour] = gaz            # trié par date_heure : le dernier reste
+    return [par_jour[j] for j in sorted(par_jour)[-nombre:]]
+
+
 @dataclass
 class Variation:
     """Dernière valeur d'un analyte et ce qui a changé depuis la précédente."""

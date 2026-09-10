@@ -19,7 +19,7 @@ from datetime import date
 
 import streamlit as st
 
-from .. import listes
+from .. import analytes, listes
 from ..domaine import prescription as dom
 from ..domaine import temperature as temp_dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
@@ -54,17 +54,47 @@ def onglet_visite(sejour: dict) -> None:
         _traitements(sejour, date_jour_str)
     with droite:
         _etat_du_jour(sejour, date_jour_str)
-        # Juste après l'état du jour : ce sont les mêmes constantes, mais
-        # heure par heure. La valeur retenue au-dessus vient de là, et devant
-        # un chiffre qui surprend c'est la courbe qu'on veut voir — une PA
-        # moyenne à 75 ne dit pas qu'on a passé la nuit à 55.
-        surveillance.bloc_du_jour(
-            contexte.base(), sejour["id"], date_jour_str,
-            titre="Surveillance horaire (relevé infirmier)",
-        )
         _biologie(sejour, date_jour_str)
         _infectieux(sejour, date_jour_str)
         _plans(sejour, date_jour_str)
+
+    st.divider()
+    _surveillance(sejour, date_jour_str)
+
+
+def _surveillance(sejour: dict, date_jour_str: str) -> None:
+    """Le relevé horaire, en bas et sur toute la largeur — avec **sa propre
+    date**.
+
+    En bas parce qu'il ne tient pas dans une demi-largeur : vingt-quatre
+    colonnes serrées dans la colonne de droite obligeaient à faire défiler le
+    tableau pour lire la nuit. Sur toute la largeur, la journée se lit d'un
+    seul regard.
+
+    Et daté à part parce que les deux questions ne tombent pas le même jour.
+    On regarde le prescrit d'aujourd'hui en se demandant comment s'est passée
+    la nuit d'avant-hier — changer de jour en haut de l'écran changerait aussi
+    les traitements affichés, et on perdrait ce qu'on était en train de lire
+    (demande du service, 10 septembre). La date proposée est celle de la
+    veille, la journée close dont on parle à la visite.
+    """
+    st.markdown("#### Constantes horaires relevées par les infirmiers")
+    gauche, droite = st.columns([1, 3])
+    with gauche:
+        jour = st.date_input(
+            "Jour du relevé", value=dom.dernier_jour_clos(),
+            key=f"visite_jour_constantes_{sejour['id']}", format="DD/MM/YYYY",
+        )
+    with droite:
+        st.caption(
+            "Ce sélecteur est **indépendant** de la date du haut de l'écran : "
+            "on peut relire la nuit d'avant-hier sans perdre le prescrit "
+            "qu'on est en train de lire."
+        )
+    surveillance.bloc_du_jour(
+        contexte.base(), sejour["id"], str(jour),
+        titre=f"Surveillance horaire du {format_date_fr(str(jour))}",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -185,41 +215,11 @@ def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
     if hydrique:
         mesures.append(f'<div class="rea-v-texte">{html.escape(hydrique)}</div>')
 
-    # Celui du jour s'il existe ; sinon le dernier connu, daté. À la visite, un
-    # gaz d'hier renseigne ; une case vide, non — et c'est bien de savoir que
-    # le dernier remonte à hier.
-    gaz = bilans_service.dernier_gaz_du_sang(
-        contexte.base(), sejour["id"], date_jour_str
-    )
-    depuis = ""
-    if gaz is None:
-        gaz = bilans_service.dernier_gaz_du_sang(contexte.base(), sejour["id"])
-        if gaz and gaz["date_heure"][:10] > date_jour_str:
-            gaz = None                      # postérieur au jour regardé
-        elif gaz:
-            depuis = f" (du {format_date_fr(gaz['date_heure'])[:5]})"
-    if gaz:
-        mode = listes.libelle_mode_court(gaz.get("mode_ventilatoire"))
-        pf = bilans_service.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
-        morceaux = [m for m in (
-            mode,
-            f"pH {_nombre(gaz['ph'])}" if gaz.get("ph") is not None else "",
-            f"PaO₂ {_nombre(gaz['pao2'])}" if gaz.get("pao2") is not None else "",
-            f"PaCO₂ {_nombre(gaz['paco2'])}" if gaz.get("paco2") is not None else "",
-            f"P/F {_nombre(pf)}" if pf is not None else "",
-            f"lactates {_nombre(gaz['lactate'])}" if gaz.get("lactate") is not None else "",
-        ) if m]
-        if morceaux:
-            mesures.append(
-                '<div class="rea-v-texte">'
-                f'{html.escape(" · ".join(morceaux))}'
-                f'<span class="rea-v-detail">{html.escape(depuis)}</span></div>'
-            )
-
     jour_hosp = jour_hospitalisation(sejour["date_admission"], date_jour_str)
     _bloc(f"État du jour — J{jour_hosp}",
           "".join(mesures) or '<div class="rea-v-vide">Rien de relevé ce jour-là.</div>',
           theme.BLEU)
+    _gaz_du_sang(sejour, date_jour_str)
 
     etats = dispositifs_service.etats(contexte.base(), sejour["id"], date_jour_str)
     en_place = [e for e in etats if e.en_place]
@@ -230,24 +230,131 @@ def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
               theme.VIOLET)
 
 
-def _biologie(sejour: dict, date_jour_str: str) -> None:
-    """La dernière valeur et celle d'avant. Une valeur seule ne dit pas si le
-    rein décroche ; c'est l'écart qui décide."""
-    variations = bilans_service.dernieres_variations(
-        contexte.base(), sejour["id"], list(ANALYTES_VISITE)
+def _gaz_du_sang(sejour: dict, date_jour_str: str) -> None:
+    """Les trois derniers jours, un gaz par jour, le plus récent à droite.
+
+    Un gaz seul ne dit pas si le poumon s'améliore. Un P/F à 176 après 140 est
+    une bonne nouvelle ; après 220, c'en est une mauvaise, et la conduite du
+    jour n'est pas la même (demande du service, 10 septembre).
+
+    Un gaz **par jour** et non les trois derniers gaz : un patient qui en a
+    quatre dans la journée remplirait la colonne de sa seule matinée, et on
+    perdrait justement ce qu'on vient chercher. L'heure accompagne donc chaque
+    colonne — un gaz de 6 h et un gaz de 22 h ne se comparent pas.
+    """
+    gaz = bilans_service.derniers_gaz_du_sang(
+        contexte.base(), sejour["id"], date_jour_str
     )
-    lignes = []
-    for v in variations:
-        if v.valeur is None:
+    if not gaz:
+        return
+    entetes = "".join(
+        f'<th style="padding:.15rem .4rem;text-align:right;font-weight:600">'
+        f'{html.escape(format_date_fr(g["date_heure"])[:5])}'
+        f'<span class="rea-v-detail"> {html.escape(g["date_heure"][11:16])}</span>'
+        "</th>"
+        for g in gaz
+    )
+    lignes = ""
+    for libelle, lire in (
+        ("Mode", lambda g: listes.libelle_mode_court(g.get("mode_ventilatoire"))),
+        ("pH", lambda g: _nombre(g.get("ph"))),
+        ("PaO₂", lambda g: _nombre(g.get("pao2"))),
+        ("PaCO₂", lambda g: _nombre(g.get("paco2"))),
+        ("P/F", lambda g: _nombre(bilans_service.rapport_pao2_fio2(
+            g.get("pao2"), g.get("fio2")))),
+        ("HCO₃⁻", lambda g: _nombre(g.get("hco3"))),
+        ("Lactates", lambda g: _nombre(g.get("lactate"))),
+    ):
+        valeurs = [lire(g) or "" for g in gaz]
+        if not any(valeurs):
             continue
-        avant = (f"était {_nombre(v.precedente)}" if v.precedente is not None else "")
-        lignes.append(_mesure(
-            f"{v.libelle}{f' ({v.unite})' if v.unite else ''}",
-            _nombre(v.valeur), avant, alerte=v.alerte,
-        ))
-    _bloc("Biologie",
-          "".join(lignes) or '<div class="rea-v-vide">Aucun bilan enregistré.</div>',
-          theme.VERT)
+        cases = "".join(
+            f'<td style="padding:.15rem .4rem;text-align:right'
+            f'{";font-weight:700" if rang == len(gaz) - 1 else ";color:#64748b"}">'
+            f'{html.escape(v) if v else "—"}</td>'
+            for rang, v in enumerate(valeurs)
+        )
+        lignes += (
+            f'<tr><td style="padding:.15rem .4rem;white-space:nowrap">'
+            f"{html.escape(libelle)}</td>{cases}</tr>"
+        )
+    _bloc(
+        "Gaz du sang",
+        '<div style="overflow-x:auto"><table style="width:100%;font-size:.82rem">'
+        f'<tr><th></th>{entetes}</tr>{lignes}</table></div>',
+        theme.BLEU,
+    )
+
+
+def _biologie(sejour: dict, date_jour_str: str) -> None:
+    """Trois jours côte à côte, la valeur du jour en dernier.
+
+    Une valeur seule ne dit pas si le rein décroche ; deux ne disent pas s'il
+    décroche ou s'il remonte. Une créatinine à 152 après 196 rassure — après
+    196 puis 120, elle inquiète. C'est la troisième colonne qui fait la
+    différence entre une amélioration et un rebond (demande du service,
+    10 septembre).
+
+    Les trois jours sont ceux **qui portent un prélèvement**, pas les trois
+    derniers du calendrier : on ne prélève pas tous les jours, et deux
+    colonnes vides n'apprendraient rien. Chaque colonne porte donc sa date —
+    deux colonnes voisines séparées de quatre jours ne se lisent pas comme
+    une cinétique.
+    """
+    jours, matrice = bilans_service.tableau_derniers_jours(
+        contexte.base(), sejour["id"], list(ANALYTES_VISITE), date_jour_str
+    )
+    if not jours:
+        _bloc("Biologie",
+              '<div class="rea-v-vide">Aucun bilan enregistré.</div>', theme.VERT)
+        return
+
+    alertes = {
+        v.analyte: v.alerte
+        for v in bilans_service.dernieres_variations(
+            contexte.base(), sejour["id"], list(ANALYTES_VISITE)
+        )
+    }
+    entetes = "".join(
+        f'<th style="padding:.15rem .4rem;text-align:right;font-weight:600">'
+        f"{html.escape(format_date_fr(j)[:5])}</th>"
+        for j in jours
+    )
+    lignes = ""
+    for id_analyte in ANALYTES_VISITE:
+        valeurs = matrice.get(id_analyte)
+        if not valeurs:
+            continue
+        a = analytes.analyte(id_analyte)
+        libelle, unite = a.libelle, a.unite
+        cases = ""
+        for rang, jour in enumerate(jours):
+            valeur = valeurs.get(jour)
+            dernier = rang == len(jours) - 1
+            # Seule la valeur la plus récente porte l'alerte : colorer les
+            # trois ferait lire trois anomalies là où il n'y en a qu'une, et
+            # la colonne d'avant-hier n'appelle plus aucune conduite.
+            couleur = (
+                f";color:{theme.ROUGE};font-weight:700"
+                if dernier and alertes.get(id_analyte) else
+                (";font-weight:700" if dernier else ";color:#64748b")
+            )
+            cases += (
+                f'<td style="padding:.15rem .4rem;text-align:right{couleur}">'
+                f"{html.escape(_nombre(valeur)) if valeur is not None else '—'}</td>"
+            )
+        lignes += (
+            f'<tr><td style="padding:.15rem .4rem;white-space:nowrap">'
+            f"{html.escape(libelle)}"
+            f'<span class="rea-v-detail"> {html.escape(unite or "")}</span></td>'
+            f"{cases}</tr>"
+        )
+    _bloc(
+        "Biologie",
+        '<div style="overflow-x:auto"><table style="width:100%;font-size:.82rem">'
+        f'<tr><th></th>{entetes}</tr>{lignes}</table></div>',
+        theme.VERT,
+    )
 
 
 def _infectieux(sejour: dict, date_jour_str: str) -> None:

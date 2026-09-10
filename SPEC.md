@@ -926,6 +926,42 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.26 — 10 septembre 2026 — trois jours côte à côte à la visite, et un tableau des constantes daté à part**
+
+*Trois jours de biologie et de gaz.* Une valeur seule ne dit pas si le rein
+décroche ; deux ne disent pas s'il décroche ou s'il remonte. Une créatinine à
+152 après 196 rassure — après 196 puis 120, elle inquiète, et la conduite du
+jour n'est pas la même (demande du service, 10 septembre). Les gaz et la
+biologie sont donc rendus en trois colonnes, la plus récente à droite et en
+gras, et **seule celle-là porte les alertes en rouge** : colorer les trois
+ferait lire trois anomalies là où il n'y en a qu'une.
+
+Trois jours **renseignés**, pas trois jours de calendrier : on ne prélève pas
+tous les jours en réanimation, et deux colonnes vides n'apprennent rien.
+Chaque colonne est datée, parce que deux colonnes voisines séparées de quatre
+jours ne se lisent pas comme une cinétique. Pour les gaz, un par jour — le
+dernier — avec son heure : un patient qui en a quatre dans la journée
+remplirait sinon la colonne de sa seule matinée, et un gaz de 6 h ne se
+compare pas à un gaz de 22 h.
+
+*Le tableau des constantes, en bas et daté à part.* Vingt-quatre colonnes
+serrées dans la demi-largeur de droite obligeaient à faire défiler le tableau
+pour lire la nuit ; en bas et sur toute la largeur, la journée se lit d'un
+seul regard. Et il a **sa propre date** : les deux questions ne tombent pas
+le même jour — on regarde le prescrit d'aujourd'hui en se demandant comment
+s'est passée la nuit d'avant-hier, et changer la date du haut de l'écran
+changerait aussi les traitements affichés.
+
+**Vérifications.** 1 038 tests passent (10 ajoutés), pyflakes propre. Recette
+navigateur rejouée sur les cinq rôles : aucun écran en erreur.
+
+*Un bug trouvé par la recette, et pas par les tests.* L'écran lisait `v.id`
+sur une `Variation`, qui porte `analyte` : la Visite tombait entièrement —
+biologie, infectieux et plans avec elle — alors que les tests de service
+passaient tous, parce qu'aucun ne touchait ce chemin. Corrigé, et figé par un
+test qui lit le code source. C'est la troisième fois qu'ouvrir réellement les
+écrans trouve ce que la suite ne voit pas.
+
 **v3.25 — 10 septembre 2026 — la diurèse se calcule, elle ne s'additionne plus**
 
 *L'erreur, d'abord.* La version du matin additionnait les cases horaires de la
