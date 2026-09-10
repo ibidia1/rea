@@ -20,18 +20,21 @@ from __future__ import annotations
 from ..db import Base
 
 #: Ce qui se relève toutes les heures, dans l'ordre du verso de la feuille.
-#: Les libellés viennent du même référentiel que la feuille imprimée : deux
-#: listes à tenir à jour finiraient par diverger.
+#:
+#: L'ordre n'est pas décoratif : l'écran affiche ces champs **deux par
+#: rangée**, et les deux pressions doivent tomber côte à côte. Saisir une
+#: systolique en haut d'une rangée et la diastolique en bas de la suivante,
+#: c'est une inversion par garde.
 CLES = (
+    ("temperature", "T°", "°C"),
     ("fc", "FC", "/min"),
     ("pas", "PA syst.", "mmHg"),
     ("pad", "PA diast.", "mmHg"),
-    ("temperature", "T°", "°C"),
     ("fr", "FR", "/min"),
     ("spo2", "SpO₂", "%"),
     ("glasgow", "Glasgow", "/15"),
-    ("diurese", "Diurèse", "mL"),
     ("dextro", "Dextro", "g/L"),
+    ("diurese", "Diurèse", "mL"),
 )
 
 

@@ -42,18 +42,25 @@ def ecran(base, utilisateur_id: str | None = None) -> None:
 def _creer(base, utilisateur_id) -> None:
     with st.expander("Créer un compte", expanded=not utilisateurs_service.tous(base)):
         with st.form("creer_compte"):
-            c1, c2, c3 = st.columns([2, 2, 1.4])
+            c1, c2 = st.columns(2)
             nom = c1.text_input("Nom", placeholder="ex. Dr Ben Salah")
             role = c2.selectbox(
                 "Rôle", dom_droits.roles(), format_func=dom_droits.libelle,
             )
+            c3, c4 = st.columns(2)
             code = c3.text_input("Code d'accès", type="password",
-                                 placeholder="4 chiffres ou plus")
+                                 placeholder="6 chiffres conseillés")
+            telephone = c4.text_input(
+                "Téléphone", placeholder="ex. 55 123 456",
+                help="Affiché au médecin dans le Prescrit, pour appeler "
+                     "directement la personne qui s'occupe du patient.",
+            )
             st.caption(_description_du_role(role))
             if st.form_submit_button("Créer le compte", type="primary"):
                 try:
                     utilisateurs_service.creer(
                         base, nom, role, code=code or None,
+                        telephone=telephone or None,
                         utilisateur_id=utilisateur_id,
                     )
                 except ValueError as erreur:
@@ -82,10 +89,12 @@ def _liste(base, comptes, utilisateur_id) -> None:
     for compte in comptes:
         etat = "actif" if compte["actif"] else "désactivé"
         code = "code d'accès posé" if compte["pin"] else "**sans code d'accès**"
+        tel = compte["telephone"] or "pas de numéro"
         c1, c2, c3, c4 = st.columns([3, 2, 1.6, 1.4])
         c1.markdown(
             f"**{compte['nom']}**<br>"
-            f"<span style='font-size:.78rem;color:#94a3b8'>{etat} · {code}</span>",
+            f"<span style='font-size:.78rem;color:#94a3b8'>"
+            f"{etat} · {code} · {tel}</span>",
             unsafe_allow_html=True,
         )
         roles = list(dom_droits.roles())
@@ -105,12 +114,19 @@ def _liste(base, comptes, utilisateur_id) -> None:
             else:
                 st.rerun()
 
-        with c3.popover("Code", use_container_width=True):
+        with c3.popover("Modifier", use_container_width=True):
             saisi = st.text_input("Nouveau code", type="password",
                                   key=f"code_{compte['id']}")
-            if st.button("Enregistrer", key=f"code_ok_{compte['id']}"):
+            if st.button("Enregistrer le code", key=f"code_ok_{compte['id']}"):
                 utilisateurs_service.definir_code(
                     base, compte["id"], saisi or None, utilisateur_id=utilisateur_id
+                )
+                st.rerun()
+            numero = st.text_input("Téléphone", value=compte["telephone"] or "",
+                                   key=f"tel_{compte['id']}")
+            if st.button("Enregistrer le numéro", key=f"tel_ok_{compte['id']}"):
+                utilisateurs_service.definir_telephone(
+                    base, compte["id"], numero, utilisateur_id=utilisateur_id
                 )
                 st.rerun()
             if compte["pin"] and st.button("Retirer le code",

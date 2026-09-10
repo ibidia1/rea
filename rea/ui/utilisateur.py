@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from .. import config
 from ..db import Base
 from ..domaine import droits as dom_droits
 from ..services import utilisateurs as utilisateurs_service
@@ -41,6 +42,19 @@ def selecteur(base: Base) -> str | None:
     if not utilisateurs:
         return _premier_compte(base)
 
+    sans_code = utilisateurs_service.comptes_sans_code(base)
+    if config.AUTH_EXIGEE and sans_code:
+        # L'application est joignable depuis un téléphone du service : un
+        # compte sans code n'est plus une commodité, c'est une porte ouverte
+        # sur le dossier. On le dit ici, où quelqu'un le lira.
+        st.error(
+            f"**{len(sans_code)} compte(s) sans code d'accès**, alors que "
+            "l'application est joignable depuis le réseau. Tant que ces "
+            "comptes n'ont pas de code, n'importe quel téléphone du service "
+            "peut entrer sous leur nom. À corriger dans "
+            "Administration → Comptes.",
+            icon="⚠️",
+        )
     st.caption("Sélection obligatoire avant toute saisie (SPEC §1.2)")
     noms = [u["nom"] for u in utilisateurs]
     with st.form("selecteur_utilisateur"):
@@ -57,11 +71,31 @@ def selecteur(base: Base) -> str | None:
             st.error("Choisir un nom.")
             return None
         compte = next(u for u in utilisateurs if u["nom"] == choix)
+
+        reste = utilisateurs_service.blocage_restant(choix)
+        if reste:
+            st.error(
+                f"Trop d'essais ratés sur ce compte. Réessayer dans "
+                f"{reste} minute(s)."
+            )
+            return None
+
+        if config.AUTH_EXIGEE and not compte["pin"]:
+            st.error(
+                "Ce compte n'a pas de code d'accès et l'application est "
+                "joignable depuis le réseau : l'entrée est refusée. Un "
+                "administrateur doit lui poser un code."
+            )
+            return None
+
         if compte["pin"] and not utilisateurs_service.code_correct(code, compte["pin"]):
+            utilisateurs_service.noter_echec(choix)
             # Un message qui ne dit pas *ce qui* est faux : « code incorrect »
             # confirmerait au passage que ce compte a bien un code.
             st.error("Nom ou code d'accès incorrect.")
             return None
+
+        utilisateurs_service.oublier_echecs(choix)
         _entrer(compte)
 
     st.caption(
@@ -86,6 +120,11 @@ def _premier_compte(base: Base) -> str | None:
         nom = st.text_input("Nom", placeholder="ex. Dr Karaa")
         code = st.text_input("Code d'accès", type="password")
         if st.form_submit_button("Créer et entrer", type="primary"):
+            if config.AUTH_EXIGEE:
+                refus = utilisateurs_service.code_acceptable(code)
+                if refus:
+                    st.error(refus)
+                    return None
             try:
                 uid = utilisateurs_service.creer(base, nom, "admin", code=code or None)
             except ValueError as erreur:

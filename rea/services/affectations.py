@@ -71,7 +71,8 @@ def du_soignant(
 def du_jour(base: Base, date_jour: str, vacation: str | None = None) -> list[dict]:
     """Toutes les affectations d'un jour — la vue du surveillant."""
     sql = (
-        "SELECT a.*, s.lit_admission, p.nom_affichage, p.matricule, u.nom AS soignant "
+        "SELECT a.*, s.lit_admission, p.nom_affichage, p.matricule, "
+        "       u.nom AS soignant, u.telephone "
         "FROM affectation a "
         "JOIN sejour s ON s.id = a.sejour_id "
         "JOIN patient p ON p.id = s.patient_id "
@@ -88,7 +89,7 @@ def du_jour(base: Base, date_jour: str, vacation: str | None = None) -> list[dic
 def du_sejour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
     """Qui s'est occupé de ce patient aujourd'hui, vacation par vacation."""
     return base.requete(
-        "SELECT a.*, u.nom AS soignant FROM affectation a "
+        "SELECT a.*, u.nom AS soignant, u.telephone FROM affectation a "
         "JOIN utilisateur u ON u.id = a.utilisateur_id "
         "WHERE a.sejour_id = ? AND a.date_jour = ? AND a.supprime = 0",
         (sejour_id, date_jour),

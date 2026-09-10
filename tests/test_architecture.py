@@ -254,24 +254,52 @@ def test_aucun_ecran_ne_contient_de_sql(chemin):
     assert not trouve, f"{chemin.name} contient du SQL : {trouve}"
 
 
-def test_ladresse_decoute_reste_la_boucle_locale():
-    """§2.4 — état actuel : un seul poste, pas de réseau. Sans adresse
-    explicite, Streamlit écoute sur toutes les interfaces : le jour où le poste
-    touche le réseau de l'hôpital, le dossier des patients devient lisible
-    depuis n'importe quelle machine, sans mot de passe."""
+def test_le_reglage_reseau_du_depot_reste_la_boucle_locale():
+    """Ce que le dépôt livre : un poste isolé.
+
+    Ouvrir l'écoute est une décision d'installation — la variable
+    `REA_HOTE` sur le poste du service — et non un réglage qui part dans
+    le dépôt. Livrer « 0.0.0.0 » exposerait le dossier de tout service qui
+    installe le logiciel sans y penser.
+    """
     from rea import config
 
     reglages = tomllib.loads((RACINE / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert reglages["server"]["address"] == config.HOTE == "127.0.0.1"
+    assert reglages["server"]["address"] == "127.0.0.1"
+    assert config.HOTE == "127.0.0.1", (
+        "REA_HOTE ne doit pas être positionné pendant les tests"
+    )
     assert reglages["server"]["port"] == config.PORT
 
 
-def test_ouvrir_le_reseau_sans_authentification_est_signale():
-    """Les deux vont ensemble : le jour où HOTE s'ouvre, AUTH_REQUISE passe à
-    True. Ce test est là pour que le second ne s'oublie pas."""
+def test_ouvrir_le_reseau_exige_l_authentification():
+    """La règle du §2.4, tenue par le code et non par la vigilance.
+
+    « HOTE s'ouvre et AUTH passe à True — les deux ensemble, jamais l'un
+    sans l'autre » était un commentaire. Un commentaire s'oublie : c'est
+    maintenant une conséquence calculée, et ce test le vérifie sur les deux
+    branches.
+    """
+    import importlib
+    import os
+
     from rea import config
 
-    if config.HOTE != "127.0.0.1":
-        assert config.AUTH_REQUISE, (
-            "HOTE n'est plus la boucle locale : AUTH_REQUISE doit passer à True"
+    assert not config.AUTH_EXIGEE, "boucle locale : pas d'authentification exigée"
+
+    ancien = os.environ.get("REA_HOTE")
+    os.environ["REA_HOTE"] = "0.0.0.0"
+    try:
+        ouvert = importlib.reload(config)
+        assert ouvert.AUTH_EXIGEE, (
+            "écoute sur le réseau sans authentification exigée : "
+            "le dossier serait lisible depuis n'importe quel téléphone"
         )
+        assert ouvert.LONGUEUR_CODE_MINIMALE >= 6
+        assert ouvert.ESSAIS_AVANT_BLOCAGE <= 10
+    finally:
+        if ancien is None:
+            os.environ.pop("REA_HOTE", None)
+        else:
+            os.environ["REA_HOTE"] = ancien
+        importlib.reload(config)

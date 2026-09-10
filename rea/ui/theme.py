@@ -224,6 +224,34 @@ div[data-testid="stDataFrame"] {{ font-size: .8rem; }}
 /* ---- Sélecteur de voie (panneau « Ajouter une ligne ») --------------- */
 div[data-testid="stButtonGroup"] > div[role="radiogroup"] {{ flex-wrap: wrap; }}
 {_CSS_BOUTONS_VOIES}
+
+/* ---- Au doigt, pas à la souris ---------------------------------------
+   Les infirmiers ouvrent leur poste sur un téléphone, au lit du malade,
+   parfois avec des gants. Une cible de 16 px se rate une fois sur trois —
+   et se rater ici veut dire cocher le traitement du dessous. 44 px est le
+   minimum recommandé pour le doigt ; on le tient sur tout ce qui se
+   touche, pas seulement sur l'écran infirmier : les mêmes doigts ouvrent
+   les autres écrans sur la même tablette. */
+@media (max-width: 640px) {{
+    /* Les marges latérales se resserrent, pas celle du haut : la barre
+       d'outils de Streamlit est fixe et masquerait le titre de l'écran. */
+    .block-container {{ padding: 2.6rem .7rem 2rem .7rem !important; }}
+    button {{ min-height: 46px !important; }}
+    input[type="text"], input[type="number"], input[type="password"] {{
+        min-height: 44px !important;
+        /* Sous 16 px, iOS zoome de lui-même à chaque champ touché, et la
+           page reste zoomée ensuite. */
+        font-size: 16px !important;
+    }}
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
+        min-height: 44px !important;
+    }}
+    div[data-testid="stCheckbox"] label {{ min-height: 40px; align-items: center; }}
+    h1 {{ font-size: 1.35rem !important; }}
+    h2, h3 {{ font-size: 1.1rem !important; }}
+    /* Un tableau large défile seul plutôt que d'élargir la page. */
+    .rea-bloc table {{ min-width: max-content; }}
+}}
 </style>
 """
 

@@ -143,3 +143,33 @@ def test_le_socle_streamlit_couvre_les_appels_utilises():
         "st.segmented_control (rea/ui/fiche.py, rea/ui/prescrit.py) demande "
         "Streamlit 1.40 au minimum"
     )
+
+
+# -- survivre à un référentiel qui change ---------------------------------
+#
+# Vécu, pas théorique : un bilan enregistré sous le code `gaz_du_sang`, code
+# disparu depuis du référentiel des examens, rendait l'écran Prescrit
+# entièrement inaccessible pour ce patient — Streamlit refuse une valeur par
+# défaut absente des options, et l'exception emporte tout l'écran. Le dossier
+# était intact, mais on ne pouvait plus prescrire.
+
+def test_une_valeur_disparue_du_referentiel_ne_fait_pas_tomber_l_ecran():
+    options = ["nfs", "iono", "crp"]
+    assert champs.index_ou_zero(options, "iono") == 1
+    assert champs.index_ou_zero(options, "gaz_du_sang") == 0
+    assert champs.index_ou_zero(options, None) == 0
+    assert champs.index_ou_zero([], "quoi que ce soit") == 0
+
+
+def test_seules_les_valeurs_encore_connues_sont_recochees():
+    options = ["nfs", "iono", "crp"]
+    gardees = champs.valeurs_connues(options, {"crp", "gaz_du_sang", "nfs"})
+    assert gardees == ["nfs", "crp"], "et dans l'ordre des options"
+
+
+def test_ce_qui_a_disparu_est_dit_et_non_tu():
+    """Une case qui se décoche toute seule entre deux ouvertures est pire
+    qu'un message qui explique pourquoi."""
+    options = ["nfs", "iono"]
+    assert champs.valeurs_oubliees(options, ["nfs", "gaz_du_sang"]) == ["gaz_du_sang"]
+    assert champs.valeurs_oubliees(options, ["nfs"]) == []

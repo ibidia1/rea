@@ -36,18 +36,43 @@ DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 # --------------------------------------------------------------------------
 # Réseau et authentification (§2.4 — contraintes d'architecture)
 # --------------------------------------------------------------------------
-# ÉTAT ACTUEL : un seul poste Windows, celui du DMI, sans réseau ni internet.
-# Le logiciel n'écoute donc que sur la boucle locale : rien de ce dossier ne
-# doit être joignable depuis une autre machine. Sans cette ligne, Streamlit
-# écoute sur toutes les interfaces — le jour où le poste touche le réseau de
-# l'hôpital, la base entière devient lisible sans mot de passe.
+# Le logiciel a d'abord tourné sur un poste unique, sans réseau : la boucle
+# locale suffisait, et rien du dossier n'était joignable d'ailleurs.
 #
-# ÉVOLUTION POSSIBLE, NON DÉCIDÉE : postes du service via LAN. Ce jour-là,
-# HOTE passe à "0.0.0.0" et AUTH_REQUISE à True — les deux ensemble, jamais
-# l'un sans l'autre.
-HOTE = "127.0.0.1"
-PORT = 8501
-AUTH_REQUISE = False
+# Les infirmiers ouvrant désormais leur poste depuis leur téléphone sur le
+# Wi-Fi du service, l'application doit écouter sur le réseau. C'est un
+# basculement, pas un réglage : dès que l'adresse n'est plus la boucle
+# locale, **le code d'accès devient obligatoire sur tous les comptes**. Les
+# deux ensemble, jamais l'un sans l'autre — la règle était écrite ici depuis
+# le début, et `AUTH_EXIGEE` la fait tenir toute seule.
+#
+# L'adresse se règle sans toucher au code, par la variable d'environnement
+# `REA_HOTE` : « 127.0.0.1 » pour un poste isolé, « 0.0.0.0 » pour écouter sur
+# le réseau, ou l'IP privée du serveur pour n'écouter que sur celle-là — c'est
+# le réglage à préférer quand le poste a deux cartes réseau, parce qu'il rend
+# le dossier invisible depuis le réseau de l'hôpital.
+HOTE = os.environ.get("REA_HOTE", "127.0.0.1").strip() or "127.0.0.1"
+PORT = int(os.environ.get("REA_PORT", "8501"))
+
+#: Adresses qui ne sortent pas de la machine.
+ADRESSES_LOCALES = ("127.0.0.1", "localhost", "::1")
+
+#: Le code d'accès est-il exigé de tous ? Vrai dès que l'application est
+#: joignable depuis une autre machine. Ce n'est pas un réglage indépendant :
+#: c'est une conséquence, et c'est voulu — un réglage se laisse oublier.
+AUTH_EXIGEE = HOTE not in ADRESSES_LOCALES
+
+#: Conservé pour compatibilité : du code ancien lit encore ce nom.
+AUTH_REQUISE = AUTH_EXIGEE
+
+#: Essais de code ratés tolérés avant blocage temporaire du compte, et durée
+#: du blocage. Sans cela, un code à quatre chiffres tombe en huit minutes
+#: d'essais automatiques — mesuré, pas supposé.
+ESSAIS_AVANT_BLOCAGE = 5
+BLOCAGE_MINUTES = 10
+
+#: Longueur minimale d'un code quand l'authentification est exigée.
+LONGUEUR_CODE_MINIMALE = 6
 
 # --------------------------------------------------------------------------
 # Sauvegardes (SPEC §2.2)
