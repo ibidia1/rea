@@ -926,6 +926,55 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.28 — 10 septembre 2026 — un catalogue de molécules qui apprend**
+
+Le produit d'une ligne de prescription se tapait à la main. On retapait
+« Imipénème » vingt fois par semaine ; on l'écrivait de vingt façons —
+« imipeneme », « Tienam », « TIENAM 1g » ; et surtout **« quelle molécule sur
+quel type d'infection » n'avait plus de réponse calculable**, puisque le
+logiciel ne savait pas que ces graphies désignaient le même produit (demande
+du service, 10 septembre).
+
+*Deux sources, une seule liste.* `referentiels/medicaments.json` livre
+98 molécules courantes de réanimation polyvalente, chacune avec son unité
+usuelle et ses **noms commerciaux en synonymes** : on tape « tie » et
+Imipénème sort, parce que « Tienam » est ce qu'on a en tête au lit du malade.
+On cherche aussi par famille — « curare », « aminoside », « C3G ». Et la table
+`medicament_local` se remplit **sans que personne la remplisse** : la première
+prescription d'une molécule absente l'y inscrit, et elle est proposée dès la
+suivante. Personne n'a de catalogue à préparer avant de pouvoir travailler.
+
+*Ce qui est écrit reste la dénomination commune*, pas la marque : c'est elle
+qui permet de compter une molécule à travers ses noms commerciaux. Les marques
+servent à la chercher, pas à la nommer.
+
+*Aucune posologie n'est proposée*, et c'est la règle du service tenue ici
+comme ailleurs. Le catalogue porte l'unité usuelle — « g » plutôt que « mg »
+pour l'imipénème — ce qui est une unité et non une dose. La dose part vide.
+Une dose pré-remplie est une dose validée sans être lue.
+
+*Le classement compte plus que le filtre.* « tie » trouve Tienam par le début
+d'un mot, mais aussi « antiepileptique » en plein milieu : trois molécules
+justes noyées sous quatre qui n'ont rien à voir, c'est une liste qu'on cesse
+d'utiliser. `chercher` classe donc début de nom, puis début de mot, puis
+milieu — et abandonne le milieu de mot dès qu'il a mieux.
+
+*Un catalogue qui apprend finit par contenir les fautes qu'on a prescrites.*
+D'où **Administration → Molécules** : chercher, corriger, retirer. Aucun de
+ces gestes ne touche aux prescriptions déjà écrites — une ligne porte le nom
+écrit ce jour-là, et le réécrire changerait une prescription signée.
+
+**Limite connue.** Le classement de `chercher` ne pilote pas la liste
+déroulante du prescrit : Streamlit filtre lui-même sur l'étiquette affichée,
+par simple sous-chaîne. La bonne molécule sort en tête, mais quelques lignes
+sans rapport peuvent l'accompagner. Le classement sert l'écran d'administration
+et restera là si la liste du prescrit est un jour pilotée côté serveur.
+
+**Vérifications.** 1 068 tests passent (17 ajoutés), pyflakes propre. Recette
+navigateur rejouée sur les cinq rôles, section « Molécules » comprise : aucun
+écran en erreur. Vérifié à l'écran : « tie » → Imipénème · Tienam en tête,
+« curare » → les quatre curares.
+
 **v3.27 — 10 septembre 2026 — une porte de secours pour les comptes**
 
 Le service s'est retrouvé enfermé dehors en testant l'application : plus

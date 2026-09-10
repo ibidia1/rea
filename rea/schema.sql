@@ -527,6 +527,30 @@ CREATE TABLE IF NOT EXISTS analyte_local (
     version      INTEGER NOT NULL DEFAULT 1
 );
 
+-- Les molécules que le service ajoute lui-même, en les prescrivant.
+--
+-- Le catalogue livré (referentiels/medicaments.json) ne peut pas connaître
+-- tout ce qui se prescrit à Kairouan. Plutôt que d'obliger quelqu'un à
+-- remplir un catalogue avant de pouvoir travailler, la première prescription
+-- d'une molécule inconnue l'inscrit ici : elle est proposée dès la suivante
+-- (demande du service, 10 septembre).
+--
+-- `cle` est la forme normalisée du nom — sans accents, sans casse, sans
+-- espaces superflus. C'est elle qui empêche « tienam », « Tienam » et
+-- « TIENAM  » de devenir trois molécules qui ne se comptent jamais ensemble.
+CREATE TABLE IF NOT EXISTS medicament_local (
+    id           TEXT PRIMARY KEY,
+    cle          TEXT NOT NULL UNIQUE,
+    libelle      TEXT NOT NULL,      -- tel qu'il sera écrit sur la prescription
+    unite        TEXT,
+    cree_le      TEXT NOT NULL,
+    cree_par     TEXT REFERENCES utilisateur(id),
+    modifie_le   TEXT,
+    modifie_par  TEXT REFERENCES utilisateur(id),
+    supprime     INTEGER NOT NULL DEFAULT 0,
+    version      INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS avis_specialise (
     id           TEXT PRIMARY KEY,
     sejour_id    TEXT NOT NULL REFERENCES sejour(id),

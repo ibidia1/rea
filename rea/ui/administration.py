@@ -23,6 +23,7 @@ from .. import aides, config, listes, protocoles, referentiels
 from ..db import Base, inspecter_fichier_base
 from ..domaine import regles as regles_dom
 from ..domaine.dates import format_date_fr
+from ..services import medicaments as medicaments_service
 from ..services import pancarte as pancarte_service
 from . import comptes as comptes_ui
 from . import theme
@@ -53,6 +54,7 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
     vues["Journal"] = lambda: _journal(base)
     vues["Fiches imprimées"] = lambda: _fiches_imprimees(base)
     vues["Référentiels"] = _referentiels
+    vues["Molécules"] = lambda: _molecules(base, utilisateur_id)
     if utilisateur_ui.peut("protocoles"):
         vues["Protocoles"] = _protocoles
         vues["Règles d'aide"] = _regles
@@ -368,6 +370,84 @@ def _referentiels() -> None:
         "<th>Référentiel</th><th style='text-align:right'>Valeurs</th><th>Version</th>"
         "</tr></thead><tbody>" + corps + "</tbody></table>",
         unsafe_allow_html=True,
+    )
+
+
+def _molecules(base: Base, utilisateur_id: str | None) -> None:
+    """Le catalogue du service — celui qui se remplit tout seul.
+
+    Un catalogue qui apprend de ce qu'on prescrit finit par contenir les
+    fautes de frappe qu'on a prescrites : « Tienma », « Tienam 1g »,
+    « tienam iv ». Chacune devient une molécule distincte qui ne se comptera
+    jamais avec les autres, et l'analyse « quelle molécule sur quel type
+    d'infection » perd exactement ce qu'elle cherchait.
+
+    D'où cet écran : chercher, corriger, retirer. Aucun de ces gestes ne
+    touche aux prescriptions déjà écrites — une ligne porte le nom écrit ce
+    jour-là, et le réécrire changerait une prescription signée. Seul le
+    catalogue change, donc ce qui sera proposé la prochaine fois.
+    """
+    st.caption(
+        "Les molécules livrées avec le logiciel sont dans "
+        "`referentiels/medicaments.json`. Celles ci-dessous, le service les a "
+        "ajoutées **en les prescrivant** : la première fois qu'un nom absent "
+        "de la liste est écrit à la main, il entre ici."
+    )
+    requete = st.text_input(
+        "Chercher une molécule", placeholder="nom, marque ou famille — ex. « tie »",
+        key="admin_recherche_molecule",
+    )
+    if requete:
+        trouvees = medicaments_service.chercher(base, requete, limite=15)
+        if not trouvees:
+            st.info("Aucune molécule ne correspond.")
+        for molecule in trouvees:
+            origine = ("ajoutée par le service" if molecule.locale
+                       else "livrée avec le logiciel")
+            synonymes = (" · " + " · ".join(molecule.synonymes)) if molecule.synonymes else ""
+            st.markdown(
+                f"**{molecule.libelle}**{synonymes} "
+                f"<span style='color:#94a3b8'>— {molecule.unite or 'sans unité'} · "
+                f"{origine}</span>",
+                unsafe_allow_html=True,
+            )
+        st.divider()
+
+    locales = medicaments_service.locales(base)
+    st.markdown(f"#### Molécules du service ({len(locales)})")
+    if not locales:
+        st.caption(
+            "Aucune pour l'instant : tout ce qui a été prescrit figurait "
+            "déjà dans le catalogue livré."
+        )
+        return
+    for molecule in locales:
+        c1, c2, c3 = st.columns([4, 2, 1])
+        nom = c1.text_input(
+            "Nom", value=molecule["libelle"], key=f"mol_nom_{molecule['id']}",
+            label_visibility="collapsed",
+        )
+        unite = c2.text_input(
+            "Unité", value=molecule["unite"] or "", key=f"mol_u_{molecule['id']}",
+            label_visibility="collapsed", placeholder="unité",
+        )
+        if nom.strip() and (nom != molecule["libelle"]
+                            or unite != (molecule["unite"] or "")):
+            if c3.button("Corriger", key=f"mol_ok_{molecule['id']}",
+                         use_container_width=True):
+                medicaments_service.renommer(
+                    base, molecule["id"], nom, unite=unite,
+                    utilisateur_id=utilisateur_id,
+                )
+                st.rerun()
+        elif c3.button("Retirer", key=f"mol_rm_{molecule['id']}",
+                       use_container_width=True):
+            medicaments_service.oublier(base, molecule["id"],
+                                        utilisateur_id=utilisateur_id)
+            st.rerun()
+    st.caption(
+        "« Retirer » ne retire que du catalogue : les prescriptions qui "
+        "portent cette molécule restent intactes."
     )
 
 
