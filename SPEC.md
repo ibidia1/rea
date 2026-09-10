@@ -926,6 +926,57 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.24 — 10 septembre 2026 — les seuils de fièvre du service, les jetés, et le relevé infirmier ouvert au médecin**
+
+*Trois états thermiques, aux seuils du service.* Les bornes provisoires
+(37,5 et 38,3 °C) sont remplacées par celles que le service a arrêtées :
+apyrétique en dessous de 38, subfébrile de 38 à **38,5 inclus**, fébrile
+**au-dessus** de 38,5. Les deux bornes ne se comparent pas de la même façon
+et c'est voulu ; les clés du référentiel le disent (`subfebrile_a_partir_de_c`,
+`febrile_au_dessus_de_c`) pour qu'on n'ait pas à relire le code. Un `<` à la
+place du `<=` rendrait fébrile un patient à 38,5 — et ferait décrocher, dans
+l'analyse du délai d'apyrexie, toute une colonne de patients qui n'ont pas
+décroché.
+
+*Les jetés.* Ce qui est recueilli puis jeté au lieu d'être réinjecté — le
+liquide gastrique aspiré, avant tout. L'infirmier les relève heure par heure,
+dans un groupe **Sorties de l'heure** distinct des constantes vitales, et le
+cumul du poste s'affiche au bout de sa grille. Ils entrent dans le **total des
+pertes** du bilan hydrique, ont leur ligne sur la feuille imprimée et leur
+case dans le plan hémodynamique. Sans eux, un patient qui perd huit cents
+millilitres par la sonde gastrique a une diurèse correcte, des drains qui ne
+donnent pas, et un bilan qui le déclare en excès de deux litres pendant qu'il
+se déshydrate.
+
+Une asymétrie assumée entre les deux sorties : des jetés absents comptent
+pour zéro, une diurèse absente prive de bilan. La diurèse est mesurée chez
+tout le monde ; la plupart des patients n'ont rien à jeter, et exiger la case
+priverait de bilan les trois quarts du service.
+
+*Le relevé infirmier ouvert au médecin.* Vingt-quatre lignes par jour étaient
+saisies et personne d'autre ne les voyait. Elles s'affichent désormais dans
+la **Visite** et dans l'**Évolution**, en lecture seule — la saisie appartient
+à celui qui est au lit du malade.
+
+Trois précautions portées par le rendu lui-même. Les heures sont dans l'ordre
+du poste (7 → 6) et non de minuit à minuit : les relevés d'une nuit sont
+rangés sous le jour de la prise de poste, et une grille partant de minuit
+afficherait la fin de la nuit **avant** le matin qui l'a précédée — la courbe
+se lirait à l'envers. La colonne de synthèse est placée **avant** les heures,
+parce que vingt-quatre colonnes ne tiennent pas dans la moitié d'un écran et
+que ce qui dépasse à droite est justement ce qu'on vient lire. Et on ne
+résume que ce qui se résume : extrêmes pour les constantes, somme pour les
+sorties — la somme des températures d'une journée n'est pas une température.
+
+Sous la diurèse et les jetés des 24 h, le total infirmier est **proposé** au
+médecin, jamais écrit à sa place : un relevé à trous n'est pas une mesure des
+24 h, et c'est ce chiffre-là qui entre ensuite dans le bilan.
+
+**Vérifications.** 1 019 tests passent (20 ajoutés), pyflakes propre. Recette
+navigateur rejouée sur les cinq rôles : aucun écran en erreur. Chaîne complète
+vérifiée à l'écran — 700 mL de jetés saisis font passer le total des pertes de
+2 646 à 3 346 mL et le bilan de +2 862 à +2 162 mL.
+
 **v3.23 — 10 septembre 2026 — recette complète, deux bugs trouvés, et les guides**
 
 *Recette.* Chaque écran de chaque rôle ouvert dans un navigateur, pour de
@@ -1205,7 +1256,8 @@ prescription se lit comme une décision.
 *Apyrétique, subfébrile, fébrile.* « Fébrile » n'est pas « a de la
 température » : en réanimation on distingue trois états, et la différence
 décide d'une conduite. Les seuils sont dans `referentiels/temperature.json`
-(37,5 et 38,3 °C, à confirmer par un senior), le domaine dans
+(apyrétique en dessous de 38 ; subfébrile de 38 à 38,5 inclus ; fébrile
+au-dessus de 38,5 — arrêtés par le service le 10 septembre 2026), le domaine dans
 `domaine/temperature.py`, et la catégorie s'affiche à côté de la température
 dans l'écran Visite — « 38,4 °C » demande un instant de conversion, « fébrile »
 se lit d'un coup d'œil.

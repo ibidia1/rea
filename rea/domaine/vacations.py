@@ -65,6 +65,23 @@ def heures(code: str) -> tuple[int, ...]:
     return tuple(range(debut, 24)) + tuple(range(0, fin))
 
 
+def heures_du_jour() -> tuple[int, ...]:
+    """Les vingt-quatre heures d'une journée d'infirmerie, dans l'ordre où
+    elles se sont vécues : 7, 8, … 23, 0, … 6.
+
+    Ce n'est pas `range(24)`, et l'écart n'est pas cosmétique. Les relevés
+    d'une nuit sont rangés sous le jour où l'équipe a pris son poste : une
+    diurèse notée à 3 h du matin appartient à la journée de la veille. Une
+    grille qui commencerait à minuit afficherait donc la fin de la nuit
+    **avant** le matin qui l'a précédée — la courbe se lirait à l'envers, et
+    une dégradation nocturne passerait pour une amélioration.
+    """
+    heures_ordonnees: list[int] = []
+    for code in codes():
+        heures_ordonnees.extend(heures(code))
+    return tuple(heures_ordonnees)
+
+
 def contient(code: str, heure: int) -> bool:
     return heure % 24 in heures(code)
 

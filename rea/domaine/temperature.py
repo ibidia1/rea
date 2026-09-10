@@ -14,6 +14,8 @@ réponse calculable.
 
 Les seuils sont dans `referentiels/temperature.json`, pas ici : ce sont eux
 que le service voudra revoir, et ils changent le résultat de l'analyse.
+Ceux du service : apyrétique en dessous de 38, subfébrile de 38 à 38,5
+inclus, fébrile au-dessus de 38,5.
 """
 
 from __future__ import annotations
@@ -42,9 +44,15 @@ def categorie(temperature_c: float | None, reglages: dict | None = None) -> str 
     if temperature_c is None:
         return None
     r = _reglages(reglages)
-    if temperature_c < r["seuil_subfebrile_c"]:
+    # Les deux bornes ne se comparent pas de la même façon, et c'est le
+    # service qui l'a voulu ainsi (10 septembre 2026) : subfébrile va de 38,0
+    # **inclus** à 38,5 **inclus**, la fièvre commence strictement au-dessus.
+    # Un `<` à la place du `<=` ci-dessous rendrait fébrile un patient à
+    # 38,5 — et ferait « décrocher » toute une colonne de patients dans
+    # l'analyse du délai d'apyrexie.
+    if temperature_c < r["subfebrile_a_partir_de_c"]:
         return APYRETIQUE
-    if temperature_c < r["seuil_febrile_c"]:
+    if temperature_c <= r["febrile_au_dessus_de_c"]:
         return SUBFEBRILE
     return FEBRILE
 

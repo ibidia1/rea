@@ -15,13 +15,14 @@ from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, parse_date
 from ..services import aides as aides_service
 from ..services import avis as avis_service
+from ..services import constantes as constantes_service
 from ..services import definitions_cliniques
 from ..services import evolution as evolution_service
 from ..services import prescriptions as prescriptions_service
 from ..services import protocoles as protocoles_service
 from ..services import scores as scores_service
 from ..services import vitesses as vitesses_service
-from . import contexte, theme
+from . import contexte, surveillance, theme
 
 from . import champs
 
@@ -306,6 +307,41 @@ def panneau_definitions(sejour: dict, date_jour_str: str) -> None:
             ))
 
 
+#: Les cases des 24 h que les infirmiers alimentent heure par heure. Le
+#: rapprochement se fait sur la clé, à un suffixe près : c'est la même
+#: mesure, comptée sur la journée d'un côté et relevée à l'heure de l'autre.
+_RELEVE_HORAIRE = {"diurese_24h": "diurese", "jetes_24h": "jetes"}
+
+
+def _releve_infirmier(sejour: dict, date_jour_str: str, cle: str) -> None:
+    """Ce que les infirmiers ont relevé sur la journée — proposé, pas écrit.
+
+    Le chiffre reste celui du médecin : il arrête ce qu'il retient pour les
+    24 h, et le total infirmier peut porter des trous (une heure non relevée,
+    un bocal changé entre deux). L'écrire à sa place ferait passer une somme
+    partielle pour une mesure, et c'est ce total-là qui entre ensuite dans le
+    bilan hydrique.
+
+    Le total est celui de la journée d'infirmerie — les trois vacations
+    ouvertes ce jour-là, de 7 h à 7 h.
+    """
+    horaire = _RELEVE_HORAIRE.get(cle)
+    if not horaire:
+        return
+    total = constantes_service.total_du_jour(
+        contexte.base(), sejour["id"], date_jour_str, horaire
+    )
+    if total is None:
+        return
+    heures = constantes_service.heures_relevees(
+        contexte.base(), sejour["id"], date_jour_str, horaire
+    )
+    st.caption(
+        f"Relevé infirmier : {champs.format_valeur(round(total))} mL "
+        f"sur {heures} h"
+    )
+
+
 def _champs_drains(sejour: dict, date_jour_str: str, elements: dict, prefixe: str) -> None:
     """Un champ par drain en place — et rien du tout s'il n'y en a pas.
 
@@ -362,6 +398,7 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     bilan = dom.bilan_hydrique(
         prescriptions_service.lignes_actives_le(contexte.base(), sejour["id"], date_jour_str),
         diurese_ml=_valeur_en_cours(prefixe, "diurese_24h", sauvegardees),
+        jetes_ml=_valeur_en_cours(prefixe, "jetes_24h", sauvegardees),
         drains=drains,
         poids_kg=sejour.get("poids_kg"),
         temperature_c=_valeur_en_cours(prefixe, "temperature", sauvegardees),
@@ -382,6 +419,8 @@ def _bloc_bilan_hydrique(sejour: dict, date_jour_str: str, elements: dict,
     detail = [
         f"Diurèse {champs.format_valeur(round(bilan.diurese_ml))} mL",
     ]
+    if bilan.jetes_ml:
+        detail.append(f"Jetés {champs.format_valeur(round(bilan.jetes_ml))} mL")
     if bilan.drains_ml:
         detail.append(f"Drains {bilan.texte_drains}")
     detail.append(
@@ -620,6 +659,15 @@ def onglet_evolution(sejour: dict) -> None:
         contexte.base(), sejour["id"], date_jour_str
     )
 
+    # Replié : c'est la matière première de l'observation, pas l'observation.
+    # Ouvert par défaut il repousserait les quatre plans sous la ligne de
+    # flottaison, alors qu'on ne le déplie que devant un chiffre qui surprend.
+    with st.expander("Surveillance horaire relevée par les infirmiers"):
+        surveillance.bloc_du_jour(
+            contexte.base(), sejour["id"], date_jour_str,
+            titre=f"Les 24 h du {format_date_fr(date_jour_str)}",
+        )
+
     elements: dict = {}
     plans = list(evolution_service.PLANS)
     for rangee in (plans[:2], plans[2:]):
@@ -645,6 +693,7 @@ def onglet_evolution(sejour: dict) -> None:
                             cle, libelle, unite, type_, plage,
                             elements_existants.get(cle), f"evo_{date_jour_str}",
                         )
+                        _releve_infirmier(sejour, date_jour_str, cle)
                     if cle_plan == "plan_hemodynamique":
                         _champs_drains(
                             sejour, date_jour_str, elements, f"evo_{date_jour_str}"

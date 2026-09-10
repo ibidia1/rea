@@ -38,9 +38,26 @@ def _cohorte(base):
 
 def test_les_trois_categories_de_temperature():
     assert temp.categorie(36.8) == temp.APYRETIQUE
-    assert temp.categorie(37.9) == temp.SUBFEBRILE
-    assert temp.categorie(38.5) == temp.FEBRILE
+    assert temp.categorie(38.2) == temp.SUBFEBRILE
+    assert temp.categorie(39.0) == temp.FEBRILE
     assert temp.categorie(None) is None
+
+
+def test_les_bornes_exactes_des_seuils_du_service():
+    """38 et 38,5 sont les deux valeurs qu'on lit vraiment sur un thermomètre.
+
+    Le service les a tranchées le 10 septembre 2026 : subfébrile de 38
+    **inclus** à 38,5 **inclus**, fébrile au-dessus. Les deux bornes ne se
+    comparent donc pas pareil, et c'est précisément ce qu'un `<` distrait
+    casserait — un patient à 38,5 deviendrait fébrile, et tous ceux qui
+    passent de 39 à 38,5 « décrocheraient » sans avoir décroché.
+    """
+    assert temp.categorie(37.9) == temp.APYRETIQUE
+    assert temp.categorie(38.0) == temp.SUBFEBRILE
+    assert temp.categorie(38.5) == temp.SUBFEBRILE
+    assert temp.categorie(38.6) == temp.FEBRILE
+    assert not temp.est_febrile(38.5)
+    assert not temp.est_apyretique(38.0)
 
 
 def test_une_temperature_absente_n_est_pas_une_apyrexie():
@@ -57,7 +74,7 @@ def test_le_delai_compte_le_jour_de_debut_comme_J1(base):
                                 produit="Tienam", date_debut="2026-09-02")
     _temperatures(base, sid, {
         "2026-09-02": 39.0,   # J1 — fébrile au début
-        "2026-09-03": 38.5,   # J2 — toujours fébrile
+        "2026-09-03": 38.8,   # J2 — toujours fébrile
         "2026-09-04": 37.0,   # J3 — apyrétique
     })
     r = croisements.delai_apyrexie(base, _cohorte(base), "Tienam")
@@ -67,7 +84,7 @@ def test_le_delai_compte_le_jour_de_debut_comme_J1(base):
 
 
 def test_un_patient_subfebrile_n_a_pas_decroche(base):
-    """37,9 °C n'est pas une apyrexie : le patient reste compté comme non
+    """38,2 °C n'est pas une apyrexie : le patient reste compté comme non
     décroché tant qu'il n'est pas franchement apyrétique."""
     sid = _sejour(base)
     ligne_id = prescriptions.ajouter_ligne(
@@ -77,8 +94,8 @@ def test_un_patient_subfebrile_n_a_pas_decroche(base):
     prescriptions.arreter_ligne(base, ligne_id, date_arret="2026-09-04")
     _temperatures(base, sid, {
         "2026-09-02": 39.0,
-        "2026-09-03": 37.9,   # subfébrile — pas décroché
-        "2026-09-04": 37.8,
+        "2026-09-03": 38.2,   # subfébrile — pas décroché
+        "2026-09-04": 38.0,
     })
     r = croisements.delai_apyrexie(base, _cohorte(base), "Tienam")
     assert r.episodes == 1

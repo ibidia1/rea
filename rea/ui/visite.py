@@ -30,7 +30,7 @@ from ..services import evolution as evolution_service
 from ..services import microbiologie as micro_service
 from ..services import prescriptions as prescriptions_service
 from ..services import vitesses as vitesses_service
-from . import contexte, theme
+from . import contexte, surveillance, theme
 
 #: Ce qu'on regarde à la visite, dans cet ordre. Pas tout le catalogue : une
 #: page de trente valeurs ne se lit pas debout, et ces huit-là décident de la
@@ -54,6 +54,14 @@ def onglet_visite(sejour: dict) -> None:
         _traitements(sejour, date_jour_str)
     with droite:
         _etat_du_jour(sejour, date_jour_str)
+        # Juste après l'état du jour : ce sont les mêmes constantes, mais
+        # heure par heure. La valeur retenue au-dessus vient de là, et devant
+        # un chiffre qui surprend c'est la courbe qu'on veut voir — une PA
+        # moyenne à 75 ne dit pas qu'on a passé la nuit à 55.
+        surveillance.bloc_du_jour(
+            contexte.base(), sejour["id"], date_jour_str,
+            titre="Surveillance horaire (relevé infirmier)",
+        )
         _biologie(sejour, date_jour_str)
         _infectieux(sejour, date_jour_str)
         _plans(sejour, date_jour_str)

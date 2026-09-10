@@ -25,7 +25,7 @@ from ..db import Base
 #: rangée**, et les deux pressions doivent tomber côte à côte. Saisir une
 #: systolique en haut d'une rangée et la diastolique en bas de la suivante,
 #: c'est une inversion par garde.
-CLES = (
+VITALES = (
     ("temperature", "T°", "°C"),
     ("fc", "FC", "/min"),
     ("pas", "PA syst.", "mmHg"),
@@ -34,8 +34,32 @@ CLES = (
     ("spo2", "SpO₂", "%"),
     ("glasgow", "Glasgow", "/15"),
     ("dextro", "Dextro", "g/L"),
-    ("diurese", "Diurèse", "mL"),
 )
+
+#: Ce qui **sort** du malade, relevé heure par heure comme le reste.
+#:
+#: Séparé des constantes vitales pour deux raisons, et la seconde compte plus
+#: que la première. À l'écran, ces cases se remplissent d'un autre geste : on
+#: vide un bocal, on ne lit pas un moniteur. Et surtout ces valeurs-là
+#: **s'additionnent sur la journée** — une FC ne se somme pas, une diurèse
+#: si. C'est cette somme qui devient le total des pertes du bilan hydrique ;
+#: sommer par erreur une température donnerait 900 °C.
+#:
+#: Les « jetés » sont ce qu'on recueille et qu'on jette au lieu de le
+#: réinjecter — le liquide gastrique aspiré, avant tout (demande du service,
+#: 10 septembre). Sans cette ligne, un patient qui perd 800 mL par la sonde
+#: gastrique apparaît en bilan positif alors qu'il se déshydrate.
+SORTIES = (
+    ("diurese", "Diurèse", "mL"),
+    ("jetes", "Jetés", "mL"),
+)
+
+#: Tout ce qui se relève, dans l'ordre du papier. Les sorties ferment la
+#: liste, comme au verso de la feuille.
+CLES = VITALES + SORTIES
+
+#: Les clés dont la somme de la journée a un sens (voir `SORTIES`).
+CLES_SOMMABLES = tuple(cle for cle, _l, _u in SORTIES)
 
 
 def libelle(cle: str) -> str:
@@ -112,3 +136,40 @@ def serie(base: Base, sejour_id: str, date_jour: str, cle: str) -> list[tuple[in
             (sejour_id, date_jour, cle),
         )
     ]
+
+
+def total_du_jour(base: Base, sejour_id: str, date_jour: str, cle: str) -> float | None:
+    """La somme d'une sortie sur la journée de service, ou None si rien n'a
+    été relevé.
+
+    None et 0 ne disent pas la même chose et l'écart se paie dans le bilan
+    hydrique : « rien de relevé » n'est pas « rien de perdu ». Ce total est
+    proposé au médecin dans l'évolution, jamais écrit à sa place — c'est lui
+    qui arrête le chiffre des 24 h, et une journée peut avoir été relevée à
+    trous.
+
+    Refuse une clé qui ne s'additionne pas : la somme des températures de la
+    journée n'est pas une température.
+    """
+    if cle not in CLES_SOMMABLES:
+        raise ValueError(f"{cle} ne s'additionne pas sur la journée")
+    ligne = base.une_ligne(
+        "SELECT COUNT(*) AS n, SUM(valeur_num) AS total FROM constante_horaire "
+        "WHERE sejour_id = ? AND date_jour = ? AND cle = ? AND supprime = 0 "
+        "AND valeur_num IS NOT NULL",
+        (sejour_id, date_jour, cle),
+    )
+    if not ligne or not ligne["n"]:
+        return None
+    return float(ligne["total"])
+
+
+def heures_relevees(base: Base, sejour_id: str, date_jour: str, cle: str) -> int:
+    """Combien d'heures portent une valeur — ce qui dit si le total vaut
+    quelque chose. Un « total » sur trois heures n'est pas un total /24 h."""
+    ligne = base.une_ligne(
+        "SELECT COUNT(*) AS n FROM constante_horaire WHERE sejour_id = ? "
+        "AND date_jour = ? AND cle = ? AND supprime = 0 AND valeur_num IS NOT NULL",
+        (sejour_id, date_jour, cle),
+    )
+    return int((ligne or {}).get("n") or 0)
