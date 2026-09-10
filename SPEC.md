@@ -926,6 +926,44 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.27 — 10 septembre 2026 — une porte de secours pour les comptes**
+
+Le service s'est retrouvé enfermé dehors en testant l'application : plus
+d'accès administrateur, et rien dans le logiciel pour en refaire un.
+
+L'écran des comptes demande le droit `comptes`, que seul le rôle
+**Administrateur** possède. Le logiciel refusait déjà de *retirer* le dernier
+administrateur — mais cette garde ne couvre pas les trois cas qui enferment
+réellement : une base qui porte des comptes sans qu'aucun ne soit
+administrateur (l'écran de première ouverture ne s'affiche plus, et personne
+ne peut en créer), le seul administrateur désactivé, ou son code perdu. Le
+seul recours restant était d'ouvrir la base SQLite à la main.
+
+`outils/administrateur.py` lit et répare : `--lister`, `--promouvoir`,
+`--creer`, `--code`, `--reactiver`.
+
+**Pourquoi un programme à part et non un bouton.** Un bouton « devenir
+administrateur » serait atteignable depuis n'importe quel téléphone du
+service, et rendrait inutile tout le reste. L'outil demande un accès aux
+fichiers du PC serveur — c'est-à-dire l'accès qui permettrait de toute façon
+de modifier la base directement. La barrière reste au bon endroit : la session
+Windows du poste serveur. Et chaque geste passe par les services habituels,
+donc le **journal d'audit** l'enregistre.
+
+Deux pièges rencontrés en l'écrivant, tous deux dans les tests désormais.
+`utilisateurs.par_nom` ne regarde que les comptes **actifs** — juste pour
+l'écran d'ouverture, faux ici, puisque le compte qu'on vient réactiver n'est
+par définition pas actif. Et l'état d'un compte se lit sur `actif`, pas sur
+`supprime` : un compte désactivé se serait affiché comme actif.
+
+Le code se tape sans s'afficher et ne se passe jamais en argument — il
+resterait dans l'historique du terminal et dans la liste des processus.
+
+**Vérifications.** 1 045 tests passent (7 ajoutés, dont l'outil lancé pour de
+vrai dans son propre processus). Essayé de bout en bout sur une base à deux
+comptes sans administrateur : `--lister` le signale, `--promouvoir` rend la
+main, le journal d'audit trace.
+
 **v3.26 — 10 septembre 2026 — trois jours côte à côte à la visite, et un tableau des constantes daté à part**
 
 *Trois jours de biologie et de gaz.* Une valeur seule ne dit pas si le rein

@@ -134,6 +134,11 @@ Prescrit, pour appeler directement l'infirmier du patient.
 Un compte ne se supprime pas, il se **désactive** — sinon des années de
 prescriptions deviendraient anonymes.
 
+**Garder au moins deux comptes administrateur.** Le logiciel refuse de retirer
+le dernier, mais rien ne le protège d'un code oublié. Si cela arrive quand
+même, l'annexe donne la porte de secours (`outils/administrateur.py`, à lancer
+sur le PC serveur).
+
 ### 1.7 L'icône de bureau
 
 Le dépôt fournit `installer.bat` : double-cliquer dessus crée un raccourci
@@ -349,8 +354,34 @@ redémarrer l'application (les compteurs sont en mémoire).
 **Un code d'accès est perdu.** Un administrateur en pose un nouveau :
 Administration → Comptes → Modifier.
 
-**Plus personne ne peut gérer les comptes.** Cette situation est empêchée par
-le logiciel : il refuse de retirer le dernier compte administrateur.
+**Aucun compte n'a accès à Administration → Comptes.** L'écran des comptes
+demande le droit `comptes`, que seul le rôle **Administrateur** possède. Trois
+cas mènent à l'impasse : une base qui porte des comptes mais aucun
+administrateur, le seul administrateur désactivé, ou son code perdu. Le
+logiciel refuse bien de *retirer* le dernier administrateur — mais cela ne
+couvre pas ces trois cas-là.
+
+La porte de secours se lance **sur le PC serveur**, jamais depuis un
+téléphone :
+
+```
+cd C:\rea
+.venv\Scripts\activate
+python outils\administrateur.py --lister
+python outils\administrateur.py --promouvoir "Dr Karaa"
+```
+
+`--lister` montre chaque compte, son rôle, s'il est actif et s'il a un code —
+et dit s'il n'y a aucun administrateur. Les autres gestes : `--creer "Nom"`
+pour un nouvel administrateur, `--code "Nom"` pour poser un code, `--reactiver
+"Nom"` pour un compte désactivé. Le code se tape sans s'afficher : ne jamais
+le passer en argument, il resterait dans l'historique du terminal.
+
+Si c'est un programme à part et non un bouton dans l'application, c'est
+voulu : un bouton « devenir administrateur » serait atteignable depuis
+n'importe quel téléphone du service. Ici il faut un accès aux fichiers du PC
+serveur — celui qui permettrait de toute façon de modifier la base
+directement. Chaque geste est enregistré dans le journal d'audit.
 
 **Mettre à jour le logiciel.** Fermer l'application, puis :
 
