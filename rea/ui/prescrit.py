@@ -17,6 +17,7 @@ from ..domaine.dates import format_date_fr, lendemain
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import dispositifs as dispositifs_service
+from ..services import medicaments as medicaments_service
 from ..services import pancarte as pancarte_service
 from ..services import prescriptions as prescriptions_service
 from ..services import vitesses as vitesses_service
@@ -513,6 +514,62 @@ def _panneau_posologie(sejour: dict, pancarte: dict, date_jour_str: str) -> None
                     st.rerun()
 
 
+def _molecule(sejour: dict, voie: str) -> tuple[str, str | None]:
+    """La molécule se choisit, elle ne se retape plus.
+
+    On tape « tie » et Imipénème sort — parce que « Tienam » est ce qu'on a en
+    tête au lit du malade, et que le catalogue le sait (demande du service,
+    10 septembre). Ce qui s'écrit sur la prescription reste la dénomination
+    commune : c'est elle qui permet de compter une molécule à travers ses noms
+    commerciaux, et donc de répondre plus tard à « quelle molécule sur quel
+    type d'infection ».
+
+    **La liste reste ouverte.** Une molécule absente s'écrit à la main dans le
+    champ du dessous — et ce seul geste l'ajoute au catalogue du service, sans
+    rien demander à personne. Fermer la liste obligerait à remplir un
+    catalogue avant de pouvoir prescrire, c'est-à-dire à prescrire sur papier
+    en attendant.
+
+    Rend le libellé et l'unité usuelle. **Pas de dose** : le catalogue porte
+    « g » plutôt que « mg » pour l'imipénème, ce qui est une unité et non une
+    posologie. Une dose pré-remplie est une dose validée sans être lue.
+    """
+    molecules = medicaments_service.catalogue(contexte.base())
+    par_code = {m.code: m for m in molecules}
+    choix = st.selectbox(
+        "Molécule", list(par_code), index=None,
+        format_func=lambda c: _etiquette_molecule(par_code[c]),
+        placeholder="Taper les premières lettres — nom ou marque",
+        key=f"molecule_{voie}_{sejour['id']}",
+    )
+    libre = st.text_input(
+        "Autre molécule", value="",
+        placeholder="si absente de la liste — elle y sera dès la prochaine fois",
+        key=f"molecule_libre_{voie}_{sejour['id']}",
+    )
+    if libre.strip():
+        return libre.strip(), None
+    if choix:
+        return par_code[choix].libelle, par_code[choix].unite
+    return "", None
+
+
+def _etiquette_molecule(molecule) -> str:
+    """« Imipénème · Tienam » — la marque est visible pour qu'on la trouve.
+
+    C'est cette étiquette que la liste filtre quand on tape : y faire figurer
+    les synonymes est exactement ce qui rend « tie » utile. Sans eux, il
+    faudrait connaître la DCI pour retrouver un produit qu'on nomme par sa
+    marque douze fois par jour.
+    """
+    etiquette = molecule.libelle
+    if molecule.synonymes:
+        etiquette += " · " + " · ".join(molecule.synonymes[:3])
+    if molecule.locale:
+        etiquette += "  (ajoutée par le service)"
+    return etiquette
+
+
 def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
     """« AJOUTER UNE LIGNE » — panneau permanent, pas un tiroir à rouvrir.
 
@@ -552,6 +609,9 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
 
     champs_voie = listes.VOIES[voie]["champs"]
     with st.form(f"ajout_ligne_{voie}"):
+        # L'unité usuelle vient du catalogue des molécules quand il y en a un ;
+        # les solutés n'en ont pas, leur volume se compte en cc/h ou en mL/24 h.
+        unite_usuelle = None
         if voie == "ENTREES":
             # Les solutés se choisissent dans le catalogue : « SG5 », « G5% » et
             # « sérum glucosé 5 » désignaient le même produit sans jamais se
@@ -569,7 +629,7 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
             )
             produit = libre.strip() or (listes.libelle(catalogue, connu) if connu else "")
         else:
-            produit = st.text_input("Produit / libellé")
+            produit, unite_usuelle = _molecule(sejour, voie)
         dose = unite = rythme = condition = None
         dilution = None
         nb_ampoules = vitesse = volume_dilution = volume_24h = None
@@ -585,7 +645,16 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
         if "dose" in champs_voie:
             c1, c2 = st.columns(2)
             dose = champs.nombre_saisi(c1.text_input("Dose", value="", placeholder="ex. 40"))
-            unite = c2.selectbox("Unité", listes.UNITES)
+            # L'unité usuelle de la molécule est proposée d'avance — « g » pour
+            # l'imipénème, « µg » pour le sufentanil. C'est une **unité**, pas
+            # une posologie : elle évite le « 1 mg d'imipénème » d'une liste
+            # déroulante restée sur son premier choix, sans jamais suggérer
+            # combien donner. La dose, elle, part vide.
+            unites = list(listes.UNITES)
+            unite = c2.selectbox(
+                "Unité", unites,
+                index=unites.index(unite_usuelle) if unite_usuelle in unites else 0,
+            )
         if "nb_ampoules" in champs_voie:
             # PO se compte en comprimés, les autres voies en ampoules — le
             # mot change, la valeur reste un nombre saisi par le médecin,
@@ -697,6 +766,15 @@ def _panneau_ajouter_ligne(sejour: dict, date_jour_str: str) -> None:
                     indication=indication or None,
                     utilisateur_id=contexte.utilisateur_id(),
                 )
+                if voie != "ENTREES":
+                    # La molécule écrite à la main entre au catalogue du
+                    # service par ce seul geste. Silencieux : on ne demande
+                    # pas à un médecin de confirmer qu'il veut enrichir un
+                    # catalogue au moment où il prescrit.
+                    medicaments_service.apprendre(
+                        contexte.base(), produit, unite=unite,
+                        utilisateur_id=contexte.utilisateur_id(),
+                    )
                 st.rerun()
 
 

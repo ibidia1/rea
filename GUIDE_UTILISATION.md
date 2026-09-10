@@ -233,6 +233,24 @@ qui rend juste la durée d'antibiothérapie.
 
 Le bouton d'impression produit la feuille A3 du service.
 
+**Choisir la molécule.** Le champ *Molécule* est une liste qu'on cherche en
+tapant : « tie » propose Imipénème, parce que le catalogue connaît « Tienam ».
+On peut aussi chercher par famille — « curare », « aminoside », « C3G ».
+
+Ce qui s'écrit sur la prescription est la **dénomination commune** et non la
+marque : c'est elle qui permet de compter une molécule à travers ses noms
+commerciaux, et donc de répondre plus tard à « quelle molécule sur quel type
+d'infection ».
+
+L'**unité usuelle** est proposée d'avance — « g » pour l'imipénème, « µg »
+pour le sufentanil. C'est une unité, pas une posologie : **la dose reste
+vide**, elle s'écrit à la main comme partout ailleurs.
+
+**La liste n'est pas fermée.** Une molécule absente s'écrit dans le champ
+*Autre molécule* juste en dessous — et ce seul geste l'ajoute au catalogue du
+service. Elle sera proposée dès la prochaine prescription, sans que personne
+ait à remplir quoi que ce soit.
+
 ### Explorations et actes
 
 Dispositifs posés et retirés, imageries, transfusions, anesthésies
@@ -307,6 +325,20 @@ kaliémie à 2,6 le quatrième jour, par exemple.
 
 Les **règles d'aide** (seuils biologiques, rappels de dispositifs) se
 modifient au même endroit, sans reprogrammer le logiciel.
+
+### Le catalogue des molécules
+
+Administration → **Molécules**. Un catalogue qui apprend de ce qu'on prescrit
+finit par contenir les fautes de frappe qu'on a prescrites : « Tienma »,
+« Tienam 1g », « tienam iv ». Chacune devient une molécule distincte qui ne se
+comptera jamais avec les autres — et c'est exactement ce que perd l'analyse.
+
+Cet écran sert à les nettoyer : chercher, corriger un nom, en retirer une.
+**Aucun de ces gestes ne touche aux prescriptions déjà écrites** : une ligne
+porte le nom écrit ce jour-là, et le réécrire changerait une prescription
+signée. Seul ce qui sera proposé la prochaine fois change.
+
+À relire de temps en temps, comme les référentiels.
 
 ### Recherche et cohortes
 
