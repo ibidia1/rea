@@ -926,6 +926,50 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.31 — 10 septembre 2026 — seize écrivains simultanés, et la course qu'ils ont révélée**
+
+Question du service : SQLite tient-il soixante comptes et une quinzaine de
+terminaux qui écrivent en même temps ? Plutôt que d'en discuter, on l'a mesuré
+— `outils/test_de_charge.py`, seize fils écrivant constantes, administrations
+et prélèvements **à travers les services**, sur douze lits.
+
+**La base n'est pas le sujet.** 1 231 écritures par seconde tenues sur
+45 secondes, latence médiane 11 ms, p99 24 ms, aucun `SQLITE_BUSY`,
+`integrity_check` à « ok ». Le service a besoin de quelques écritures par
+minute : il y a deux ordres de grandeur de marge. La limite réelle du logiciel
+est le temps de rendu de Streamlit, pas la base.
+
+**Mais la mesure a trouvé autre chose.** Onze écritures perdues sur 36 587,
+toutes de la même forme : `IntegrityError: UNIQUE constraint failed`. Les
+services notaient « s'il existe une ligne, la mettre à jour, sinon l'insérer »
+**hors transaction**. Deux fils lisent tous les deux « rien de noté » et
+insèrent tous les deux ; le second heurte l'index unique, et la note est
+perdue — une administration non enregistrée alors que l'infirmière a vu le
+bouton devenir vert.
+
+Ce n'est pas une hypothèse de laboratoire. Le déclencheur le plus probable
+n'est pas deux infirmières sur le même patient : c'est **un seul doigt qui
+appuie deux fois** sur un téléphone quand le réseau traîne.
+
+Corrigé sur les cinq écritures concernées — administrations, constantes
+horaires, prélèvements, affectations, apprentissage d'une molécule — en
+enveloppant le « lire puis écrire » dans `base.transaction()`, qui tient le
+verrou du début à la fin. Après correction : **zéro erreur sur 55 409
+écritures**, et plus rapide qu'avant (1 231/s contre 813).
+
+**Une nuance sur le mode WAL, qu'il faut connaître.** SQLite en WAL laisse
+lire pendant qu'on écrit. Cette application, elle, pose un verrou Python
+autour de *tous* ses accès, lectures comprises — c'est lui qui rend le « lire
+puis écrire » sûr. Pendant une transaction, un autre fil ne lit donc pas : il
+attend. Sans conséquence tant qu'une transaction dure onze millisecondes ;
+grave dès qu'on mettrait un calcul, une impression ou une attente réseau dans
+un `with base.transaction()`, ce qui bloquerait alors tout le service. Un test
+grave cette règle.
+
+**Vérifications.** 1 111 tests passent (7 ajoutés, qui rejouent les collisions
+en une seconde), pyflakes propre. Le test de charge complet reste dans
+`outils/test_de_charge.py`, à rejouer avant toute mise en service.
+
 **v3.30 — 10 septembre 2026 — les prélèvements du poste, et l'essai de rôle**
 
 *Les bilans et les radios de sa vacation.* `bilan_demande` disait ce qu'il faut

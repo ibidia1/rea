@@ -383,6 +383,28 @@ n'importe quel téléphone du service. Ici il faut un accès aux fichiers du PC
 serveur — celui qui permettrait de toute façon de modifier la base
 directement. Chaque geste est enregistré dans le journal d'audit.
 
+**Vérifier que la base tient la charge du service.** Avant la mise en service,
+et après toute mise à jour importante :
+
+```
+cd C:\rea
+.venv\Scripts\activate
+set REA_DIR=C:\rea\essai_charge
+python outils\test_de_charge.py
+```
+
+Seize soignants simulés écrivent pendant une minute. **La seule ligne qui
+compte est « erreurs : 0 »** — une écriture qui échoue est une administration
+non enregistrée alors que l'infirmière a vu le bouton devenir vert. Regarder
+aussi `integrity_check`, qui doit rendre « ok ».
+
+Ce test utilise sa **propre base** (`REA_DIR`) : ne jamais le lancer sur celle
+du service. Effacer le dossier d'essai ensuite.
+
+Mesuré le 10 septembre 2026 : 1 231 écritures par seconde, latence médiane
+11 ms, aucune erreur — deux ordres de grandeur au-dessus de ce dont un service
+de douze lits a besoin.
+
 **Mettre à jour le logiciel.** Fermer l'application, puis :
 
 ```

@@ -198,13 +198,19 @@ def apprendre(
     """
     libelle = (libelle or "").strip()
     cle = normaliser(libelle)
-    if not cle or par_libelle(base, libelle) is not None:
+    if not cle:
         return None
-    return base.inserer(
-        "medicament_local",
-        {"cle": cle, "libelle": libelle, "unite": (unite or "").strip() or None},
-        utilisateur_id=utilisateur_id,
-    )
+    # Lire puis écrire n'est atomique que dans une transaction : sans elle, deux
+    # fils lisent tous les deux « rien » et insèrent tous les deux — le second
+    # heurte l'index unique (mesuré sur seize écrivains simultanés, 10 septembre).
+    with base.transaction():
+        if par_libelle(base, libelle) is not None:
+            return None
+        return base.inserer(
+            "medicament_local",
+            {"cle": cle, "libelle": libelle, "unite": (unite or "").strip() or None},
+            utilisateur_id=utilisateur_id,
+        )
 
 
 def locales(base: Base) -> list[dict]:
