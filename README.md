@@ -1,7 +1,10 @@
 # Logiciel de service — Réanimation polyvalente
 
-Voir **[SPEC.md](SPEC.md)** — c'est le document de référence du projet,
-à jour à chaque session de travail.
+| Document | Pour qui |
+|---|---|
+| **[INSTALLATION.md](INSTALLATION.md)** | installer le poste serveur, le routeur du service, l'accès depuis les téléphones et les autres postes |
+| **[GUIDE_UTILISATION.md](GUIDE_UTILISATION.md)** | se servir du logiciel, un guide par métier |
+| **[SPEC.md](SPEC.md)** | la référence du projet et son journal des versions |
 
 ## État actuel
 

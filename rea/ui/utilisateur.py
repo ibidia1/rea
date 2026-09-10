@@ -160,6 +160,7 @@ def peut(droit: str) -> bool:
 
 
 def changer_utilisateur() -> None:
-    for cle in ("utilisateur_id", "utilisateur_nom", "utilisateur_role"):
+    for cle in ("utilisateur_id", "utilisateur_nom", "utilisateur_role",
+                "accueil_pose", "ecran", "sejour_id"):
         st.session_state.pop(cle, None)
     st.rerun()

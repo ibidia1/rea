@@ -173,3 +173,16 @@ def test_ce_qui_a_disparu_est_dit_et_non_tu():
     options = ["nfs", "iono"]
     assert champs.valeurs_oubliees(options, ["nfs", "gaz_du_sang"]) == ["gaz_du_sang"]
     assert champs.valeurs_oubliees(options, ["nfs"]) == []
+
+
+def test_libelle_tolere_une_liste_plate():
+    """`UNITES` est une liste de chaînes — « mg », « g » — et non des paires.
+    `entree[0]` y lit la première lettre, `entree[1]` la deuxième : une unité
+    d'une seule lettre levait `IndexError` et emportait l'écran des
+    protocoles. Trouvé en ouvrant chaque écran de chaque rôle."""
+    from rea import listes
+
+    assert listes.libelle(listes.UNITES, "g") == "g"
+    assert listes.libelle(listes.UNITES, "mg") == "mg"
+    assert listes.libelle(listes.UNITES, "inconnu") == "inconnu"
+    assert listes.libelle(listes.ROLES, "senior") == "Senior"

@@ -181,10 +181,22 @@ GRADES_ESCARRE = _charger("escarres", "grades")
 # --------------------------------------------------------------------------
 
 def libelle(liste, code: str | None, defaut: str = "") -> str:
-    """Libellé d'un code dans une liste de paires (code, libellé, …)."""
+    """Libellé d'un code dans une liste de paires (code, libellé, …).
+
+    Tolère une liste **plate** de chaînes — « mg », « g », « cc » — où le
+    code est son propre libellé. Sans cela, `entree[0]` lit la première
+    lettre d'une chaîne, `entree[1]` la deuxième, et une unité d'une seule
+    lettre lève `IndexError` : l'écran entier tombe, pour une liste dont le
+    seul tort est de ne pas avoir de libellé séparé. C'est arrivé sur
+    l'éditeur de protocoles.
+    """
     if code is None:
         return defaut
     for entree in liste:
+        if isinstance(entree, str):
+            if entree == code:
+                return entree
+            continue
         if entree[0] == code:
             return entree[1]
     return code

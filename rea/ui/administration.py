@@ -608,10 +608,12 @@ def _editeur_protocoles() -> None:
             "Dose", key=f"ed_proto_ligne_dose_{i}", placeholder="1",
             label_visibility="collapsed" if i else "visible",
         )
+        # `UNITES` est une liste plate de chaînes (« mg », « g »…), pas des
+        # paires code/libellé : l'unité *est* son libellé.
         unite = cc4.selectbox(
-            "Unité", [""] + list(listes.codes(listes.UNITES)),
+            "Unité", [""] + list(listes.UNITES),
             key=f"ed_proto_ligne_unite_{i}",
-            format_func=lambda c: "—" if not c else listes.libelle(listes.UNITES, c),
+            format_func=lambda c: c or "—",
             label_visibility="collapsed" if i else "visible",
         )
         rythme = cc5.selectbox(

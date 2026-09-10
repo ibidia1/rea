@@ -926,6 +926,48 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.23 — 10 septembre 2026 — recette complète, deux bugs trouvés, et les guides**
+
+*Recette.* Chaque écran de chaque rôle ouvert dans un navigateur, pour de
+vrai : cinq rôles, sept écrans de fiche, six vues de recherche, sept sections
+d'administration, quatre vues de surveillance. Deux bugs en sont sortis, que
+la suite de tests ne pouvait pas voir.
+
+**L'accueil du rôle était une prison.** Le point d'entrée reposait l'écran
+d'accueil « chaque fois que l'écran courant est absent ». Or ouvrir un
+dossier retire l'écran courant pour laisser passer la fiche — l'accueil était
+donc reposé aussitôt. Conséquence : le surveillant et l'infirmier ne
+pouvaient **jamais** ouvrir un dossier patient, renvoyés chez eux à chaque
+tentative. Toute la différence tenait entre « une fois par session » et
+« chaque fois qu'il manque ».
+
+**Une unité d'une seule lettre emportait l'écran des protocoles.** `UNITES`
+est une liste plate de chaînes — « mg », « g » — et non des paires
+code/libellé. `libelle()` y lisait `entree[1]`, c'est-à-dire la deuxième
+lettre : `IndexError` sur « g », et l'écran entier tombait. Corrigé à
+l'appel, et `libelle()` tolère désormais une liste plate — c'est la même
+famille que le bilan disparu du référentiel, en v3.21.
+
+Les deux sont figés par des tests qui lisent le code source : ils tiennent
+sans navigateur.
+
+*Deux guides, dans le dépôt.*
+
+**INSTALLATION.md** part d'un PC Windows neuf et va jusqu'aux infirmiers
+connectés depuis leur téléphone : Python, dépendances, premier compte,
+comptes du service, sauvegardes, puis le routeur du service, l'adresse fixe
+du serveur, le lancement sur le réseau privé, et enfin l'accès filaire des
+autres postes de l'hôpital — avec ce que ce dernier choix implique. Chaque
+étape se termine par une vérification ; les pièges du double réseau
+(passerelle à laisser vide, pas de pont, `REA_HOTE` sur l'IP privée et non
+sur `0.0.0.0`) y sont expliqués plutôt que mentionnés.
+
+**GUIDE_UTILISATION.md** donne quatre guides indépendants — infirmier,
+surveillant, résident, senior — qui suivent la journée réelle du poste. Ils
+disent aussi ce que le logiciel **refuse** de faire et pourquoi : pas de
+posologie proposée d'elle-même, pas de chiffre incalculable affiché, pas de
+pourcentage sous cinq patients.
+
 **v3.22 — 10 septembre 2026 — un « non donné » qui dit pourquoi, et qui arrive à qui doit agir**
 
 « Il arrive qu'il manque le médicament, ou qu'on ne puisse pas le donner —

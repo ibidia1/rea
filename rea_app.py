@@ -44,8 +44,14 @@ if not utilisateur_id:
 #: doit être celui qui s'affiche en entrant.
 ACCUEIL_PAR_ROLE = {"infirmier": "poste", "surveillant": "supervision"}
 
-if "ecran" not in st.session_state:
+# Une seule fois par session, et pas « chaque fois que l'écran est absent ».
+# La nuance décide de tout : ouvrir un dossier retire `ecran` pour laisser
+# passer la fiche, et un test « si absent, remets l'accueil du rôle » la
+# reposait aussitôt — le surveillant et l'infirmier étaient renvoyés chez eux
+# à chaque tentative d'ouvrir un patient, sans jamais pouvoir en lire un.
+if "accueil_pose" not in st.session_state:
     st.session_state["ecran"] = ACCUEIL_PAR_ROLE.get(utilisateur_ui.role_courant(), "")
+    st.session_state["accueil_pose"] = True
 
 
 # --------------------------------------------------------------------------
