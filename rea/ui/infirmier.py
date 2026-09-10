@@ -305,24 +305,22 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
 
     with st.form(f"constantes_{patient['sejour_id']}_{heure}"):
         valeurs = {}
-        # Deux colonnes, remplies **ligne par ligne** et non colonne par
-        # colonne. Sous 640 px, Streamlit empile les colonnes : un remplissage
-        # vertical y devient « FC, PA diast., FR, Glasgow, Dextro, PA syst. »
-        # — les deux pressions séparées par quatre champs, et l'ordre de la
-        # feuille perdu. Deux par rangée gardent le même ordre dans les deux
-        # dispositions.
-        champs_constantes = list(constantes_service.CLES)
-        for i in range(0, len(champs_constantes), 2):
-            for colonne, (cle, libelle, unite) in zip(
-                st.columns(2), champs_constantes[i:i + 2]
-            ):
-                with colonne:
-                    brut = st.text_input(
-                        f"{libelle} ({unite})" if unite else libelle,
-                        value="" if saisies.get(cle) is None else _nombre(saisies[cle]),
-                        key=f"cst_{patient['sejour_id']}_{heure}_{cle}",
-                    )
-                valeurs[cle] = _lire(brut)
+        _rangees(constantes_service.VITALES, patient, heure, saisies, valeurs)
+        # Les sorties à part, sous leur titre : on ne les remplit pas du même
+        # geste (on vide un bocal, on ne lit pas un moniteur), et surtout ce
+        # sont les seules valeurs de cet écran qui s'additionnent sur la
+        # journée pour devenir le total des pertes.
+        st.markdown(
+            f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
+            f"color:{theme.BLEU}'>Sorties de l'heure</div>",
+            unsafe_allow_html=True,
+        )
+        _rangees(constantes_service.SORTIES, patient, heure, saisies, valeurs)
+        st.caption(
+            "Jetés : ce qui est recueilli puis jeté au lieu d'être réinjecté "
+            "— liquide gastrique aspiré, vomissements recueillis. Une case "
+            "vide veut dire « rien de relevé », pas « rien de perdu »."
+        )
         if st.form_submit_button(f"Enregistrer le relevé de {heure:02d} h",
                                  type="primary", use_container_width=True):
             constantes_service.enregistrer(
@@ -335,20 +333,59 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
     _grille_du_jour(grille, heures)
 
 
+def _rangees(champs_constantes, patient, heure, saisies, valeurs) -> None:
+    """Deux colonnes, remplies **ligne par ligne** et non colonne par colonne.
+
+    Sous 640 px, Streamlit empile les colonnes : un remplissage vertical y
+    devient « FC, PA diast., FR, Glasgow, Dextro, PA syst. » — les deux
+    pressions séparées par quatre champs, et l'ordre de la feuille perdu.
+    Deux par rangée gardent le même ordre dans les deux dispositions.
+    """
+    champs_constantes = list(champs_constantes)
+    for i in range(0, len(champs_constantes), 2):
+        for colonne, (cle, libelle, unite) in zip(
+            st.columns(2), champs_constantes[i:i + 2]
+        ):
+            with colonne:
+                brut = st.text_input(
+                    f"{libelle} ({unite})" if unite else libelle,
+                    value="" if saisies.get(cle) is None else _nombre(saisies[cle]),
+                    key=f"cst_{patient['sejour_id']}_{heure}_{cle}",
+                )
+            valeurs[cle] = _lire(brut)
+
+
 def _grille_du_jour(grille: dict, heures) -> None:
     """Le relevé du poste en tableau : c'est la courbe qu'on lit d'un coup
-    d'œil pour voir si quelque chose se dégrade."""
+    d'œil pour voir si quelque chose se dégrade.
+
+    Une colonne de plus au bout pour les sorties : leur **cumul du poste**.
+    C'est le chiffre qu'on donne à la relève et qu'on additionne sinon de
+    tête, six bocaux à la suite. Il ne s'affiche que sur les lignes où une
+    somme veut dire quelque chose — la somme des six températures d'une
+    vacation ne serait pas une température.
+    """
     if not grille:
         return
     entetes = "".join(f"<th style='padding:.2rem .35rem'>{h:02d}</th>" for h in heures)
+    entetes += "<th style='padding:.2rem .5rem;border-left:1px solid #e2e8f0'>Total</th>"
     lignes = ""
     for cle, libelle, _unite in constantes_service.CLES:
-        if not any(cle in grille.get(h, {}) for h in heures):
+        valeurs = [grille.get(h, {}).get(cle) for h in heures]
+        if not any(v is not None for v in valeurs):
             continue
         cases = "".join(
-            f"<td style='text-align:center;padding:.2rem .35rem'>"
-            f"{_nombre(grille.get(h, {}).get(cle))}</td>"
-            for h in heures
+            f"<td style='text-align:center;padding:.2rem .35rem'>{_nombre(v)}</td>"
+            for v in valeurs
+        )
+        if cle in constantes_service.CLES_SOMMABLES:
+            total = sum(v for v in valeurs if v is not None)
+            cumul = f"<b>{_nombre(total)}</b>"
+        else:
+            cumul = ""
+        cases += (
+            f"<td style='text-align:center;padding:.2rem .5rem;"
+            f"border-left:1px solid #e2e8f0'>{cumul}</td>"
         )
         lignes += (
             f"<tr><td style='padding:.2rem .4rem;white-space:nowrap'>"
