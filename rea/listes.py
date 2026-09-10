@@ -107,6 +107,8 @@ SOUS_TYPES_ENTREES = _charger("sous_types_entrees")
 # qu'un interne finit par remplir avec le paramètre d'à côté.
 MODES_VENTILATOIRES = _charger("modes_ventilatoires")
 SPECIALITES_AVIS = _charger("specialites_avis")
+MOTIFS_NON_ADMINISTRATION = _charger("motifs_non_administration")
+
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
 ADDITIFS_PERFUSION = _charger("additifs_perfusion")

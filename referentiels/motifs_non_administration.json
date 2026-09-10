@@ -1,0 +1,21 @@
+{
+  "nom": "motifs_non_administration",
+  "libelle": "Pourquoi un traitement n'a pas été donné",
+  "version": "2026-09-10.1",
+  "date": "2026-09-10",
+  "note": "Demande du service (10 septembre 2026). Un « non donné » n'est pas qu'une case : selon le motif, quelqu'un doit agir. `action` dit qui — `pharmacie` pour ce qui se commande, `abord` pour ce qui demande de poser une voie ou une sonde, `medical` pour ce qui demande une décision du médecin, `aucune` pour ce qui se règle tout seul à la prise suivante. Les motifs marqués d'une action remontent à l'écran du surveillant et au Prescrit du médecin, avec le nom du patient : c'est la seule façon qu'une rupture de stock ne se découvre pas trois prises plus tard. Le texte libre reste possible à côté, pour préciser — il ne remplace pas le motif, sinon plus rien ne se compte.",
+  "valeurs": [
+    ["rupture_stock", "Médicament non disponible (rupture)", "pharmacie"],
+    ["dotation_epuisee", "Dotation du service épuisée", "pharmacie"],
+    ["pas_de_sng", "Pas de sonde nasogastrique en place", "abord"],
+    ["pas_de_voie", "Pas de voie d'abord disponible", "abord"],
+    ["voie_obstruee", "Voie obstruée ou déplacée", "abord"],
+    ["a_jeun", "Patient à jeun", "aucune"],
+    ["patient_absent", "Patient absent (bloc, imagerie)", "aucune"],
+    ["etat_clinique", "Contre-indication clinique du moment", "medical"],
+    ["suspendu_medecin", "Suspendu par le médecin", "aucune"],
+    ["refus_patient", "Refus du patient", "medical"],
+    ["intolerance", "Intolérance ou effet indésirable", "medical"],
+    ["autre", "Autre — préciser", "aucune"]
+  ]
+}

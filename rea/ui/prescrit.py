@@ -14,6 +14,7 @@ from .. import config, listes
 from ..domaine import coherence, prescription as dom
 from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr, lendemain
+from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import dispositifs as dispositifs_service
 from ..services import pancarte as pancarte_service
@@ -109,10 +110,39 @@ def _soignants_du_patient(sejour: dict) -> None:
     )
 
 
+def _non_donnes(sejour: dict, date_jour_str: str) -> None:
+    """Ce qui n'est pas passé aujourd'hui, sous les yeux de celui qui
+    prescrit.
+
+    Sans cela, on relit une courbe qui ne baisse pas et on conclut à un échec
+    du traitement, alors que la dose n'a simplement pas été donnée — parce
+    que la pharmacie était en rupture, ou qu'il n'y avait pas encore de sonde
+    pour le per os. C'est la conséquence clinique du travail infirmier, elle
+    a sa place ici (demande du service, 10 septembre).
+    """
+    lignes = adm_service.non_donnees_du_sejour(
+        contexte.base(), sejour["id"], date_jour_str
+    )
+    if not lignes:
+        return
+    contenu = "".join(
+        f"<div style='padding:.15rem 0'><b>{l['produit']}</b> à "
+        f"{l['heure_prevue']:02d} h — {l['libelle_motif'] or 'motif non précisé'}"
+        + (f" ({l['motif']})" if l.get("motif") else "")
+        + "</div>"
+        for l in lignes
+    )
+    theme.bloc_html(
+        f"Non donné{'s' if len(lignes) > 1 else ''} ce jour ({len(lignes)})",
+        contenu, theme.ORANGE,
+    )
+
+
 def onglet_prescrit(sejour: dict) -> None:
     date_jour = st.date_input("Jour affiché", value=date.today(), key="date_prescrit")
     date_jour_str = str(date_jour)
     _soignants_du_patient(sejour)
+    _non_donnes(sejour, date_jour_str)
 
     pancarte = prescriptions_service.pancarte_du_jour(contexte.base(), sejour["id"], date_jour_str)
 
