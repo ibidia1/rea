@@ -21,3 +21,6 @@ venv/
 Thumbs.db
 .coverage
 htmlcov/
+
+# Secret local du compte de secours — jamais versionne
+secours.txt

@@ -56,6 +56,53 @@ def _version() -> str:
 
 VERSION = _version()
 
+
+# --------------------------------------------------------------------------
+# Compte de secours (« break-glass »)
+# --------------------------------------------------------------------------
+# Un administrateur qui entre TOUJOURS — même base vide, même plus aucun
+# compte, même tous les administrateurs bloqués. C'est la porte de dernier
+# recours du propriétaire, pas un compte du service : il n'apparaît dans
+# aucune liste, aucun écran, aucune sélection.
+#
+# Son mot de passe n'est PAS écrit ici, et c'est le point qui compte : ce
+# fichier part sur le dépôt et se recopie en clair dans le dossier du poste,
+# donc tout ce qu'on y écrirait serait lisible par quiconque ouvre l'un ou
+# l'autre — l'inverse d'un secret. Le code est donc lu d'un secret LOCAL au
+# poste, dans cet ordre :
+#
+#   1. la variable d'environnement REA_SECOURS_CODE ;
+#   2. sinon, la première ligne du fichier `<RACINE>/secours.txt`
+#      (par défaut C:\ReaService\secours.txt), hors du dossier du code et
+#      jamais versionné ;
+#   3. à défaut de tout cela, « ADMIN123 » — un défaut PUBLIC, écrit ci-dessous
+#      et donc connu de quiconque lit ceci : à remplacer par (1) ou (2) sur le
+#      poste pour que le compte de secours soit réellement secret.
+#
+# REA_SECOURS_ID permet d'en changer le nom ; REA_SECOURS=0 le désactive tout
+# à fait pour un poste qui n'en veut pas.
+
+SECOURS_UTILISATEUR_ID = "secours"
+SECOURS_ID = (os.environ.get("REA_SECOURS_ID") or "ADMIN").strip()
+SECOURS_ACTIF = (os.environ.get("REA_SECOURS", "1").strip() != "0")
+
+
+def _code_de_secours() -> str:
+    depuis_env = os.environ.get("REA_SECOURS_CODE")
+    if depuis_env and depuis_env.strip():
+        return depuis_env.strip()
+    try:
+        lignes = (RACINE / "secours.txt").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lignes = []
+    for ligne in lignes:
+        if ligne.strip():
+            return ligne.strip()
+    return "ADMIN123"
+
+
+SECOURS_CODE = _code_de_secours()
+
 # --------------------------------------------------------------------------
 # Réseau et authentification (§2.4 — contraintes d'architecture)
 # --------------------------------------------------------------------------

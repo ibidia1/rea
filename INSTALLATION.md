@@ -177,6 +177,31 @@ installer le logiciel, importer ce fichier (Administration → Sauvegardes →
 Installer une base venue d'ailleurs), et retrouver les patients. Une
 sauvegarde jamais restaurée n'existe pas.
 
+### 1.8 Le compte de secours (pour vous seul)
+
+Il existe un compte administrateur **de dernier recours**, qui entre toujours
+— même si la base est vide, même si tous les comptes administrateurs sont
+bloqués ou perdus. Il n'apparaît dans aucune liste et dans aucun écran : on y
+entre en **tapant son nom** dans le champ « Qui êtes-vous ? » de l'ouverture
+(le champ accepte un nom absent de la liste), puis son code.
+
+Par défaut : nom **`ADMIN`**, code **`ADMIN123`**.
+
+**Ce défaut n'est pas secret** — il est écrit dans cette notice, publique. Pour
+que ce compte soit réellement à vous, **posez un vrai code sur le poste**, de
+l'une des deux façons (la première qui existe l'emporte) :
+
+1. un fichier **`C:\ReaService\secours.txt`** dont la première ligne est votre
+   code. C'est le plus simple ; ce fichier reste sur le poste et n'est jamais
+   copié ailleurs ni versionné ;
+2. une variable d'environnement **`REA_SECOURS_CODE`**.
+
+Pour renommer le compte : variable `REA_SECOURS_ID`. Pour le supprimer tout à
+fait sur un poste qui n'en veut pas : `REA_SECOURS=0`.
+
+Ce compte est un passe-partout sur tout le dossier : ne donnez son code à
+personne d'autre, et changez-le si vous pensez qu'il a été vu.
+
 ---
 
 ## 2. Le réseau du service
