@@ -22,6 +22,7 @@ saisi, telle quelle.
 
 from __future__ import annotations
 
+import base64
 import html
 from datetime import timedelta
 from pathlib import Path
@@ -897,6 +898,41 @@ def _avec_date(libelle: str, date_heure: str) -> str:
 # Assemblage
 # --------------------------------------------------------------------------
 
+#: L'emplacement du logo, aux dimensions du cadre de l'en-tête (88 × 60 px).
+_CADRE_LOGO = "width:88px;height:60px;flex:none"
+
+
+def _logo() -> Brut:
+    """Le logo de l'hôpital s'il a été déposé sur le poste, sinon le cadre
+    pointillé qui montre où le déposer.
+
+    On embarque l'image dans la page en base64 : la feuille est un seul fichier
+    HTML qu'on imprime ou qu'on ouvre ailleurs, et un `<img src=fichier>` s'y
+    afficherait cassé une fois le fichier parti. Lecture d'un fichier local,
+    pas de la base : la règle R3 interdit à la couche rendu de requêter le
+    dossier, pas de lire l'image que l'installateur a posée."""
+    for nom in config.NOMS_LOGO:
+        try:
+            donnees = (config.RACINE / nom).read_bytes()
+        except OSError:
+            continue
+        mime = "image/png" if nom.endswith(".png") else "image/jpeg"
+        b64 = base64.b64encode(donnees).decode("ascii")
+        return Brut(
+            f'<div style="{_CADRE_LOGO};display:flex;align-items:center;'
+            f'justify-content:center">'
+            f'<img src="data:{mime};base64,{b64}" alt="Logo de l\'hôpital" '
+            f'style="max-width:88px;max-height:60px;object-fit:contain"></div>'
+        )
+    # Aucune image : on garde le cadre pointillé, qui dit exactement où elle va.
+    return Brut(
+        f'<div style="{_CADRE_LOGO};border:1px dashed #8a9998;display:flex;'
+        'align-items:center;justify-content:center;text-align:center;'
+        'font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#6d7c7b;'
+        'letter-spacing:.06em;line-height:1.3">LOGO<br>HÔPITAL</div>'
+    )
+
+
 def contexte(dossier) -> dict:
     """Les valeurs à poser dans la maquette, à partir du dossier rassemblé.
 
@@ -921,6 +957,7 @@ def contexte(dossier) -> dict:
 
     ctx = {
         # En-tête
+        "logo": _logo(),
         "date_fr": format_date_fr(date_jour),
         "lit": sejour.get("lit_admission") or "",
         "jour_hosp": f"J{jour_hospitalisation(sejour['date_admission'], date_jour)}",
