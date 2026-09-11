@@ -47,7 +47,6 @@ LIGNES_PAR_VOIE = {
     "KINE": ("kineRows", 2),
     "SOINS": ("soinsRows", 2),
 }
-LIGNES_BILANS_A_FAIRE = 2
 LIGNES_MICROBIO = 6
 NB_JOURS_BIOLOGIE = 3       # deux jours remplis + le jour en cours, laissé libre
 NB_CRENEAUX_PAR_JOUR = 4
@@ -342,33 +341,57 @@ def _dose(ligne: dict) -> str:
     return " · ".join(morceaux)
 
 
-def _bilans_a_faire(dossier) -> list[dict]:
-    """Les examens demandés la veille pour aujourd'hui, à leur ligne.
+def _bande_bilans(dossier) -> Brut:
+    """Les bilans demandés, écrits à leur heure sur la grille du recto.
 
-    C'est la demande faite hier soir qui devient la consigne d'aujourd'hui :
-    sans ce report, elle ne vit que dans la tête de celui qui l'a écrite.
+    Une seule bande de 24 h : à chaque heure prélevée, un carré à cocher et,
+    juste à côté sur fond blanc, le nom du bilan — on lit sur la grille même ce
+    qui est demandé, sans colonne de nom à gauche (demande du service, 12
+    septembre). Le panel de 8 h vit dans « Bilan du jour » ; ici on porte les
+    prélèvements des autres heures (lactate de contrôle, CRP du soir, Rx…).
     """
-    veille = (parse_date(dossier.date_jour) - timedelta(days=1)).isoformat()
     demandes = dossier.pancarte["bilans_demandes"]
     heure_defaut = int(config.HEURE_PRELEVEMENT_DEFAUT.split(":")[0])
-    lignes = []
-    for demande in demandes[:LIGNES_BILANS_A_FAIRE]:
+    par_heure: dict[int, list[str]] = {}
+    for demande in demandes:
         heure = demande.get("heure_prelevement") or config.HEURE_PRELEVEMENT_DEFAUT
         try:
-            heures = {int(str(heure).split(":")[0])}
+            h = int(str(heure).split(":")[0]) % 24
         except (ValueError, TypeError):
-            heures = {heure_defaut}
-        lignes.append({
-            "libelle": listes.libelle(
-                listes.EXAMENS_A_DEMANDER, demande["examen_code"],
-                demande["examen_code"],
-            ),
-            "origine": f"dem. {format_date_fr(veille)[:5]}",
-            "grille": _grille_heures(heures, symbole="◻"),
-        })
-    while len(lignes) < LIGNES_BILANS_A_FAIRE:
-        lignes.append({"libelle": "", "origine": "", "grille": Brut("")})
-    return lignes
+            h = heure_defaut
+        if h == heure_defaut:
+            continue  # le prélèvement de 8 h est déjà dans « Bilan du jour »
+        libelle = listes.libelle(
+            listes.EXAMENS_A_DEMANDER, demande["examen_code"],
+            demande["examen_code"],
+        )
+        par_heure.setdefault(h, []).append(libelle)
+    if not par_heure:
+        return Brut("")
+    total = len(ORDRE_HEURES)
+    blocs = []
+    for h in sorted(par_heure, key=ORDRE_HEURES.index):
+        col = ORDRE_HEURES.index(h)
+        a_droite = col >= total * 2 / 3   # près du bord : l'étiquette part à gauche
+        cote = (f"right:{(total - col) / total * 100:.4f}%" if a_droite
+                else f"left:{col / total * 100:.4f}%")
+        sens = "row-reverse" if a_droite else "row"
+        aligne = "flex-end" if a_droite else "flex-start"
+        etiquettes = "".join(
+            '<span style="background:#fff;box-shadow:0 0 0 1px #fff;font-size:8px;'
+            'font-weight:700;line-height:1.15;color:#33403f;padding:0 3px;'
+            f'white-space:nowrap">{html.escape(l)}</span>'
+            for l in par_heure[h]
+        )
+        blocs.append(
+            f'<div style="position:absolute;top:2px;bottom:2px;{cote};display:flex;'
+            f'flex-direction:{sens};align-items:flex-start;gap:3px">'
+            '<span style="font-size:13px;font-weight:700;line-height:1;'
+            'color:#14595c">◻</span>'
+            f'<span style="display:flex;flex-direction:column;gap:1px;'
+            f'align-items:{aligne}">{etiquettes}</span></div>'
+        )
+    return Brut('<div style="position:absolute;inset:0">' + "".join(blocs) + "</div>")
 
 
 def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
@@ -996,7 +1019,7 @@ def contexte(dossier) -> dict:
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
         **prescrit["blocs"],
-        "bilanPrescRows": _bilans_a_faire(dossier),
+        "bilanPrescRows": [{"grille": _bande_bilans(dossier)}],
         # Verso — surveillance laissée manuscrite
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),

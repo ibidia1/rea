@@ -181,17 +181,26 @@ def test_une_perfusion_continue_n_a_pas_de_rond(base, dossier):
     assert "○" not in grille
 
 
-def test_les_examens_demandes_la_veille_sont_a_leur_ligne(base, dossier):
+def test_les_bilans_demandes_sont_ecrits_a_leur_heure(base, dossier):
     _pid, sid = dossier
     prescriptions.definir_bilans_demandes(
         base, sid, AUJ, [("nfs", "06:00"), ("ionogramme", "06:00")]
     )
-    contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    libelles = [l["libelle"] for l in contexte["bilanPrescRows"]]
-    assert "NFS" in libelles and "Ionogramme" in libelles
-    ligne = next(l for l in contexte["bilanPrescRows"] if l["libelle"] == "NFS")
-    cases = re.findall(r'justify-content:center">(.*?)</div>', ligne["grille"].html)
-    assert {i for i, c in enumerate(cases) if "◻" in c} == {_colonne(6)}
+    bande = feuille.contexte(_dossier(base, sid, AUJ))["bilanPrescRows"][0]["grille"].html
+    # Le nom est écrit sur la grille, pas dans une colonne à gauche.
+    assert "NFS" in bande and "Ionogramme" in bande
+    assert "◻" in bande
+    # Placés à la colonne de 6 h (la grille commence à 8 h).
+    col = _colonne(6)
+    assert f"right:{(24 - col) / 24 * 100:.4f}%" in bande
+
+
+def test_le_prelevement_de_8h_ne_charge_pas_la_bande(base, dossier):
+    _pid, sid = dossier
+    # Le panel de 8 h vit dans « Bilan du jour » : inutile de le répéter ici.
+    prescriptions.definir_bilans_demandes(base, sid, AUJ, [("nfs", "08:00")])
+    bande = feuille.contexte(_dossier(base, sid, AUJ))["bilanPrescRows"][0]["grille"].html
+    assert "NFS" not in bande
 
 
 def test_les_cases_du_bilan_du_jour_sont_cochees(base, dossier):
