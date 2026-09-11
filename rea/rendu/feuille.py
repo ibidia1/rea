@@ -479,8 +479,13 @@ def _valeurs_biologie(
 ) -> list[dict]:
     """Une ligne par paramètre, ses valeurs rangées par jour et par créneau.
 
-    Le jour en cours est laissé vide : les bilans de la garde s'y écrivent à la
-    main pendant la nuit et sont ressaisis le lendemain matin.
+    Le jour en cours porte les bilans **déjà saisis dans le logiciel**, puis des
+    cases libres pour ceux que la garde écrira à la main pendant la nuit. Avant,
+    ce jour était laissé entièrement vide et un bilan entré le matin même
+    n'apparaissait que sur la pancarte du lendemain — le service imprimait alors
+    une feuille sans ses propres résultats du jour (demande du service,
+    11 septembre). Ce qui a été saisi s'imprime ; la place restante reste
+    réglée pour la suite.
 
     `lignes_spec` : (code, libellé) ou (codes, libellé) — une ligne peut
     combiner plusieurs paramètres (« TP / INR », « Ca²⁺ / Mg²⁺ / Phosphore »),
@@ -497,9 +502,13 @@ def _valeurs_biologie(
         for code in codes:
             cellules: list[str] = []
             for groupe in repartition:
-                if groupe["en_cours"] or groupe["jour"] is None:
+                if groupe["jour"] is None:
                     cellules.extend([""] * groupe["colonnes"])
                 else:
+                    # Le jour en cours passe par le même chemin : ses bilans
+                    # déjà saisis remplissent les premières cases, et
+                    # `_creneaux_du_jour` complète en blanc jusqu'au nombre de
+                    # colonnes — la place que la garde remplit à la main.
                     cellules.extend(_creneaux_du_jour(
                         dossier, groupe["jour"], code, source, groupe["colonnes"]
                     ))

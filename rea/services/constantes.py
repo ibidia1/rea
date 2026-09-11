@@ -88,8 +88,40 @@ PREFIXE_ETAT_DRAIN = "etat_drain:"
 MARQUE_BULLAGE = "bullage"
 
 
+#: Les deux pupilles, relevées comme un état (texte), jamais comme un nombre :
+#: on note leur diamètre ET leur réactivité, et « la moyenne de réactive et
+#: aréactive » n'existe pas plus que celle de deux modes de drain (demande du
+#: service, 11 septembre).
+PREFIXE_PUPILLE = "pupille:"
+PUPILLES = (
+    (f"{PREFIXE_PUPILLE}d", "Pupille droite"),
+    (f"{PREFIXE_PUPILLE}g", "Pupille gauche"),
+)
+
+
 def cle_drain(dispositif_id: str) -> str:
     return f"{PREFIXE_DRAIN}{dispositif_id}"
+
+
+def etat_pupille(taille_mm: str | None, reactivite: str | None) -> str | None:
+    """Le diamètre et la réactivité réunis en une ligne, telle qu'elle se relit.
+
+    « 3|reactive » en base : le diamètre à gauche du trait, le code de
+    réactivité à droite. L'un ou l'autre peut manquer — on note ce qu'on voit —
+    mais si les deux manquent, il n'y a rien à écrire."""
+    taille = (taille_mm or "").strip()
+    reactivite = (reactivite or "").strip()
+    if not taille and not reactivite:
+        return None
+    return f"{taille}|{reactivite}"
+
+
+def lire_etat_pupille(texte: str | None) -> tuple[str, str | None]:
+    """L'inverse : de « 3|reactive » au diamètre et au code de réactivité."""
+    if not texte:
+        return "", None
+    taille, _, reactivite = texte.partition("|")
+    return taille.strip(), (reactivite.strip() or None)
 
 
 def cle_etat_drain(dispositif_id: str) -> str:

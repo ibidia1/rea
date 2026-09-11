@@ -469,6 +469,7 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
         _rangees(constantes_service.VITALES, patient, heure, saisies, valeurs)
         sacs = _recueils(patient, heure, saisies, valeurs, jetes, recueils)
         textes = _etats_des_drains(patient, heure, thoraciques, etats_saisis)
+        textes.update(_pupilles(patient, heure, etats_saisis))
         if st.form_submit_button(f"Enregistrer le relevé de {heure:02d} h",
                                  type="primary", use_container_width=True):
             constantes_service.enregistrer(
@@ -540,6 +541,48 @@ def _etats_des_drains(patient, heure, thoraciques, etats_saisis) -> dict[str, st
                 key=f"bulle_{patient['sejour_id']}_{heure}_{cle}",
             )
         textes[cle] = constantes_service.etat_drain(mode, bullage)
+    return textes
+
+
+def _pupilles(patient, heure, etats_saisis) -> dict[str, str | None]:
+    """L'état des pupilles, œil par œil : le diamètre en mm et la réactivité.
+
+    Les deux ensemble, parce que l'un sans l'autre ne dit pas grand-chose : une
+    pupille à 5 mm réactive n'a rien d'une pupille à 5 mm aréactive, et c'est le
+    passage de « réactive » à « lente » puis « aréactive » qui annonce
+    l'aggravation avant tout le reste (demande du service, 11 septembre).
+
+    Un état, pas un nombre : « aréactive » ne se moyenne pas, et le diamètre
+    voyage collé à sa réactivité pour qu'on ne lise jamais l'un sans l'autre.
+    """
+    st.markdown(
+        f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
+        f"color:{theme.VIOLET}'>Pupilles</div>",
+        unsafe_allow_html=True,
+    )
+    reactivites = listes.codes(listes.REACTIVITES_PUPILLE)
+    textes: dict[str, str | None] = {}
+    for cle, libelle in constantes_service.PUPILLES:
+        taille_saisie, reactivite_saisie = constantes_service.lire_etat_pupille(
+            etats_saisis.get(cle)
+        )
+        gauche, droite = st.columns([2, 3])
+        with gauche:
+            taille = st.text_input(
+                f"{libelle} — diamètre (mm)", value=taille_saisie,
+                placeholder="mm",
+                key=f"pup_mm_{patient['sejour_id']}_{heure}_{cle}",
+            )
+        with droite:
+            reactivite = st.selectbox(
+                f"{libelle} — réactivité", reactivites,
+                index=(reactivites.index(reactivite_saisie)
+                       if reactivite_saisie in reactivites else None),
+                placeholder="Non notée",
+                format_func=lambda c: listes.libelle(listes.REACTIVITES_PUPILLE, c),
+                key=f"pup_r_{patient['sejour_id']}_{heure}_{cle}",
+            )
+        textes[cle] = constantes_service.etat_pupille(taille, reactivite)
     return textes
 
 
@@ -630,6 +673,22 @@ def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes, recueils) 
         if not any(v is not None for v in valeurs):
             continue
         lignes += _rangee(libelle, [_nombre(v) for v in valeurs], "")
+
+    etats = constantes_service.etats_du_jour(base, patient["sejour_id"], jour)
+    for cle, libelle in constantes_service.PUPILLES:
+        cases = []
+        vu = False
+        for h in heures:
+            taille, react = constantes_service.lire_etat_pupille(
+                etats.get(h, {}).get(cle)
+            )
+            if taille or react:
+                vu = True
+            lettre = {"reactive": "R", "lente": "L", "areactive": "A"}.get(
+                react or "", "")
+            cases.append(" ".join(m for m in (taille, lettre) if m))
+        if vu:
+            lignes += _rangee(libelle, cases, "", couleur=theme.VIOLET)
 
     for cle, libelle, unite in recueils:
         niveaux = [grille.get(h, {}).get(cle) for h in heures]

@@ -121,6 +121,11 @@ NATURES_DRAIN = _charger("natures_drain")
 # en siphonnage qui ne donne rien (demande du service, 11 septembre).
 ETATS_DRAIN_THORACIQUE = _charger("etats_drain_thoracique")
 
+# La réponse des pupilles à la lumière, relevée heure par heure avec leur
+# diamètre : une pupille qui devient lente puis aréactive annonce une
+# aggravation neurologique (demande du service, 11 septembre).
+REACTIVITES_PUPILLE = _charger("reactivites_pupille")
+
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
 ADDITIFS_PERFUSION = _charger("additifs_perfusion")
