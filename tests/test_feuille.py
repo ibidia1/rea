@@ -1131,3 +1131,42 @@ def test_sans_glasgow_initial_la_ligne_nest_pas_imprimee(base, dossier):
     """Une ligne « Glasgow initial : » vide se lit comme un 3."""
     _pid, sid = dossier
     assert "Glasgow initial" not in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+
+
+# --------------------------------------------------------------------------
+# Le logo de l'hôpital
+# --------------------------------------------------------------------------
+# Emplacement fixe en haut à gauche de la feuille. Le service y dépose son
+# image ; tant qu'il ne l'a pas fait, le cadre pointillé montre où elle ira
+# (demande du service, 11 septembre).
+
+def test_sans_image_le_cadre_du_logo_montre_l_emplacement(base, dossier, tmp_path, monkeypatch):
+    # RACINE isolée : sans image déposée, le cadre pointillé doit apparaître —
+    # et aucun logo laissé par un autre test ne doit fausser le résultat.
+    monkeypatch.setattr(feuille.config, "RACINE", tmp_path)
+    _pid, sid = dossier
+    ctx = feuille.contexte(_dossier(base, sid, AUJ))
+    assert "LOGO" in ctx["logo"].html
+    assert "dashed" in ctx["logo"].html
+    assert "<img" not in ctx["logo"].html
+
+
+def test_l_image_deposee_sur_le_poste_s_imprime(base, dossier, tmp_path, monkeypatch):
+    """Déposée dans le dossier du poste (`config.RACINE`), elle est embarquée
+    dans la page en base64 — la feuille reste un seul fichier imprimable."""
+    monkeypatch.setattr(feuille.config, "RACINE", tmp_path)
+    _pid, sid = dossier
+    # Un PNG 1×1 valide, comme le ferait un vrai fichier logo.png.
+    png_1x1 = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000d49444154789c63f8cfc0f01f0005000100ff9a9c1c0000000049454e44ae426082"
+    )
+    (tmp_path / "logo.png").write_bytes(png_1x1)
+    ctx = feuille.contexte(_dossier(base, sid, AUJ))
+    assert '<img src="data:image/png;base64,' in ctx["logo"].html
+    assert "LOGO" not in ctx["logo"].html
+
+
+def test_le_gabarit_porte_la_variable_logo():
+    modele = feuille.MODELE.read_text(encoding="utf-8")
+    assert "{{ logo }}" in modele

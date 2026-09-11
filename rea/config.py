@@ -33,6 +33,14 @@ FICHIER_BASE = DOSSIER_DONNEES / "rea.db"
 # Dossier des protocoles, livré avec le code (versionné, signé — SPEC §4.5)
 DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 
+# Le logo de l'hôpital sur la feuille imprimée. On dépose l'image sur le poste
+# à cet emplacement — `C:\ReaService\logo.png` — et elle apparaît en haut à
+# gauche de la pancarte, à la place du cadre pointillé « LOGO HÔPITAL ». PNG ou
+# JPEG ; hors du dossier du code, donc conservée d'une réinstallation à
+# l'autre. Tant qu'aucune image n'est déposée, le cadre pointillé montre où
+# elle ira (demande du service, 11 septembre).
+NOMS_LOGO = ("logo.png", "logo.jpg", "logo.jpeg")
+
 
 # --------------------------------------------------------------------------
 # Version livrée
