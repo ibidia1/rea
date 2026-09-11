@@ -791,9 +791,15 @@ def _avis_specialises(dossier) -> Brut:
     # il est perdu — et un avis chirurgical se lit en entier ou pas du tout
     # (demande du service, 11 septembre). `overflow-wrap:anywhere` casse aussi
     # un mot ou une référence trop longue plutôt que de déborder.
+    #
+    # En surbrillance sobre : un fond crème pâle et une police un peu plus
+    # grande, parce qu'un avis pèse sur la conduite et se cherche du regard
+    # (demande du service, 12 septembre). Sobre — pas un surligneur fluo qui
+    # traverse la photocopie : une bande légère, lisible aussi en noir et blanc.
     corps = "".join(
-        '<div style="font-size:8.5px;line-height:1.4;padding:1px 4px;'
-        'border-bottom:1px solid #d3dcdb;white-space:normal;'
+        '<div style="font-size:9.5px;line-height:1.35;padding:2px 5px;'
+        'border-bottom:1px solid #d3dcdb;background:#f6efda;'
+        'border-left:2px solid #b9922e;white-space:normal;'
         'overflow-wrap:anywhere">'
         f"{html.escape(l)}</div>"
         for l in lignes

@@ -191,6 +191,11 @@ CREATE TABLE IF NOT EXISTS sejour (
     statut_j28             TEXT,                      -- vivant / decede / perdu_de_vue
     date_statut_j28        TEXT,
 
+    -- Motif d'une admission supprimee (erreur de saisie) : la ligne reste en
+    -- base avec supprime = 1, et ceci dit pourquoi (demande du service,
+    -- 12 septembre).
+    motif_suppression      TEXT,
+
     cree_le                TEXT NOT NULL,
     cree_par               TEXT REFERENCES utilisateur(id),
     modifie_le             TEXT,

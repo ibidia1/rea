@@ -601,6 +601,37 @@ def changer_de_lit(
         )
 
 
+def supprimer_admission(
+    base: Base, sejour_id: str, *, motif: str, utilisateur_id: str | None = None
+) -> None:
+    """Retire une admission créée par erreur, pour qu'elle ne fausse plus les
+    statistiques (demande du service, 12 septembre).
+
+    Suppression **logique**, jamais physique (règle de conception 2) : la ligne
+    reste en base avec `supprime = 1`, et le journal garde qui l'a retirée,
+    quand, et pourquoi. Ainsi la fausse admission disparaît du tableau des lits,
+    du décompte des admissions et de la recherche — toutes ces requêtes filtrent
+    déjà `supprime = 0` — sans qu'on efface une trace opposable.
+
+    Réservé à une erreur de saisie : un séjour réel qui se termine se **clôt**
+    par une sortie, il ne se supprime pas. Le motif est donc obligatoire, pour
+    qu'une suppression ne se confonde jamais avec une sortie escamotée.
+    """
+    if not (motif or "").strip():
+        raise ValueError("Un motif est obligatoire pour supprimer une admission.")
+    sejour = base.une_ligne(
+        "SELECT * FROM sejour WHERE id = ? AND supprime = 0", (sejour_id,)
+    )
+    if not sejour:
+        raise ValueError("Admission introuvable.")
+    with base.transaction():
+        base.mettre_a_jour(
+            "sejour", sejour_id,
+            {"supprime": 1, "motif_suppression": motif.strip()},
+            utilisateur_id=utilisateur_id, action="suppression",
+        )
+
+
 # --------------------------------------------------------------------------
 # Sortie (SPEC §4.7) — clôture le séjour et libère le lit
 # --------------------------------------------------------------------------
