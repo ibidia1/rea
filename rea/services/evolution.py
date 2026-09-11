@@ -13,6 +13,8 @@ from ..domaine import calculs
 from ..domaine import dispositifs as dom_dispositifs
 from ..domaine import prescription as dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
+from ..domaine import avis as dom_avis
+from . import avis as avis_service
 from . import bilans as bilans_service
 from . import constantes as constantes_service
 from . import dispositifs as dispositifs_service
@@ -149,10 +151,27 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
     lignes.append("Sous le traitement :")
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
     lignes_traitement = [
-        dom.libelle_ligne(l, date_jour) for l in pancarte["lignes"] if l["statut"] == "active"
+        # Sans les heures de prise : dans l'observation collée au dossier, le
+        # « (8h-20h) » derriere chaque produit alourdit sans rien apprendre —
+        # c'est la pancarte qui porte les heures (demande du service,
+        # 12 septembre).
+        dom.libelle_ligne(l, date_jour, avec_horaires=False)
+        for l in pancarte["lignes"] if l["statut"] == "active"
     ]
     if lignes_traitement:
         lignes.extend(lignes_traitement)
+
+    # Les avis rendus CE jour-la, juste avant la conduite : c'est l'avis du
+    # jour qui pese sur la decision qu'on ecrit dessous (demande du service,
+    # 12 septembre). Les avis anciens restent au dossier, pas dans le texte du
+    # jour.
+    avis_du_jour = [
+        dom_avis.ligne_avis(a) for a in avis_service.du_sejour(base, sejour_id)
+        if a.get("date_avis") == date_jour
+    ]
+    if avis_du_jour:
+        lignes.append("Avis :")
+        lignes.extend(avis_du_jour)
 
     lignes.append("Conduite :")
     if entree.get("conduite"):

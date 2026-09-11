@@ -99,3 +99,40 @@ def test_inserer_sur_table_sans_cree_le_ne_leve_pas(base):
     # cree_le ; inserer() ne doit pas tenter de l'y écrire.
     id_ = base.inserer("sauvegarde", {"date_heure": "2026-09-01T00:00:00", "fichier": "x", "motif": "test"})
     assert id_
+
+
+def test_l_evolution_ecrit_le_traitement_sans_les_heures_de_prise(base):
+    """Le « (8h-20h) » derriere chaque produit alourdit l'observation collee au
+    dossier : c'est la pancarte qui porte les heures (demande du service,
+    12 septembre)."""
+    pid, sid = _sejour_type(base)
+    pr.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Tienam", dose=1, unite="g",
+        rythme="x3/j", date_debut="2026-08-28",
+    )
+    texte = evolution.texte_genere(base, sid, "2026-09-01")
+    assert "Tienam 1g x3/j" in texte
+    assert "(8h" not in texte and "-20h)" not in texte
+
+
+def test_l_evolution_reprend_les_avis_du_jour_avant_la_conduite(base):
+    """L'avis rendu ce jour-la pese sur la decision qu'on ecrit dessous ; il se
+    place donc juste avant « Conduite » (demande du service, 12 septembre)."""
+    from rea.services import avis
+    pid, sid = _sejour_type(base)
+    avis.demander(base, sejour_id=sid, specialite="CCVT",
+                  texte="Pas d'indication chirurgicale", date_avis="2026-09-01",
+                  nom="X", grade="senior")
+    texte = evolution.texte_genere(base, sid, "2026-09-01")
+    assert "Avis :" in texte
+    assert "Pas d'indication chirurgicale" in texte
+    assert texte.index("Avis :") < texte.index("Conduite :")
+
+
+def test_l_evolution_n_ecrit_pas_les_avis_d_un_autre_jour(base):
+    from rea.services import avis
+    pid, sid = _sejour_type(base)
+    avis.demander(base, sejour_id=sid, specialite="nephrologie",
+                  texte="avis de la veille", date_avis="2026-08-31", nom="Y")
+    texte = evolution.texte_genere(base, sid, "2026-09-01")
+    assert "avis de la veille" not in texte

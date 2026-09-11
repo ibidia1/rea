@@ -220,15 +220,18 @@ def _rangee_etat(cle: str, libelle: str, heures, bornes, etats: dict) -> str:
 #: large : « En siphonnage » n'y tient pas, « siph » oui.
 _ABREGE = {"siphonnage": "siph", "aspiration": "asp", "clampe": "clamp"}
 
-#: La réactivité pupillaire, en une lettre : R réactive, L lente, A aréactive.
-_ABREGE_REACTIVITE = {"reactive": "R", "lente": "L", "areactive": "A"}
+#: La taille de la pupille, abrégée pour tenir dans une colonne étroite.
+_ABREGE_TAILLE = {"myosis": "myo", "intermediaire": "int", "mydriase": "myd"}
+#: La réactivité pupillaire, en une lettre : R réactive, A aréactive.
+_ABREGE_REACTIVITE = {"reactive": "R", "areactive": "A"}
 
 
-def _abrege_pupille(taille: str, reactivite: str | None) -> str:
-    """« 3 R », « 4 A », « 3 », « R » — le diamètre et une lettre, tenus dans
-    un vingt-quatrième de la largeur."""
+def _abrege_pupille(taille: str | None, reactivite: str | None) -> str:
+    """« myo R », « myd A », « int » — la taille abrégée et une lettre, tenues
+    dans un vingt-quatrième de la largeur."""
+    mots = _ABREGE_TAILLE.get(taille or "", taille or "")
     lettre = _ABREGE_REACTIVITE.get(reactivite or "", "")
-    return " ".join(m for m in (taille, lettre) if m)
+    return " ".join(m for m in (mots, lettre) if m)
 
 
 def _extremes(valeurs, unite: str) -> str:

@@ -121,9 +121,11 @@ NATURES_DRAIN = _charger("natures_drain")
 # en siphonnage qui ne donne rien (demande du service, 11 septembre).
 ETATS_DRAIN_THORACIQUE = _charger("etats_drain_thoracique")
 
-# La réponse des pupilles à la lumière, relevée heure par heure avec leur
-# diamètre : une pupille qui devient lente puis aréactive annonce une
-# aggravation neurologique (demande du service, 11 septembre).
+# L'état des pupilles, relevé heure par heure : leur taille (myosis /
+# intermédiaire / mydriase) et leur réactivité (réactive / aréactive). En
+# catégorie et non en millimètres — au lit du malade on lit un myosis, pas
+# « 2,5 mm » (demande du service, 12 septembre).
+TAILLES_PUPILLE = _charger("tailles_pupille")
 REACTIVITES_PUPILLE = _charger("reactivites_pupille")
 
 GRADES_AVIS = _charger("grades_avis")

@@ -1,12 +1,11 @@
 {
   "nom": "reactivites_pupille",
   "libelle": "Réactivité pupillaire à la lumière",
-  "version": "2026-09-11.1",
-  "date": "2026-09-11",
-  "note": "Ce que l'infirmier note à chaque relevé, en plus du diamètre : la réponse de la pupille à la lumière. « Réactive » et « aréactive » sont les deux qui déclenchent une conduite ; « lente » est la nuance qui annonce l'aggravation avant l'aréactivité. Demande du service, 11 septembre 2026.",
+  "version": "2026-09-12.1",
+  "date": "2026-09-12",
+  "note": "La réponse de la pupille à la lumière, notée à chaque relevé avec sa taille : réactive ou aréactive, les deux états qui déclenchent une conduite. Demande du service, 12 septembre 2026.",
   "valeurs": [
     ["reactive", "Réactive"],
-    ["lente", "Lente"],
     ["areactive", "Aréactive"]
   ]
 }

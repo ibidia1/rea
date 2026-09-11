@@ -103,25 +103,29 @@ def cle_drain(dispositif_id: str) -> str:
     return f"{PREFIXE_DRAIN}{dispositif_id}"
 
 
-def etat_pupille(taille_mm: str | None, reactivite: str | None) -> str | None:
-    """Le diamètre et la réactivité réunis en une ligne, telle qu'elle se relit.
+def etat_pupille(taille: str | None, reactivite: str | None) -> str | None:
+    """La taille et la réactivité réunies en une ligne, telle qu'elle se relit.
 
-    « 3|reactive » en base : le diamètre à gauche du trait, le code de
-    réactivité à droite. L'un ou l'autre peut manquer — on note ce qu'on voit —
-    mais si les deux manquent, il n'y a rien à écrire."""
-    taille = (taille_mm or "").strip()
+    « myosis|areactive » en base : le code de taille à gauche du trait, le code
+    de réactivité à droite. L'un ou l'autre peut manquer — on note ce qu'on
+    voit — mais si les deux manquent, il n'y a rien à écrire.
+
+    La taille est une catégorie (myosis / intermédiaire / mydriase), jamais un
+    nombre de millimètres : au lit du malade on lit un myosis, pas « 2,5 mm »
+    (demande du service, 12 septembre)."""
+    taille = (taille or "").strip()
     reactivite = (reactivite or "").strip()
     if not taille and not reactivite:
         return None
     return f"{taille}|{reactivite}"
 
 
-def lire_etat_pupille(texte: str | None) -> tuple[str, str | None]:
-    """L'inverse : de « 3|reactive » au diamètre et au code de réactivité."""
+def lire_etat_pupille(texte: str | None) -> tuple[str | None, str | None]:
+    """L'inverse : de « myosis|areactive » au code de taille et de réactivité."""
     if not texte:
-        return "", None
+        return None, None
     taille, _, reactivite = texte.partition("|")
-    return taille.strip(), (reactivite.strip() or None)
+    return (taille.strip() or None), (reactivite.strip() or None)
 
 
 def cle_etat_drain(dispositif_id: str) -> str:
