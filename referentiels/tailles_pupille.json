@@ -1,0 +1,12 @@
+{
+  "nom": "tailles_pupille",
+  "libelle": "Taille de la pupille",
+  "version": "2026-09-12.1",
+  "date": "2026-09-12",
+  "note": "La taille se note en catégorie, pas en millimètres : au lit du malade on lit un myosis ou une mydriase, pas « 2,5 mm », et une catégorie ne se discute pas d'un examinateur à l'autre comme un chiffre. « Intermédiaire » est l'état normal entre les deux. Demande du service, 12 septembre 2026.",
+  "valeurs": [
+    ["myosis", "Myosis"],
+    ["intermediaire", "Intermédiaire"],
+    ["mydriase", "Mydriase"]
+  ]
+}

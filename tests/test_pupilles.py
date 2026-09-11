@@ -17,21 +17,21 @@ def _service():
     return importlib.import_module("rea.services.constantes")
 
 
-def test_les_reactivites_viennent_du_referentiel():
-    codes = listes.codes(listes.REACTIVITES_PUPILLE)
-    assert codes == ("reactive", "lente", "areactive")
+def test_les_tailles_et_reactivites_viennent_du_referentiel():
+    assert listes.codes(listes.TAILLES_PUPILLE) == ("myosis", "intermediaire", "mydriase")
+    assert listes.codes(listes.REACTIVITES_PUPILLE) == ("reactive", "areactive")
 
 
-def test_le_diametre_et_la_reactivite_voyagent_ensemble():
+def test_la_taille_et_la_reactivite_voyagent_ensemble():
     c = _service()
-    assert c.etat_pupille("3", "reactive") == "3|reactive"
-    assert c.lire_etat_pupille("3|reactive") == ("3", "reactive")
+    assert c.etat_pupille("myosis", "reactive") == "myosis|reactive"
+    assert c.lire_etat_pupille("myosis|reactive") == ("myosis", "reactive")
 
 
 def test_l_un_ou_l_autre_peut_manquer():
     c = _service()
-    assert c.lire_etat_pupille(c.etat_pupille("4", None)) == ("4", None)
-    assert c.lire_etat_pupille(c.etat_pupille("", "areactive")) == ("", "areactive")
+    assert c.lire_etat_pupille(c.etat_pupille("mydriase", None)) == ("mydriase", None)
+    assert c.lire_etat_pupille(c.etat_pupille("", "areactive")) == (None, "areactive")
 
 
 def test_rien_a_noter_ne_s_ecrit_pas():
@@ -56,11 +56,11 @@ def test_les_deux_pupilles_sont_relevees(base):
                                date_admission="2026-09-11")
     droite, gauche = c.PUPILLES[0][0], c.PUPILLES[1][0]
     c.enregistrer(base, sid, "2026-09-11", 8, {},
-                  textes={droite: c.etat_pupille("3", "reactive"),
-                          gauche: c.etat_pupille("5", "areactive")})
+                  textes={droite: c.etat_pupille("myosis", "reactive"),
+                          gauche: c.etat_pupille("mydriase", "areactive")})
     etats = c.etats_du_jour(base, sid, "2026-09-11")
-    assert c.lire_etat_pupille(etats[8][droite]) == ("3", "reactive")
-    assert c.lire_etat_pupille(etats[8][gauche]) == ("5", "areactive")
+    assert c.lire_etat_pupille(etats[8][droite]) == ("myosis", "reactive")
+    assert c.lire_etat_pupille(etats[8][gauche]) == ("mydriase", "areactive")
 
 
 # --------------------------------------------------------------------------

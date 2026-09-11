@@ -590,11 +590,17 @@ def libelle_court(ligne: dict) -> str:
     return " ".join(m for m in morceaux if m)
 
 
-def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
+def libelle_ligne(ligne: dict, a_la_date: str | date,
+                  avec_horaires: bool = True) -> str:
     """Texte complet d'une ligne tel qu'affiché sur la pancarte, ex.
-    « J2 Targocid 400mg x2/j » ou « Introduction de Targocid 400mg x2/j ».
+    « J2 Targocid 400mg x2/j (8h-20h) » ou « Introduction de Targocid… ».
     Le corps de la description suit la voie (SPEC §5.2) : un PSE ne montre
-    jamais de rythme, un PO ne montre jamais de vitesse."""
+    jamais de rythme, un PO ne montre jamais de vitesse.
+
+    `avec_horaires=False` retire les heures de prise derrière le rythme :
+    l'observation d'évolution qu'on colle au dossier n'a pas besoin de
+    « (8h-20h) » derrière chaque produit — c'est la pancarte qui porte les
+    heures, pas le texte (demande du service, 12 septembre)."""
     etiquette = etiquette_jour(ligne, a_la_date)
     morceaux = [etiquette.texte, ligne["produit"]]
     voie = ligne.get("voie")
@@ -619,7 +625,7 @@ def libelle_ligne(ligne: dict, a_la_date: str | date) -> str:
             morceaux.append(f"{_nombre(ligne['dose'])}{ligne.get('unite') or ''}")
         if ligne.get("rythme") and ligne["rythme"] not in ("continu", "conditionnel"):
             horaires = horaires_affiches(ligne["rythme"], ligne.get("horaires_override"))
-            suffixe = f" ({horaires})" if horaires else ""
+            suffixe = f" ({horaires})" if horaires and avec_horaires else ""
             morceaux.append(f"{ligne['rythme']}{suffixe}")
         elif ligne.get("rythme") == "conditionnel" and ligne.get("condition_texte"):
             morceaux.append(f"si {ligne['condition_texte']}")

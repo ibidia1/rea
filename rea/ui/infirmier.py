@@ -545,33 +545,37 @@ def _etats_des_drains(patient, heure, thoraciques, etats_saisis) -> dict[str, st
 
 
 def _pupilles(patient, heure, etats_saisis) -> dict[str, str | None]:
-    """L'état des pupilles, œil par œil : le diamètre en mm et la réactivité.
+    """L'état des pupilles, œil par œil : la taille et la réactivité.
 
     Les deux ensemble, parce que l'un sans l'autre ne dit pas grand-chose : une
-    pupille à 5 mm réactive n'a rien d'une pupille à 5 mm aréactive, et c'est le
-    passage de « réactive » à « lente » puis « aréactive » qui annonce
-    l'aggravation avant tout le reste (demande du service, 11 septembre).
+    mydriase réactive n'a rien d'une mydriase aréactive, et c'est ce couple qui
+    annonce l'aggravation avant tout le reste (demande du service, 12 septembre).
 
-    Un état, pas un nombre : « aréactive » ne se moyenne pas, et le diamètre
-    voyage collé à sa réactivité pour qu'on ne lise jamais l'un sans l'autre.
+    La taille en catégorie — myosis / intermédiaire / mydriase — et non en
+    millimètres : au lit du malade on lit un myosis, pas « 2,5 mm », et une
+    catégorie ne se discute pas d'un examinateur à l'autre comme un chiffre.
     """
     st.markdown(
         f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
         f"color:{theme.VIOLET}'>Pupilles</div>",
         unsafe_allow_html=True,
     )
+    tailles = listes.codes(listes.TAILLES_PUPILLE)
     reactivites = listes.codes(listes.REACTIVITES_PUPILLE)
     textes: dict[str, str | None] = {}
     for cle, libelle in constantes_service.PUPILLES:
         taille_saisie, reactivite_saisie = constantes_service.lire_etat_pupille(
             etats_saisis.get(cle)
         )
-        gauche, droite = st.columns([2, 3])
+        gauche, droite = st.columns(2)
         with gauche:
-            taille = st.text_input(
-                f"{libelle} — diamètre (mm)", value=taille_saisie,
-                placeholder="mm",
-                key=f"pup_mm_{patient['sejour_id']}_{heure}_{cle}",
+            taille = st.selectbox(
+                f"{libelle} — taille", tailles,
+                index=(tailles.index(taille_saisie)
+                       if taille_saisie in tailles else None),
+                placeholder="Non notée",
+                format_func=lambda c: listes.libelle(listes.TAILLES_PUPILLE, c),
+                key=f"pup_t_{patient['sejour_id']}_{heure}_{cle}",
             )
         with droite:
             reactivite = st.selectbox(
@@ -684,9 +688,10 @@ def _grille_du_jour(base, patient, jour, grille: dict, heures, jetes, recueils) 
             )
             if taille or react:
                 vu = True
-            lettre = {"reactive": "R", "lente": "L", "areactive": "A"}.get(
-                react or "", "")
-            cases.append(" ".join(m for m in (taille, lettre) if m))
+            abrege = {"myosis": "myo", "intermediaire": "int",
+                      "mydriase": "myd"}.get(taille or "", taille or "")
+            lettre = {"reactive": "R", "areactive": "A"}.get(react or "", "")
+            cases.append(" ".join(m for m in (abrege, lettre) if m))
         if vu:
             lignes += _rangee(libelle, cases, "", couleur=theme.VIOLET)
 
