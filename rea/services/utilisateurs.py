@@ -113,30 +113,17 @@ def code_correct(code: str, empreinte: str | None) -> bool:
 # Lire
 # --------------------------------------------------------------------------
 
-def _sans_secours(lignes: list[dict]) -> list[dict]:
-    """Retire le compte de secours de toute liste montrée ou comptée.
-
-    Il ne doit apparaître nulle part — ni dans l'ouverture, ni dans l'écran
-    des comptes, ni dans le décompte des administrateurs. C'est le seul filtre
-    qui le tient caché : `actifs` et `tous` sont les deux seules portes par
-    lesquelles les lignes d'utilisateurs sortent vers le reste du logiciel.
-    `par_id`, lui, le rend — c'est ainsi que sa session fonctionne une fois
-    entré, sans qu'il figure jamais dans une liste.
-    """
-    return [u for u in lignes if u["id"] != config.SECOURS_UTILISATEUR_ID]
-
-
 def actifs(base: Base) -> list[dict]:
-    return _sans_secours(base.requete(
+    return base.requete(
         "SELECT * FROM utilisateur WHERE actif = 1 AND supprime = 0 ORDER BY nom"
-    ))
+    )
 
 
 def tous(base: Base) -> list[dict]:
     """Actifs et désactivés — l'écran des comptes montre les deux."""
-    return _sans_secours(base.requete(
+    return base.requete(
         "SELECT * FROM utilisateur WHERE supprime = 0 ORDER BY actif DESC, nom"
-    ))
+    )
 
 
 def par_id(base: Base, utilisateur_id: str | None) -> dict | None:
@@ -534,51 +521,6 @@ def comptes_sans_code(base: Base) -> list[dict]:
     refuse et l'administrateur est renvoyé vers l'écran des comptes.
     """
     return [u for u in actifs(base) if not u["pin"]]
-
-
-def est_compte_de_secours(nom: str, code: str) -> bool:
-    """Le nom et le code frappés ouvrent-ils le compte de secours ?
-
-    On ne compare pas à une empreinte stockée en base — délibérément : le code
-    de secours vit dans un secret local au poste (`config.SECOURS_CODE`), pas
-    dans la base, pour qu'il n'y ait rien à voler dans une sauvegarde et rien
-    à changer par un écran. `compare_digest` des deux côtés, pour ne pas
-    laisser le temps de réponse trahir ce qui est bon.
-    """
-    if not config.SECOURS_ACTIF:
-        return False
-    nom_ok = hmac.compare_digest(_cle(nom), _cle(config.SECOURS_ID))
-    code_ok = hmac.compare_digest((code or "").strip(), config.SECOURS_CODE)
-    return nom_ok and code_ok
-
-
-def compte_de_secours(base: Base) -> dict:
-    """Matérialise, une fois, la ligne du compte de secours, et la rend.
-
-    Une vraie ligne en base, et non une session fantôme : tout ce qui s'écrit
-    porte un `cree_par` qui référence un utilisateur par clé étrangère (les
-    clés étrangères sont actives). Sans ligne, la première écriture du compte
-    de secours serait refusée par la base. Elle reste hors de toutes les
-    listes — `actifs` et `tous` l'excluent — donc invisible partout.
-
-    Son `pin` reste vide : il ne sert jamais à l'entrée, qui passe par
-    `est_compte_de_secours` et le secret local, jamais par la base.
-    """
-    with base.transaction():
-        existant = base.une_ligne(
-            "SELECT * FROM utilisateur WHERE id = ?", (config.SECOURS_UTILISATEUR_ID,)
-        )
-        if not existant:
-            base.inserer(
-                "utilisateur",
-                {"id": config.SECOURS_UTILISATEUR_ID, "nom": config.SECOURS_ID,
-                 "role": "admin", "pin": None, "code_provisoire": 0},
-            )
-            existant = base.une_ligne(
-                "SELECT * FROM utilisateur WHERE id = ?",
-                (config.SECOURS_UTILISATEUR_ID,),
-            )
-    return existant
 
 
 def code_acceptable(code: str) -> str | None:

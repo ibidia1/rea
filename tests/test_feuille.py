@@ -98,18 +98,20 @@ def test_les_bilans_des_jours_precedents_sont_reportes(base, dossier):
         assert valeur in html
 
 
-def test_la_colonne_du_jour_reste_vide_pour_la_garde(base, dossier):
-    """Les bilans de la nuit s'écrivent à la main et sont ressaisis le
-    lendemain matin : le logiciel ne doit pas occuper leur place."""
+def test_le_jour_en_cours_imprime_les_bilans_deja_saisis(base, dossier):
+    """Un bilan saisi le jour même doit figurer sur la pancarte imprimée ce
+    jour-là, et pas seulement sur celle du lendemain : le service imprimait une
+    feuille dépourvue de ses propres résultats du jour (demande du service,
+    11 septembre). Les cases restantes du jour en cours demeurent libres pour
+    ce que la garde ajoutera à la main pendant la nuit."""
     _pid, sid = dossier
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{AUJ}T02:00",
                                  valeurs={"hb": 7.1})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     ligne_hb = next(l for l in contexte["bioHemato"] if l["libelle"] == "Hb")
     cellules = re.findall(r">([^<>]*)</div>", ligne_hb["valeurs"].html)
-    creneaux_du_jour = cellules[-feuille.NB_CRENEAUX_PAR_JOUR:]
-    assert creneaux_du_jour == [""] * feuille.NB_CRENEAUX_PAR_JOUR
-    assert "7,1" not in ligne_hb["valeurs"].html
+    assert "7,1" in cellules          # le bilan saisi s'imprime
+    assert "" in cellules             # et il reste des cases pour la garde
 
 
 def test_un_rond_par_prise_a_la_bonne_heure(base, dossier):

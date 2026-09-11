@@ -84,13 +84,42 @@ CSS = f"""
 }}
 
 /* ---- La barre d'outils de Streamlit ----------------------------------
-   Retirée, et pour deux raisons. Elle propose « Deploy », qui n'a aucun sens
-   dans un service — le logiciel tourne déjà sur le PC de la réanimation. Et
-   elle occupe le coin en haut à droite, précisément là où se trouve notre
-   accès Admin : le bouton passait dessous et n'était plus cliquable. */
-div[data-testid="stToolbar"] {{ display: none !important; }}
+   On retire ses ACTIONS de droite (« Deploy », le menu ⋮), pour deux raisons :
+   « Deploy » n'a aucun sens dans un service — le logiciel tourne déjà sur le
+   PC de la réanimation — et elles occupent le coin en haut à droite,
+   précisément là où se trouve notre accès Admin, qui passait dessous.
+
+   Mais on NE cache PAS toute la barre d'outils : c'est elle qui, à gauche,
+   porte la flèche pour rouvrir la barre latérale une fois repliée. La cacher,
+   c'était la replier sans pouvoir la rouvrir — exactement le piège que le
+   service a signalé (11 septembre). On vise donc « Deploy » et le menu ⋮
+   nommément, et non leur conteneur. */
+div[data-testid="stToolbarActions"],
+div[data-testid="stAppDeployButton"],
+div[data-testid="stMainMenu"],
+[data-testid="stMainMenuButton"] {{ display: none !important; }}
 div[data-testid="stVerticalBlock"] {{ gap: .4rem; }}
 div[data-testid="stHorizontalBlock"] {{ gap: .7rem; }}
+
+/* ---- La poignée qui plie et déplie la barre latérale -----------------
+   Elle existe déjà, mais Streamlit la dessine minuscule et pâle : le service
+   ne la trouvait pas, et croyait la barre disparue. On la rend bien visible —
+   entourée, plus grande — sans jamais la masquer, pour qu'on puisse toujours
+   replier la barre et la rouvrir (demande du service, 11 septembre).
+
+   La flèche qui rouvre la barre une fois repliée (en haut à gauche) reçoit le
+   même traitement : c'est elle qu'on cherche quand l'écran paraît vide. */
+button[data-testid="stSidebarCollapseButton"],
+button[data-testid="stExpandSidebarButton"],
+div[data-testid="stSidebarCollapsedControl"] button,
+div[data-testid="collapsedControl"] button {{
+    border: 1px solid {ROUGE} !important;
+    border-radius: 8px !important;
+    color: {ROUGE} !important;
+    background: #ffffff !important;
+    width: 2rem !important; height: 2rem !important;
+    opacity: 1 !important;
+}}
 
 /* ---- Échelle typographique -------------------------------------------
    Volontairement plus petite que le défaut de Streamlit : les cartes sont

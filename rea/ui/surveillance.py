@@ -129,6 +129,23 @@ def _tableau(grille: dict, heures, sorties: dict, recueils: list[str],
             continue
         lignes += _rangee(libelle, _extremes(valeurs, unite), valeurs, heures, bornes)
 
+    # Les pupilles, juste sous les constantes neuro (Glasgow y est) : diamètre
+    # et réactivité collés, « 3 R », « 4 A », parce que c'est leur conjonction
+    # qui se lit (demande du service, 11 septembre).
+    for cle, libelle in constantes_service.PUPILLES:
+        cases = []
+        vu = False
+        for h in heures:
+            taille, react = constantes_service.lire_etat_pupille(
+                (etats or {}).get(h, {}).get(cle)
+            )
+            if taille or react:
+                vu = True
+            cases.append(_abrege_pupille(taille, react))
+        if vu:
+            lignes += _rangee(libelle, "", cases, heures, bornes,
+                              couleur="#7048B6", brut=True)
+
     for cle in recueils:
         libelle = noms.get(cle, cle)
         unite = "mL"
@@ -202,6 +219,16 @@ def _rangee_etat(cle: str, libelle: str, heures, bornes, etats: dict) -> str:
 #: Ce que la colonne peut porter. Le tableau fait vingt-quatre colonnes de
 #: large : « En siphonnage » n'y tient pas, « siph » oui.
 _ABREGE = {"siphonnage": "siph", "aspiration": "asp", "clampe": "clamp"}
+
+#: La réactivité pupillaire, en une lettre : R réactive, L lente, A aréactive.
+_ABREGE_REACTIVITE = {"reactive": "R", "lente": "L", "areactive": "A"}
+
+
+def _abrege_pupille(taille: str, reactivite: str | None) -> str:
+    """« 3 R », « 4 A », « 3 », « R » — le diamètre et une lettre, tenus dans
+    un vingt-quatrième de la largeur."""
+    lettre = _ABREGE_REACTIVITE.get(reactivite or "", "")
+    return " ".join(m for m in (taille, lettre) if m)
 
 
 def _extremes(valeurs, unite: str) -> str:

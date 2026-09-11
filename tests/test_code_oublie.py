@@ -216,6 +216,18 @@ def test_la_barre_laterale_est_depliee_par_defaut():
     assert 'initial_sidebar_state="expanded"' in APPLI
 
 
+def test_la_poignee_pour_plier_la_barre_est_bien_visible():
+    """Le service croyait la barre disparue : la poignée qui la plie et la
+    rouvre existe, mais Streamlit la dessine minuscule et pâle. Le thème la
+    rend visible — entourée, agrandie — sans jamais la masquer, pour qu'on
+    puisse toujours replier la barre et la rouvrir (11 septembre)."""
+    theme = (RACINE / "rea" / "ui" / "theme.py").read_text(encoding="utf-8")
+    assert "stSidebarCollapseButton" in theme
+    assert "stExpandSidebarButton" in theme
+    # Jamais masquée : on doit pouvoir replier ET rouvrir.
+    assert "stSidebarCollapseButton" not in theme.split("display: none")[0][-200:]
+
+
 def test_la_deconnexion_oublie_le_mode_admin():
     """Sinon l'écran d'ouverture resterait filtré aux administrateurs pour la
     personne suivante, qui ne trouverait plus son nom."""
