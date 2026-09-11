@@ -198,6 +198,18 @@
     "examens_demain": [
       [
         [
+          "bilan_complet"
+        ],
+        "Bilan complet"
+      ],
+      [
+        [
+          "acsos"
+        ],
+        "ACSOS"
+      ],
+      [
+        [
           "nfs"
         ],
         "NFS"
@@ -223,10 +235,15 @@
       ],
       [
         [
-          "crp",
+          "crp"
+        ],
+        "CRP"
+      ],
+      [
+        [
           "procalcitonine"
         ],
-        "CRP/PCT"
+        "PCT"
       ],
       [
         [
@@ -248,28 +265,21 @@
       ],
       [
         [
-          "ecbu",
+          "ecbu"
+        ],
+        "ECBU"
+      ],
+      [
+        [
           "pdp"
         ],
-        "ECBU / PDP"
+        "PDP"
       ],
       [
         [
           "rx_thorax"
         ],
         "Rx thorax"
-      ],
-      [
-        [
-          "ecg"
-        ],
-        "ECG"
-      ],
-      [
-        [
-          "echo_tdm"
-        ],
-        "Écho / TDM"
       ]
     ]
   }
