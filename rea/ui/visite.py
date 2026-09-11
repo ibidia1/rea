@@ -25,6 +25,7 @@ from ..domaine import temperature as temp_dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
 from ..services import avis as avis_service
 from ..services import bilans as bilans_service
+from ..services import constantes as constantes_service
 from ..services import dispositifs as dispositifs_service
 from ..services import evolution as evolution_service
 from ..services import explorations as explorations_service
@@ -457,6 +458,35 @@ def _explorations(sejour: dict, date_jour_str: str) -> None:
     _bloc(f"Explorations faites ({len(faites)})", "".join(lignes), theme.BLEU)
 
 
+def _derniers_etats_de_drain(sejour: dict, date_jour_str: str) -> dict[str, str]:
+    """Nom du drain -> son dernier etat releve ce jour-la, en clair.
+
+    Le dernier et non le premier : a la visite, la question est « dans quoi
+    est-il branche maintenant », pas « dans quoi l'a-t-on branche a 7 h ».
+    """
+    base = contexte.base()
+    etats = constantes_service.etats_du_jour(base, sejour["id"], date_jour_str)
+    dernier: dict[str, str] = {}
+    for heure in sorted(etats):
+        for cle, texte in etats[heure].items():
+            if cle.startswith(constantes_service.PREFIXE_ETAT_DRAIN):
+                dernier[cle] = texte
+
+    lisible: dict[str, str] = {}
+    for drain in evolution_service.drains_du_jour(base, sejour["id"], date_jour_str):
+        cle = constantes_service.cle_etat_drain(drain["dispositif_id"])
+        mode, bullage = constantes_service.lire_etat_drain(dernier.get(cle))
+        if not mode and not bullage:
+            continue
+        morceaux = []
+        if mode:
+            morceaux.append(listes.libelle(listes.ETATS_DRAIN_THORACIQUE, mode))
+        if bullage:
+            morceaux.append("bullage")
+        lisible[drain["libelle"]] = ", ".join(morceaux).lower()
+    return lisible
+
+
 def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
     """Ce qui est entré, ce qui est sorti, ce qui reste — sous les traitements.
 
@@ -483,8 +513,17 @@ def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
         f"{bilan.diurese_ml:.0f} mL" if bilan.diurese_ml is not None else "—",
         None,
     ))
+    # L'etat du drain thoracique se lit AVEC son volume, jamais sans : un drain
+    # qui n'a rien donne de la journee ne se lit pas pareil selon qu'il etait
+    # clampe — c'est attendu — ou en siphonnage, ou c'est peut-etre un drain
+    # bouche (demande du service, 11 septembre).
+    etats = _derniers_etats_de_drain(sejour, date_jour_str)
     for libelle_drain, volume in bilan.detail_drains:
-        lignes.append(_mesure(libelle_drain, f"{volume:.0f} mL", None))
+        etat = etats.get(libelle_drain)
+        valeur = f"{volume:.0f} mL"
+        if etat:
+            valeur += f" <span class='rea-v-detail'>· {html.escape(etat)}</span>"
+        lignes.append(_mesure(libelle_drain, valeur, None))
     if bilan.pertes_insensibles_ml is not None:
         lignes.append(_mesure(
             "Pertes insensibles", f"{bilan.pertes_insensibles_ml:.0f} mL", None

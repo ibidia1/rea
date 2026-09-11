@@ -362,6 +362,114 @@ def creer_compte_initial(base: Base) -> str:
     return identifiant
 
 
+# --------------------------------------------------------------------------
+# Codes oubliés (demande du service, 11 septembre 2026)
+# --------------------------------------------------------------------------
+# Une personne qui a perdu son code ne peut pas le remettre elle-même : ce
+# serait une porte ouverte à qui saurait un nom. Elle dépose une demande, et
+# l'administrateur y répond.
+
+EN_ATTENTE = "en_attente"
+TRAITEE = "traitee"
+REFUSEE = "refusee"
+
+
+def demander_un_code(base: Base, cible_id: str) -> str:
+    """Dépose une demande de code oublié, ou rend celle qui attend déjà.
+
+    Rend l'existante plutôt que d'en empiler : appuyer trois fois sur le
+    bouton ne doit pas donner trois lignes à traiter à l'administrateur.
+    """
+    cible = par_id(base, cible_id)
+    if not cible or not cible["actif"]:
+        raise ValueError("Compte introuvable.")
+    with base.transaction():
+        deja = base.une_ligne(
+            "SELECT * FROM demande_code WHERE utilisateur_id = ? AND etat = ? "
+            "AND supprime = 0",
+            (cible_id, EN_ATTENTE),
+        )
+        if deja:
+            return deja["id"]
+        return base.inserer(
+            "demande_code",
+            {"utilisateur_id": cible_id,
+             "demande_le": datetime.now().isoformat(timespec="minutes"),
+             "etat": EN_ATTENTE},
+            utilisateur_id=cible_id,
+        )
+
+
+def demandes_de_code(base: Base) -> list[dict]:
+    """Les demandes qui attendent une réponse, la plus ancienne d'abord."""
+    lignes = base.requete(
+        "SELECT * FROM demande_code WHERE etat = ? AND supprime = 0 "
+        "ORDER BY demande_le",
+        (EN_ATTENTE,),
+    )
+    demandes = []
+    for ligne in lignes:
+        compte = par_id(base, ligne["utilisateur_id"])
+        if compte and compte["actif"]:
+            demandes.append({**ligne, "nom": compte["nom"], "role": compte["role"]})
+    return demandes
+
+
+def reinitialiser_le_code(
+    base: Base, demande_id: str, *, utilisateur_id: str | None = None
+) -> str:
+    """Remet le code du compte à celui de départ, et lève son blocage.
+
+    Trois choses ensemble, et c'est le tout qui rend le compte utilisable :
+
+    * le code redevient `config.CODE_INITIAL`, marqué **provisoire** — il est
+      écrit dans le logiciel, donc public : la personne en choisira un vrai
+      dès son entrée, et rien ne s'ouvrira avant ;
+    * le compteur d'essais ratés est remis à zéro. Sans cela, quelqu'un qui
+      s'est bloqué en cherchant son code recevrait un nouveau code et se
+      verrait quand même refuser l'entrée pendant dix minutes — le temps de
+      rappeler l'administrateur pour lui dire que ça ne marche pas ;
+    * la demande est marquée traitée, pour qu'elle cesse de figurer dans la
+      liste de l'administrateur.
+    """
+    demande = base.une_ligne(
+        "SELECT * FROM demande_code WHERE id = ? AND supprime = 0", (demande_id,)
+    )
+    if not demande or demande["etat"] != EN_ATTENTE:
+        raise ValueError("Cette demande a déjà été traitée.")
+    cible = par_id(base, demande["utilisateur_id"])
+    if not cible or not cible["actif"]:
+        raise ValueError("Compte introuvable.")
+
+    with base.transaction():
+        definir_code(base, cible["id"], config.CODE_INITIAL, provisoire=True,
+                     utilisateur_id=utilisateur_id)
+        base.mettre_a_jour(
+            "demande_code", demande_id,
+            {"etat": TRAITEE,
+             "traitee_le": datetime.now().isoformat(timespec="minutes"),
+             "traitee_par": utilisateur_id},
+            utilisateur_id=utilisateur_id,
+        )
+    oublier_echecs(cible["nom"])
+    return cible["nom"]
+
+
+def refuser_la_demande(
+    base: Base, demande_id: str, *, utilisateur_id: str | None = None
+) -> None:
+    """L'administrateur a vu et a dit non. La demande reste, marquée refusée :
+    trois demandes refusées sur le même compte en une semaine ne se lisent pas
+    comme un code oublié trois fois."""
+    base.mettre_a_jour(
+        "demande_code", demande_id,
+        {"etat": REFUSEE,
+         "traitee_le": datetime.now().isoformat(timespec="minutes"),
+         "traitee_par": utilisateur_id},
+        utilisateur_id=utilisateur_id,
+    )
+
+
 def designer_administrateur(
     base: Base, cible_id: str, *, code: str, nouveau_code: str | None = None
 ) -> None:

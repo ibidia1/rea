@@ -1,0 +1,12 @@
+{
+  "nom": "etats_drain_thoracique",
+  "libelle": "Mode d'un drain thoracique",
+  "version": "2026-09-11.1",
+  "date": "2026-09-11",
+  "note": "À CONTRE-VALIDER PAR UN SENIOR. Le mode est ce dans quoi le drain est branché ; il se relève avec le volume, heure par heure. Le bullage n'est PAS dans cette liste et c'est voulu : il se constate en même temps que le mode, pas à sa place — un drain peut buller en siphonnage comme en aspiration, et une liste unique obligerait à choisir entre les deux. Il a donc sa propre case à cocher. Demande du service, 11 septembre 2026.",
+  "valeurs": [
+    ["siphonnage", "En siphonnage"],
+    ["aspiration", "En aspiration"],
+    ["clampe", "Clampé"]
+  ]
+}

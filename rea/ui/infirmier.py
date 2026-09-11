@@ -456,16 +456,22 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
     saisies = grille.get(heure, {})
     jetes = constantes_service.sacs_jetes_du_jour(base, patient["sejour_id"], jour)
 
-    recueils = _recueils_du_patient(base, patient, jour)
+    drains = evolution_service.drains_du_jour(base, patient["sejour_id"], jour)
+    recueils = _recueils_du_patient(drains)
+    thoraciques = [d for d in drains if d["type"] == "drain_thoracique"]
+    etats_saisis = constantes_service.etats_du_jour(
+        base, patient["sejour_id"], jour
+    ).get(heure, {})
 
     with st.form(f"constantes_{patient['sejour_id']}_{heure}"):
         valeurs = {}
         _rangees(constantes_service.VITALES, patient, heure, saisies, valeurs)
         sacs = _recueils(patient, heure, saisies, valeurs, jetes, recueils)
+        textes = _etats_des_drains(patient, heure, thoraciques, etats_saisis)
         if st.form_submit_button(f"Enregistrer le relevé de {heure:02d} h",
                                  type="primary", use_container_width=True):
             constantes_service.enregistrer(
-                base, patient["sejour_id"], jour, heure, valeurs,
+                base, patient["sejour_id"], jour, heure, valeurs, textes=textes,
                 sacs_jetes=sacs, utilisateur_id=utilisateur_id,
             )
             st.success(f"Relevé de {heure:02d} h enregistré.")
@@ -474,7 +480,7 @@ def _constantes(base, patient, jour, vacation, utilisateur_id) -> None:
     _grille_du_jour(base, patient, jour, grille, heures, jetes, recueils)
 
 
-def _recueils_du_patient(base, patient, jour) -> list[tuple[str, str, str]]:
+def _recueils_du_patient(drains) -> list[tuple[str, str, str]]:
     """Ce qui se recueille chez CE patient-là : la diurèse, et ses drains.
 
     La diurèse est de tous les patients ; les drains sont de celui-ci — un
@@ -485,11 +491,55 @@ def _recueils_du_patient(base, patient, jour) -> list[tuple[str, str, str]]:
     Deux redons dans le même abdomen arrivent numérotés — « Redon (abdomen) 1 »
     et « 2 » — sans quoi le volume se noterait sur le mauvais.
     """
-    drains = evolution_service.drains_du_jour(base, patient["sejour_id"], jour)
     return list(constantes_service.SORTIES) + [
         (constantes_service.cle_drain(drain["dispositif_id"]), drain["libelle"], "mL")
         for drain in drains
     ]
+
+
+def _etats_des_drains(patient, heure, thoraciques, etats_saisis) -> dict[str, str | None]:
+    """L'état d'un drain thoracique : dans quoi il est branché, et s'il bulle.
+
+    Un drain qui ne donne rien ne se lit pas de la même façon selon qu'il est
+    clampé ou en siphonnage : dans le premier cas c'est attendu, dans le
+    second c'est peut-être un drain bouché (demande du service,
+    11 septembre).
+
+    Le bullage a sa propre case plutôt qu'une entrée dans la liste des modes :
+    un drain peut buller en siphonnage comme en aspiration, et une liste
+    unique obligerait à choisir entre les deux.
+
+    Seuls les drains thoraciques ont cet état. Un redon n'est ni clampé ni en
+    siphonnage, et lui poser la question serait lui faire dire n'importe quoi.
+    """
+    if not thoraciques:
+        return {}
+    st.markdown(
+        f"<div style='margin:.9rem 0 .2rem;font-weight:700;"
+        f"color:{theme.ROUGE}'>Drains thoraciques</div>",
+        unsafe_allow_html=True,
+    )
+    modes = listes.codes(listes.ETATS_DRAIN_THORACIQUE)
+    textes: dict[str, str | None] = {}
+    for drain in thoraciques:
+        cle = constantes_service.cle_etat_drain(drain["dispositif_id"])
+        mode_pose, bullait = constantes_service.lire_etat_drain(etats_saisis.get(cle))
+        gauche, droite = st.columns([3, 2])
+        with gauche:
+            mode = st.selectbox(
+                drain["libelle"], modes,
+                index=modes.index(mode_pose) if mode_pose in modes else None,
+                placeholder="Etat non noté",
+                format_func=lambda c: listes.libelle(listes.ETATS_DRAIN_THORACIQUE, c),
+                key=f"mode_{patient['sejour_id']}_{heure}_{cle}",
+            )
+        with droite:
+            bullage = st.checkbox(
+                "Bullage", value=bullait,
+                key=f"bulle_{patient['sejour_id']}_{heure}_{cle}",
+            )
+        textes[cle] = constantes_service.etat_drain(mode, bullage)
+    return textes
 
 
 def _recueils(patient, heure, saisies, valeurs, jetes, recueils) -> set[str]:

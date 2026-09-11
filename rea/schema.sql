@@ -75,6 +75,35 @@ CREATE TABLE IF NOT EXISTS utilisateur (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_utilisateur_nom ON utilisateur(nom);
 
 -- -------------------------------------------------------------------------
+-- Codes oubliés (demande du service, 11 septembre 2026)
+-- -------------------------------------------------------------------------
+-- Un code se perd, et la personne ne peut plus entrer. Elle ne peut pas le
+-- remettre elle-même — ce serait une porte ouverte à qui saurait un nom.
+-- Elle dépose donc une DEMANDE, que l'administrateur voit dans l'écran des
+-- comptes et à laquelle il répond en connaissance de cause.
+--
+-- Une table plutôt qu'un drapeau sur `utilisateur` : ce qui compte ici est
+-- l'historique. Trois demandes en une semaine sur le même compte, ce n'est
+-- pas un code oublié trois fois, c'est quelqu'un qui essaie d'entrer.
+CREATE TABLE IF NOT EXISTS demande_code (
+    id             TEXT PRIMARY KEY,
+    utilisateur_id TEXT NOT NULL REFERENCES utilisateur(id),
+    demande_le     TEXT NOT NULL,
+    -- 'en_attente', 'traitee' ou 'refusee'. Une demande refusée reste : elle
+    -- dit que l'administrateur a vu et a dit non.
+    etat           TEXT NOT NULL DEFAULT 'en_attente',
+    traitee_le     TEXT,
+    traitee_par    TEXT REFERENCES utilisateur(id),
+    cree_le        TEXT NOT NULL,
+    cree_par       TEXT REFERENCES utilisateur(id),
+    modifie_le     TEXT,
+    modifie_par    TEXT REFERENCES utilisateur(id),
+    supprime       INTEGER NOT NULL DEFAULT 0,
+    version        INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_demande_code_etat ON demande_code(etat, supprime);
+
+-- -------------------------------------------------------------------------
 -- Identité (SPEC §4.1) — table séparée des données cliniques (règle 6)
 -- -------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS patient (

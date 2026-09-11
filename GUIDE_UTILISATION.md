@@ -113,6 +113,19 @@ le chirurgien les a posés, pour que le volume ne se note pas sur le mauvais.
 Ce que vous relevez part directement dans le bilan entrées/sorties que le
 médecin lit à la visite.
 
+**Un drain thoracique a en plus son état**, sous « Drains thoraciques » :
+dans quoi il est branché — **en siphonnage**, **en aspiration**, **clampé** —
+et une case **Bullage** à cocher quand il bulle.
+
+C'est ce qui donne son sens au volume. Un drain qui n'a rien donné de la
+journée se lit tout autrement selon qu'il était clampé — c'est attendu — ou en
+siphonnage, où c'est peut-être un drain bouché.
+
+Le bullage a sa propre case plutôt qu'une ligne dans la liste : un drain peut
+buller en siphonnage comme en aspiration, et une liste unique obligerait à
+choisir entre les deux. Seuls les drains thoraciques ont cet état — un redon
+n'est ni clampé ni en siphonnage.
+
 **Quand vous videz le sac ou le bocal**, cochez « j'ai vidé après ce relevé ».
 C'est la case la plus importante de l'écran. Elle dit que le niveau que vous
 venez d'écrire est le dernier de ce sac-là, et que le prochain repart de
@@ -448,6 +461,32 @@ l'administrateur. Chacun y change le sien, l'ancien étant demandé, sans
 passer par personne : un infirmier qui prend son poste à 7 h n'a personne à
 chercher. Tant qu'un compte n'a pas de code, le bouton le dit :
 « ⚠️ Poser mon code d'accès ».
+
+**Se déconnecter** est juste au-dessus, en haut de la barre latérale.
+
+### Un code oublié
+
+Sur l'écran d'ouverture : **« J'ai oublié mon code d'accès »**. On choisit son
+nom, on clique, et c'est tout — une **demande** part vers l'administrateur.
+
+Le code ne peut pas être retrouvé : le logiciel n'en garde qu'une empreinte,
+jamais le code lui-même. Ce que l'administrateur peut faire, c'est le
+**remettre à zéro**.
+
+Côté administrateur, la demande apparaît tout en haut de Administration →
+**Comptes** — en haut parce que c'est la seule chose de cet écran qui bloque
+quelqu'un : tant qu'elle n'est pas traitée, la personne ne peut pas prendre
+son poste. Deux boutons : *Remettre à zéro* et *Ignorer*.
+
+**Remettre à zéro demande une confirmation**, et le message dit exactement ce
+qui va se passer : le code devient `rea123` — à dire de vive voix — le compte
+en réclamera un vrai dès la première entrée, et **le blocage des essais ratés
+est levé**. Ce dernier point compte : quelqu'un qui s'est bloqué en cherchant
+son code recevrait sinon un nouveau code et se verrait quand même refuser
+l'entrée pendant dix minutes.
+
+C'est l'administrateur qui décide, pas le logiciel : lui seul sait si la
+personne devant lui est bien celle du compte.
 
 ### Essayer un rôle
 

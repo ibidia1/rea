@@ -59,9 +59,10 @@ def bloc_du_jour(base, sejour_id: str, date_jour: str, *, titre: str | None = No
         for cle in recueils
     }
     noms = _noms_des_recueils(base, sejour_id, date_jour)
+    etats = constantes_service.etats_du_jour(base, sejour_id, date_jour)
     theme.bloc_html(
         titre or f"Surveillance horaire du {format_date_fr(date_jour)}",
-        _tableau(grille, heures, sorties, recueils, noms)
+        _tableau(grille, heures, sorties, recueils, noms, etats)
         + _reserves(sorties, noms)
         + _signatures(base, sejour_id, date_jour),
         theme.BLEU,
@@ -114,7 +115,7 @@ def _reserves(sorties: dict, noms: dict[str, str]) -> str:
 
 
 def _tableau(grille: dict, heures, sorties: dict, recueils: list[str],
-             noms: dict[str, str]) -> str:
+             noms: dict[str, str], etats: dict | None = None) -> str:
     bornes = _bornes_de_vacation()
     entetes = "".join(
         f"<th style='padding:.3rem .45rem;font-weight:600{_bord(h, bornes)}'>"
@@ -157,6 +158,7 @@ def _tableau(grille: dict, heures, sorties: dict, recueils: list[str],
             f"{libelle} — niveau", "", marques, heures, bornes,
             couleur="#94a3b8", brut=True,
         )
+        lignes += _rangee_etat(cle, libelle, heures, bornes, etats or {})
     # Le résumé **avant** les heures, et non après. Vingt-quatre colonnes ne
     # tiennent pas dans la moitié droite d'un écran de visite : le tableau
     # défile, et ce qui dépasse est ce qu'on met à droite. Or la colonne qu'on
@@ -170,6 +172,36 @@ def _tableau(grille: dict, heures, sorties: dict, recueils: list[str],
         "font-weight:600'>Journée</th>"
         f"{entetes}</tr>{lignes}</table></div>"
     )
+
+
+def _rangee_etat(cle: str, libelle: str, heures, bornes, etats: dict) -> str:
+    """Le mode d'un drain thoracique, heure par heure : « siph », « asp »,
+    « clampé », avec un ● quand il bulle.
+
+    Une ligne à part du volume, et pas de total : la moyenne de « clampé » et
+    de « siphonnage » n'existe pas. Ce qu'on lit ici, c'est le moment où ça
+    change — un drain clampé à 14 h qui ne donne plus rien à 15 h, c'est
+    attendu ; le même en siphonnage, c'est peut-être un drain bouché.
+
+    Abrégé parce que la colonne fait un vingt-quatrième de la largeur :
+    « En siphonnage » n'y tient pas, « siph » oui.
+    """
+    cle_etat = cle.replace(constantes_service.PREFIXE_DRAIN,
+                           constantes_service.PREFIXE_ETAT_DRAIN, 1)
+    textes = [etats.get(h, {}).get(cle_etat) for h in heures]
+    if not any(textes):
+        return ""
+    cases = []
+    for texte in textes:
+        mode, bullage = constantes_service.lire_etat_drain(texte)
+        cases.append((_ABREGE.get(mode, mode or "") + ("●" if bullage else "")))
+    return _rangee(f"{libelle} — mode", "", cases, heures, bornes,
+                   couleur="#b45309", brut=True)
+
+
+#: Ce que la colonne peut porter. Le tableau fait vingt-quatre colonnes de
+#: large : « En siphonnage » n'y tient pas, « siph » oui.
+_ABREGE = {"siphonnage": "siph", "aspiration": "asp", "clampe": "clamp"}
 
 
 def _extremes(valeurs, unite: str) -> str:

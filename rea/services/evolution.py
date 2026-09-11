@@ -268,6 +268,11 @@ def drains_du_jour(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
             "valeur": du_chevet if du_chevet is not None else valeurs.get(cle),
             "releve_infirmier": du_chevet,
             "dispositif_id": etat.id,
+            # Le type, parce que tous les drains ne se surveillent pas pareil :
+            # seul un drain thoracique est clampé, en siphonnage ou en
+            # aspiration. Poser la question a un redon lui ferait dire
+            # n'importe quoi.
+            "type": etat.type,
         })
     return drains
 

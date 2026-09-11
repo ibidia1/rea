@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from .. import config
 from ..domaine import droits as dom_droits
 from ..services import utilisateurs as utilisateurs_service
 from . import theme
@@ -34,9 +35,85 @@ def ecran(base, utilisateur_id: str | None = None) -> None:
             icon="⚠️",
         )
 
+    _demandes_de_code(base, utilisateur_id)
     _creer(base, utilisateur_id)
     st.divider()
     _liste(base, comptes, utilisateur_id)
+
+
+def _demandes_de_code(base, utilisateur_id) -> None:
+    """Les codes oubliés qui attendent une réponse — tout en haut de l'écran.
+
+    En haut parce que c'est la seule chose ici qui bloque quelqu'un : tant
+    qu'elle n'est pas traitée, une infirmière ne peut pas prendre son poste.
+    Le reste de cet écran peut attendre le lendemain.
+
+    L'administrateur confirme avant que quoi que ce soit ne bouge. C'est lui
+    qui sait si la personne devant lui est bien celle du compte — le logiciel,
+    lui, ne voit qu'un nom dans une liste (demande du service, 11 septembre).
+    """
+    demandes = utilisateurs_service.demandes_de_code(base)
+    if not demandes:
+        return
+
+    st.warning(
+        f"**{len(demandes)} demande(s) de code oublié.** Tant qu'elles ne "
+        "sont pas traitées, ces personnes ne peuvent pas entrer.",
+        icon="🔑",
+    )
+    for demande in demandes:
+        c1, c2, c3 = st.columns([4, 2, 2])
+        c1.markdown(
+            f"**{demande['nom']}** — {dom_droits.libelle(demande['role'])}<br>"
+            f"<span style='font-size:.78rem;color:#94a3b8'>"
+            f"demandé le {demande['demande_le'].replace('T', ' à ')}</span>",
+            unsafe_allow_html=True,
+        )
+        cle = f"remise_{demande['id']}"
+        if c2.button("Remettre à zéro", key=f"rz_{demande['id']}",
+                     use_container_width=True, type="primary"):
+            st.session_state[cle] = True
+        if c3.button("Ignorer", key=f"ig_{demande['id']}",
+                     use_container_width=True):
+            utilisateurs_service.refuser_la_demande(
+                base, demande["id"], utilisateur_id=utilisateur_id
+            )
+            st.rerun()
+
+        if st.session_state.get(cle):
+            # Une confirmation, parce que le geste donne un code connu de
+            # tous à un compte qui peut valoir un accès au dossier. Deux
+            # clics, et le second dit ce qui va se passer.
+            st.error(
+                f"**Confirmer la remise à zéro du code de « {demande['nom']} » ?**\n\n"
+                f"Son code deviendra **`{config.CODE_INITIAL}`**, à lui dire de "
+                "vive voix. Ce code est écrit dans le logiciel : il ne protège "
+                "rien, et le compte réclamera un vrai code dès la première "
+                "entrée. Le blocage des essais ratés sera également levé.",
+                icon="⚠️",
+            )
+            oui, non = st.columns(2)
+            if oui.button("Oui, remettre le code à zéro",
+                          key=f"oui_{demande['id']}", type="primary",
+                          use_container_width=True):
+                try:
+                    nom = utilisateurs_service.reinitialiser_le_code(
+                        base, demande["id"], utilisateur_id=utilisateur_id
+                    )
+                except ValueError as erreur:
+                    st.error(str(erreur))
+                else:
+                    st.session_state.pop(cle, None)
+                    st.success(
+                        f"Code de « {nom} » remis à `{config.CODE_INITIAL}`. "
+                        "Le lui dire de vive voix."
+                    )
+                    st.rerun()
+            if non.button("Annuler", key=f"non_{demande['id']}",
+                          use_container_width=True):
+                st.session_state.pop(cle, None)
+                st.rerun()
+    st.divider()
 
 
 def _creer(base, utilisateur_id) -> None:
