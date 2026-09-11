@@ -826,15 +826,22 @@ def _abords(dossier) -> list[dict]:
     return lignes
 
 
+#: Coché d'office sur la feuille : au bilan de 8 h on prélève le panel complet
+#: la plupart du temps, autant que la case parte cochée (demande du service,
+#: 12 septembre). Les autres examens se cochent d'après la saisie.
+COCHES_PAR_DEFAUT = {"bilan_complet"}
+
+
 def _examens_demain(dossier) -> list[dict]:
-    """Les cases « à demander pour demain », cochées d'après la saisie."""
+    """Les cases du « Bilan du jour », cochées d'après la saisie — et « Bilan
+    complet » cochée d'office, parce que c'est le prélèvement de 8 h."""
     demandes = {
         d["examen_code"]
         for d in dossier.pancarte_demain["bilans_demandes"]
     }
     lignes = []
     for codes, libelle in referentiels.charger("feuille_lignes", "examens_demain"):
-        coche = bool(set(codes) & demandes)
+        coche = bool(set(codes) & demandes) or bool(set(codes) & COCHES_PAR_DEFAUT)
         lignes.append({
             "case": "☑" if coche else "☐",
             "libelle": libelle,

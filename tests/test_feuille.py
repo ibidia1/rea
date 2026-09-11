@@ -194,7 +194,7 @@ def test_les_examens_demandes_la_veille_sont_a_leur_ligne(base, dossier):
     assert {i for i, c in enumerate(cases) if "◻" in c} == {_colonne(6)}
 
 
-def test_les_cases_a_demander_demain_sont_cochees(base, dossier):
+def test_les_cases_du_bilan_du_jour_sont_cochees(base, dossier):
     _pid, sid = dossier
     demain = (date.fromisoformat(AUJ) + timedelta(days=1)).isoformat()
     prescriptions.definir_bilans_demandes(
@@ -202,9 +202,23 @@ def test_les_cases_a_demander_demain_sont_cochees(base, dossier):
     )
     cases = {c["libelle"]: c["case"] for c in feuille.contexte(_dossier(base, sid, AUJ))["examensDemain"]}
     assert cases["NFS"] == "☑"
-    # « CRP/PCT » est une case pour deux examens : la PCT suffit à la cocher.
-    assert cases["CRP/PCT"] == "☑"
+    # CRP et PCT ont désormais leur propre case ; la PCT demandée ne coche
+    # qu'elle-même.
+    assert cases["PCT"] == "☑"
+    assert cases["CRP"] == "☐"
     assert cases["Rx thorax"] == "☐"
+
+
+def test_le_bilan_complet_est_coche_d_office(base, dossier):
+    _pid, sid = dossier
+    # Aucun bilan saisi : « Bilan complet » part quand même cochée, car c'est
+    # le prélèvement de 8 h.
+    cases = {c["libelle"]: c["case"] for c in feuille.contexte(_dossier(base, sid, AUJ))["examensDemain"]}
+    assert cases["Bilan complet"] == "☑"
+    assert cases["ACSOS"] == "☐"
+    # Écho/TDM et ECG ont quitté la rubrique.
+    assert "Écho / TDM" not in cases
+    assert "ECG" not in cases
 
 
 def test_les_dispositifs_sont_coches_avec_leur_compteur(base, dossier):
