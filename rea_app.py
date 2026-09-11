@@ -32,7 +32,11 @@ from rea.ui import surveillant as surveillant_ui
 from rea.ui import theme
 from rea.ui import utilisateur as utilisateur_ui
 
-st.set_page_config(page_title="Réanimation polyvalente", page_icon="🏥", layout="wide")
+# Barre latérale dépliée : c'est elle qui porte la navigation et la
+# déconnexion. Repliée, elle se réduit à une flèche que personne ne cherche —
+# le service ne la voyait pas (11 septembre).
+st.set_page_config(page_title="Réanimation polyvalente", page_icon="🏥",
+                   layout="wide", initial_sidebar_state="expanded")
 theme.appliquer()
 
 base = contexte.base()
@@ -62,7 +66,9 @@ with st.sidebar:
 
     st.write(f"**{utilisateur_ui.nom_utilisateur_courant()}**")
     st.caption(dom_droits.libelle(utilisateur_ui.role_courant()))
-    if st.button("Changer d'utilisateur"):
+    # « Se déconnecter » : le même geste que « changer d'utilisateur », sous
+    # le mot que tout le monde cherche (11 septembre).
+    if st.button("Se déconnecter", use_container_width=True):
         utilisateur_ui.changer_utilisateur()
     utilisateur_ui.mon_code(base)
     st.divider()

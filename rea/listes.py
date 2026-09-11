@@ -116,6 +116,11 @@ MOTIFS_NON_PRELEVEMENT = _charger("motifs_non_prelevement")
 # compléter avec un chirurgien.
 NATURES_DRAIN = _charger("natures_drain")
 
+# Ce dans quoi un drain thoracique est branché, relevé heure par heure avec
+# son volume : un drain clampé qui ne donne rien ne se lit pas comme un drain
+# en siphonnage qui ne donne rien (demande du service, 11 septembre).
+ETATS_DRAIN_THORACIQUE = _charger("etats_drain_thoracique")
+
 GRADES_AVIS = _charger("grades_avis")
 PRODUITS_ENTREES = _charger("produits_entrees")
 ADDITIFS_PERFUSION = _charger("additifs_perfusion")

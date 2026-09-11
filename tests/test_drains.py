@@ -221,3 +221,119 @@ def test_la_sonde_urinaire_n_est_pas_un_drain(base):
     dispositifs.poser(base, sejour_id=sid, type_="sonde_urinaire",
                       date_pose="2026-09-08")
     assert evolution.drains_du_jour(base, sid, "2026-09-08") == []
+
+
+# --------------------------------------------------------------------------
+# L'etat d'un drain thoracique : dans quoi il est branche, et s'il bulle
+# --------------------------------------------------------------------------
+# Un drain qui ne donne rien ne se lit pas de la meme facon selon qu'il est
+# clampe — c'est attendu — ou en siphonnage, ou c'est peut-etre un drain
+# bouche (demande du service, 11 septembre).
+
+def test_les_modes_du_drain_thoracique_existent():
+    codes = listes.codes(listes.ETATS_DRAIN_THORACIQUE)
+    assert set(codes) == {"siphonnage", "aspiration", "clampe"}
+
+
+def test_le_bullage_n_est_pas_un_mode():
+    """Un drain peut buller en siphonnage comme en aspiration : le mettre
+    dans la liste des modes obligerait a choisir entre les deux."""
+    assert "bullage" not in listes.codes(listes.ETATS_DRAIN_THORACIQUE)
+
+
+def test_le_mode_et_le_bullage_se_reunissent_et_se_relisent(base):
+    constantes = _service("constantes")
+    assert constantes.etat_drain("aspiration", True) == "aspiration+bullage"
+    assert constantes.etat_drain("clampe", False) == "clampe"
+    assert constantes.etat_drain(None, True) == "bullage"
+    assert constantes.etat_drain(None, False) is None
+
+    assert constantes.lire_etat_drain("aspiration+bullage") == ("aspiration", True)
+    assert constantes.lire_etat_drain("clampe") == ("clampe", False)
+    assert constantes.lire_etat_drain("bullage") == (None, True)
+    assert constantes.lire_etat_drain(None) == (None, False)
+
+
+def test_l_etat_se_releve_heure_par_heure(base):
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    sid = _patient(base)
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              site="Droit", date_pose="2026-09-08")
+    cle = constantes.cle_etat_drain(drain)
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {},
+                           textes={cle: constantes.etat_drain("siphonnage", True)})
+    constantes.enregistrer(base, sid, "2026-09-08", 14, {},
+                           textes={cle: constantes.etat_drain("clampe", False)})
+
+    etats = constantes.etats_du_jour(base, sid, "2026-09-08")
+    assert etats[8][cle] == "siphonnage+bullage"
+    assert etats[14][cle] == "clampe"
+
+
+def test_l_etat_et_le_volume_cohabitent_sur_la_meme_heure(base):
+    """Deux cles distinctes pour le meme drain, ecrites dans le meme geste."""
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    sid = _patient(base)
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              date_pose="2026-09-08")
+    constantes.enregistrer(
+        base, sid, "2026-09-08", 8,
+        {constantes.cle_drain(drain): 120},
+        textes={constantes.cle_etat_drain(drain): "aspiration"},
+    )
+    assert constantes.du_jour(base, sid, "2026-09-08")[8][constantes.cle_drain(drain)] == 120
+    assert constantes.etats_du_jour(base, sid, "2026-09-08")[8][
+        constantes.cle_etat_drain(drain)] == "aspiration"
+
+
+def test_un_etat_efface_disparait(base):
+    """Une case videe efface la note, elle n'ecrit pas une chaine vide."""
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    sid = _patient(base)
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              date_pose="2026-09-08")
+    cle = constantes.cle_etat_drain(drain)
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {}, textes={cle: "clampe"})
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {}, textes={cle: None})
+    assert constantes.etats_du_jour(base, sid, "2026-09-08") == {}
+
+
+def test_l_etat_n_est_pas_un_recueil(base):
+    """Il ne se totalise jamais : la moyenne de « clampe » et de
+    « siphonnage » n'existe pas."""
+    constantes = _service("constantes")
+    assert constantes.est_recueil(constantes.cle_etat_drain("abc")) is False
+    assert constantes.est_recueil(constantes.cle_drain("abc")) is True
+
+
+def test_le_releve_d_etat_ne_perturbe_pas_le_total_du_drain(base):
+    """Les deux cles se ressemblent : `drain:x` et `etat_drain:x`. Si la
+    seconde etait comptee comme un niveau, elle casserait le total."""
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    sid = _patient(base)
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              date_pose="2026-09-08")
+    volume, etat = constantes.cle_drain(drain), constantes.cle_etat_drain(drain)
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {volume: 0},
+                           textes={etat: "siphonnage"})
+    constantes.enregistrer(base, sid, "2026-09-08", 16, {volume: 250},
+                           textes={etat: "clampe"})
+    assert constantes.total_du_jour(base, sid, "2026-09-08", volume).volume_ml == 250
+
+
+def test_le_type_du_drain_remonte_pour_savoir_qui_a_un_etat(base):
+    """Seul un drain thoracique est clampe ou en siphonnage. Poser la
+    question a un redon lui ferait dire n'importe quoi."""
+    dispositifs = _service("dispositifs")
+    evolution = _service("evolution")
+    sid = _patient(base)
+    dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                      date_pose="2026-09-08")
+    dispositifs.poser(base, sejour_id=sid, type_="redon", site="Abdomen",
+                      date_pose="2026-09-08")
+    types = {d["type"] for d in evolution.drains_du_jour(base, sid, "2026-09-08")}
+    assert types == {"drain_thoracique", "redon"}

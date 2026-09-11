@@ -30,6 +30,33 @@ def utilisateurs_actifs(base: Base) -> list[dict]:
     return utilisateurs_service.actifs(base)
 
 
+def _entete_accueil(base: Base) -> None:
+    """Le titre, et l'accès administrateur en haut à droite.
+
+    Là, sur l'écran d'ouverture, et non une fois entré : l'administrateur qui
+    vient débloquer un collègue ou créer un compte n'a pas de raison de
+    traverser l'application d'abord. Il cherche le bouton où on cherche un
+    bouton — dans le coin (demande du service, 11 septembre).
+
+    Le bouton ne donne rien de plus qu'un raccourci : il présélectionne les
+    comptes administrateurs dans la liste, et le code reste exigé. Une porte
+    qui s'ouvrirait d'un clic ne serait pas une porte.
+    """
+    gauche, droite = st.columns([5, 1])
+    with gauche:
+        st.title("Réanimation polyvalente")
+    with droite:
+        if not utilisateurs_service.administrateurs(base):
+            return
+        st.write("")
+        if st.button("Accès admin", use_container_width=True,
+                     help="Entrer avec un compte administrateur"):
+            st.session_state["accueil_admin"] = not st.session_state.get(
+                "accueil_admin", False
+            )
+            st.rerun()
+
+
 def selecteur(base: Base) -> str | None:
     """Affiche l'ouverture. Retourne l'id de l'utilisateur courant, ou None
     tant qu'aucun n'est entré — l'appelant doit alors bloquer la suite."""
@@ -45,7 +72,7 @@ def selecteur(base: Base) -> str | None:
             return None
         return st.session_state["utilisateur_id"]
 
-    st.title("Réanimation polyvalente")
+    _entete_accueil(base)
     utilisateurs = utilisateurs_actifs(base)
 
     if not utilisateurs:
@@ -76,6 +103,18 @@ def selecteur(base: Base) -> str | None:
             "Administration → Comptes.",
             icon="⚠️",
         )
+    # « Accès admin » ne fait que filtrer la liste : le code reste exigé, et
+    # une porte qui s'ouvrirait d'un clic ne serait pas une porte.
+    if st.session_state.get("accueil_admin"):
+        administrateurs = utilisateurs_service.administrateurs(base)
+        if administrateurs:
+            utilisateurs = administrateurs
+            st.info(
+                "**Accès administrateur** — seuls les comptes qui gèrent les "
+                "comptes sont proposés. Le code reste demandé.",
+                icon="🔑",
+            )
+
     st.caption("Sélection obligatoire avant toute saisie (SPEC §1.2)")
     noms = [u["nom"] for u in utilisateurs]
     with st.form("selecteur_utilisateur"):
@@ -119,13 +158,60 @@ def selecteur(base: Base) -> str | None:
         utilisateurs_service.oublier_echecs(choix)
         _entrer(compte)
 
-    st.caption(
-        "Un compte oublié ou un code perdu se règle dans "
-        "Administration → Comptes, depuis un compte administrateur."
-    )
+    _code_oublie(base, utilisateurs)
     if utilisateurs_service.sans_administrateur(base):
         _designer_un_administrateur(base, utilisateurs)
     return None
+
+
+def _code_oublie(base: Base, utilisateurs: list[dict]) -> None:
+    """« J'ai oublié mon code » — une demande, pas une remise à zéro.
+
+    La personne ne peut pas remettre son code elle-même : ce serait une porte
+    ouverte à qui saurait un nom. Elle dépose une demande que l'administrateur
+    voit dans Administration → Comptes, et à laquelle il répond en
+    connaissance de cause — c'est lui qui sait si la personne devant lui est
+    bien celle du compte (demande du service, 11 septembre).
+
+    Ce qu'on lui dit ici est exactement ce qui va se passer, et rien de plus :
+    promettre un déblocage immédiat à quelqu'un qui attend l'administrateur
+    lui ferait réessayer dix fois.
+    """
+    with st.expander("J'ai oublié mon code d'accès"):
+        st.write(
+            "Votre code ne peut pas être retrouvé — le logiciel n'en garde "
+            "qu'une empreinte, jamais le code lui-même. Un administrateur "
+            "peut le **remettre à zéro** : il vous donnera alors un code "
+            "provisoire, et vous en choisirez un nouveau en entrant."
+        )
+        noms = [u["nom"] for u in utilisateurs]
+        nom = st.selectbox("Quel compte ?", noms, index=None,
+                           placeholder="Choisir son nom", key="oubli_nom")
+        if not nom:
+            return
+        compte = next(u for u in utilisateurs if u["nom"] == nom)
+
+        deja = [
+            d for d in utilisateurs_service.demandes_de_code(base)
+            if d["utilisateur_id"] == compte["id"]
+        ]
+        if deja:
+            st.success(
+                f"Une demande est déjà déposée pour « {nom} ». Prévenir un "
+                "administrateur : il la traitera depuis Administration → "
+                "Comptes.",
+                icon="✅",
+            )
+            return
+
+        if st.button("Demander la remise à zéro de mon code",
+                     key="oubli_demander", type="primary"):
+            try:
+                utilisateurs_service.demander_un_code(base, compte["id"])
+            except ValueError as erreur:
+                st.error(str(erreur))
+            else:
+                st.rerun()
 
 
 def _designer_un_administrateur(base: Base, utilisateurs: list[dict]) -> None:
@@ -402,6 +488,7 @@ def peut(droit: str) -> bool:
 
 def changer_utilisateur() -> None:
     for cle in ("utilisateur_id", "utilisateur_nom", "utilisateur_role",
-                "role_essai", "accueil_pose", "ecran", "sejour_id"):
+                "role_essai", "accueil_pose", "ecran", "sejour_id",
+                "accueil_admin"):
         st.session_state.pop(cle, None)
     st.rerun()

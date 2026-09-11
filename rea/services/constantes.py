@@ -73,8 +73,62 @@ CLES_NIVEAU = tuple(cle for cle, _l, _u in SORTIES)
 PREFIXE_DRAIN = "drain:"
 
 
+#: Préfixe des clés d'état d'un drain thoracique : `etat_drain:<id>`.
+#:
+#: Séparé du volume, parce que ce n'est pas la même nature de chose. Le
+#: volume se totalise sur la journée ; l'état, lui, se lit heure par heure et
+#: ne se totalise jamais — la moyenne de « clampé » et de « siphonnage »
+#: n'existe pas (demande du service, 11 septembre).
+PREFIXE_ETAT_DRAIN = "etat_drain:"
+
+#: Ce qui s'ajoute au mode quand il est constaté : le bullage. Il n'est pas
+#: dans la liste des modes et c'est voulu — un drain peut buller en
+#: siphonnage comme en aspiration, et une liste unique obligerait à choisir
+#: entre les deux.
+MARQUE_BULLAGE = "bullage"
+
+
 def cle_drain(dispositif_id: str) -> str:
     return f"{PREFIXE_DRAIN}{dispositif_id}"
+
+
+def cle_etat_drain(dispositif_id: str) -> str:
+    return f"{PREFIXE_ETAT_DRAIN}{dispositif_id}"
+
+
+def etat_drain(mode: str | None, bullage: bool) -> str | None:
+    """Le mode et le bullage réunis en une ligne, telle qu'elle se relit.
+
+    « aspiration+bullage » plutôt que deux colonnes : le tableau du médecin
+    a déjà vingt-quatre heures de large, et ces deux-là se lisent toujours
+    ensemble.
+    """
+    if not mode:
+        return MARQUE_BULLAGE if bullage else None
+    return f"{mode}+{MARQUE_BULLAGE}" if bullage else mode
+
+
+def lire_etat_drain(texte: str | None) -> tuple[str | None, bool]:
+    """L'inverse : de « aspiration+bullage » au mode et au bullage."""
+    if not texte:
+        return None, False
+    morceaux = texte.split("+")
+    bullage = MARQUE_BULLAGE in morceaux
+    mode = next((m for m in morceaux if m != MARQUE_BULLAGE), None)
+    return mode, bullage
+
+
+def etats_du_jour(base: Base, sejour_id: str, date_jour: str) -> dict[int, dict[str, str]]:
+    """heure -> {clé d'état: texte relevé}, pour toute la journée."""
+    grille: dict[int, dict[str, str]] = {}
+    for ligne in base.requete(
+        "SELECT heure, cle, valeur_texte FROM constante_horaire "
+        "WHERE sejour_id = ? AND date_jour = ? AND supprime = 0 "
+        "AND valeur_texte IS NOT NULL ORDER BY heure",
+        (sejour_id, date_jour),
+    ):
+        grille.setdefault(ligne["heure"], {})[ligne["cle"]] = ligne["valeur_texte"]
+    return grille
 
 
 def est_recueil(cle: str) -> bool:
@@ -103,6 +157,7 @@ def enregistrer(
     heure: int,
     valeurs: dict[str, float | None],
     *,
+    textes: dict[str, str | None] | None = None,
     sacs_jetes: set[str] | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
@@ -110,6 +165,12 @@ def enregistrer(
 
     Effacer plutôt que d'écrire zéro : une FC à 0 est un arrêt cardiaque, pas
     une case qu'on a vidée.
+
+    `textes` porte ce qui se relève sans se chiffrer — l'état d'un drain
+    thoracique : clampé, en siphonnage, en aspiration. Une case à part de
+    `valeurs` parce qu'un état ne se moyenne pas, ne s'additionne pas, et
+    n'a pas d'extrêmes : le confondre avec un nombre ferait calculer la
+    moyenne de « clampé » et de « siphonnage ».
 
     `sacs_jetes` nomme les recueils vidés **juste après** ce relevé : le
     niveau qu'on vient d'écrire est le dernier de ce sac-là, et le suivant
@@ -125,11 +186,11 @@ def enregistrer(
     # mille écritures, tous de cette forme.
     with base.transaction():
         _ecrire_les_mesures(base, sejour_id, date_jour, heure, valeurs, jetes,
-                            utilisateur_id)
+                            utilisateur_id, textes or {})
 
 
 def _ecrire_les_mesures(base, sejour_id, date_jour, heure, valeurs, jetes,
-                        utilisateur_id) -> None:
+                        utilisateur_id, textes=None) -> None:
     existantes = {
         ligne["cle"]: ligne
         for ligne in base.requete(
@@ -138,23 +199,29 @@ def _ecrire_les_mesures(base, sejour_id, date_jour, heure, valeurs, jetes,
             (sejour_id, date_jour, heure),
         )
     }
-    for cle, valeur in valeurs.items():
+    a_ecrire = [(cle, valeur, None) for cle, valeur in valeurs.items()]
+    a_ecrire += [(cle, None, texte) for cle, texte in (textes or {}).items()]
+
+    for cle, valeur, texte in a_ecrire:
         ancienne = existantes.get(cle)
-        if valeur is None:
+        if valeur is None and not texte:
             if ancienne:
                 base.supprimer_logiquement("constante_horaire", ancienne["id"],
                                            utilisateur_id=utilisateur_id)
             continue
-        drapeau = 1 if cle in jetes else 0
+        champs = {
+            "valeur_num": float(valeur) if valeur is not None else None,
+            "valeur_texte": texte,
+            "sac_jete": 1 if cle in jetes else 0,
+        }
         if ancienne:
-            base.mettre_a_jour("constante_horaire", ancienne["id"],
-                               {"valeur_num": float(valeur), "sac_jete": drapeau},
+            base.mettre_a_jour("constante_horaire", ancienne["id"], champs,
                                utilisateur_id=utilisateur_id)
         else:
             base.inserer(
                 "constante_horaire",
                 {"sejour_id": sejour_id, "date_jour": date_jour, "heure": heure,
-                 "cle": cle, "valeur_num": float(valeur), "sac_jete": drapeau},
+                 "cle": cle, **champs},
                 utilisateur_id=utilisateur_id,
             )
 
