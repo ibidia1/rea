@@ -460,12 +460,17 @@ def _explorations(sejour: dict, date_jour_str: str) -> None:
             exploration["type"], {}
         ).get("libelle", exploration["type"])
         jour = format_date_fr(exploration["date_heure"][:10])[:5]
+        # La conclusion en entier : l'écran n'est pas la feuille imprimée, il
+        # n'a pas à couper à 60 caractères. C'est justement pour lire la visite
+        # à l'écran plutôt que sur le papier qu'on ne tronque pas (demande du
+        # service, 12 septembre).
         conclusion = (exploration["conclusion"] or "").strip()
         lignes.append(
             '<div class="rea-v-ligne">'
             f'<span class="rea-v-produit">{html.escape(titre)} '
             f'<span class="rea-v-detail">{html.escape(jour)}</span></span>'
-            f'<span class="rea-v-dose">{html.escape(conclusion[:60])}</span>'
+            f'<span class="rea-v-dose" style="white-space:normal;'
+            f'text-align:right">{html.escape(conclusion)}</span>'
             "</div>"
         )
     _bloc(f"Explorations faites ({len(faites)})", "".join(lignes), theme.BLEU)

@@ -128,6 +128,8 @@ def onglet_identite(sejour: dict) -> None:
     with st.expander("Modifier l'admission"):
         _modifier_admission(sejour)
 
+    _supprimer_admission(sejour)
+
     st.markdown("**Antécédents**")
     _antecedents_editeur(sejour)
 
@@ -330,6 +332,68 @@ def _formulaire_habitude(sejour: dict, *, key_prefixe: str) -> None:
                 base, patient_id=patient_id, categorie="habitude", libelle=libelle_libre,
                 precision=precision or None, utilisateur_id=uid,
             )
+            st.rerun()
+
+
+def _supprimer_admission(sejour: dict) -> None:
+    """Retire une admission créée par erreur — réservé à l'administrateur.
+
+    Une fausse admission (mauvais patient, double-clic, essai) gonfle le nombre
+    d'entrées et fausse les statistiques du service. L'administrateur peut la
+    supprimer ; la ligne reste en base (jamais de suppression physique), avec le
+    motif et qui l'a faite. Ce n'est pas une sortie : un vrai séjour se clôt par
+    une sortie, cette porte-ci est pour l'erreur (demande du service,
+    12 septembre).
+
+    Deux clics, parce que le geste retire un patient de tous les écrans : le
+    second confirme, et le motif est exigé.
+    """
+    from . import utilisateur as utilisateur_ui
+
+    if not utilisateur_ui.peut("comptes"):
+        return
+    with st.expander("Supprimer cette admission (erreur de saisie)"):
+        st.caption(
+            "Pour une admission créée par erreur — mauvais patient, double "
+            "saisie, essai. Elle disparaît des lits et **des statistiques**. "
+            "Un vrai séjour qui se termine se clôt par une **sortie**, pas ici."
+        )
+        motif = st.text_input(
+            "Motif de la suppression", key=f"motif_suppr_{sejour['id']}",
+            placeholder="ex. admission créée deux fois",
+        )
+        cle_confirme = f"confirme_suppr_{sejour['id']}"
+        if not st.session_state.get(cle_confirme):
+            if st.button("Supprimer l'admission", key=f"suppr_{sejour['id']}"):
+                if not motif.strip():
+                    st.error("Indiquer un motif avant de supprimer.")
+                else:
+                    st.session_state[cle_confirme] = True
+                    st.rerun()
+            return
+        st.warning(
+            f"**Confirmer** la suppression de l'admission de "
+            f"**{sejour.get('nom_affichage', '')}** (lit "
+            f"{sejour.get('lit_admission', '')}) ? Elle quittera les lits et les "
+            "statistiques. Cette trace reste au journal."
+        )
+        gauche, droite = st.columns(2)
+        if gauche.button("Oui, supprimer", key=f"suppr_ok_{sejour['id']}",
+                         type="primary"):
+            try:
+                sejours_service.supprimer_admission(
+                    contexte.base(), sejour["id"], motif=motif,
+                    utilisateur_id=contexte.utilisateur_id(),
+                )
+            except ValueError as erreur:
+                st.error(str(erreur))
+                return
+            st.session_state.pop(cle_confirme, None)
+            st.session_state.pop("sejour_id", None)
+            st.success("Admission supprimée.")
+            st.rerun()
+        if droite.button("Annuler", key=f"suppr_non_{sejour['id']}"):
+            st.session_state.pop(cle_confirme, None)
             st.rerun()
 
 

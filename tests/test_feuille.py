@@ -1195,3 +1195,17 @@ def test_un_avis_long_revient_a_la_ligne_au_lieu_d_etre_coupe(base, dossier):
     assert "white-space:nowrap" not in html_avis          # ne file plus hors cadre
     assert "overflow-wrap:anywhere" in html_avis          # casse même un mot trop long
     assert "aggravation hémodynamique" in html_avis       # le texte entier est là
+
+
+def test_l_avis_est_en_surbrillance_sobre_sur_la_feuille(base, dossier):
+    """« Avis cardio : Dr X » se cherche du regard : fond crème et police un
+    peu plus grande, sobre — pas un fluo qui traverse la photocopie (demande du
+    service, 12 septembre)."""
+    from rea.services import avis as avis_service
+    _pid, sid = dossier
+    avis_service.demander(base, sejour_id=sid, specialite="cardiologie",
+                          texte="FEVG conservée", date_avis=AUJ, nom="X")
+    ctx = feuille.contexte(_dossier(base, sid, AUJ))
+    html_avis = ctx["avisRows"].html
+    assert "background:#f6efda" in html_avis     # surbrillance sobre
+    assert "font-size:9.5px" in html_avis        # un peu plus grande
