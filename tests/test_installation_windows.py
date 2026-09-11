@@ -185,3 +185,26 @@ def test_le_reste_du_depot_reste_en_fins_de_ligne_unix():
         cwd=RACINE, capture_output=True, text=True, check=True,
     ).stdout
     assert sortie.strip().endswith("eol: lf"), sortie.strip()
+
+
+def test_le_lanceur_ne_refuse_pas_de_demarrer_si_la_sonde_echoue():
+    """L'app lit elle-meme sa config ; ces valeurs ne servent qu'a ouvrir le
+    navigateur. Une sonde qui echoue (dossier OneDrive, chemin avec espace) ne
+    doit pas afficher « installation incomplete » alors que le logiciel demarre
+    (signale par le service, 11 septembre)."""
+    lanceur = lire(RACINE / "lancer_reanimation.bat")
+    assert 'set "REA_HOTE=127.0.0.1"' in lanceur
+    assert 'set "REA_PORT=8501"' in lanceur
+    # L'ancien abandon a disparu : plus de "exit /b 1" declenche par la lecture
+    # de config. Le seul refus qui reste est l'absence du venv (pas installe).
+    apres_venv = lanceur.split('.venv\\Scripts\\python.exe" (', 1)[1]
+    corps = apres_venv.split(")", 1)[1]  # apres le bloc "venv manquant"
+    assert "exit /b 1" not in corps
+
+
+def test_la_sonde_de_config_insere_le_dossier_dans_le_chemin():
+    """Sans cela, « import rea » echoue quand l'icone lance le fichier depuis
+    un repertoire courant qui n'est pas celui du programme."""
+    lanceur = lire(RACINE / "lancer_reanimation.bat")
+    assert "sys.path.insert(0, r'%~dp0')" in lanceur
+    assert 'set "PYTHONPATH=%~dp0"' in lanceur
