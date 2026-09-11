@@ -368,6 +368,40 @@ def _champs_drains(sejour: dict, date_jour_str: str, elements: dict, prefixe: st
                 key=f"{prefixe}_{drain['cle']}",
             )
         )
+        # Le mode d'un drain thoracique se lit à côté de son volume : un drain
+        # clampé qui ne donne rien, c'est attendu ; en siphonnage, c'est
+        # peut-être un drain bouché. Repris du relevé infirmier (le dernier du
+        # jour), en lecture seule — c'est l'infirmier qui le note heure par
+        # heure (demande du service, 11 septembre).
+        if drain["type"] == "drain_thoracique":
+            mode = _dernier_mode_drain(sejour["id"], date_jour_str,
+                                       drain["dispositif_id"])
+            st.caption(f"↳ Mode : **{mode}**" if mode
+                       else "↳ Mode non noté par l'infirmier")
+
+
+def _dernier_mode_drain(sejour_id: str, date_jour_str: str, dispositif_id: str) -> str:
+    """Le dernier mode noté d'un drain thoracique ce jour-là : « en
+    siphonnage », « clampé, bullage »…
+
+    Le dernier et non le premier : à la relève, la question est « dans quoi
+    est-il branché maintenant », pas « à 7 h ». Vide si l'infirmier n'a rien
+    noté."""
+    etats = constantes_service.etats_du_jour(
+        contexte.base(), sejour_id, date_jour_str
+    )
+    cle = constantes_service.cle_etat_drain(dispositif_id)
+    texte = None
+    for heure in sorted(etats):
+        if cle in etats[heure]:
+            texte = etats[heure][cle]
+    mode, bullage = constantes_service.lire_etat_drain(texte)
+    morceaux = []
+    if mode:
+        morceaux.append(listes.libelle(listes.ETATS_DRAIN_THORACIQUE, mode))
+    if bullage:
+        morceaux.append("bullage")
+    return ", ".join(morceaux).lower()
 
 
 def _valeur_en_cours(prefixe: str, cle: str, sauvegardees: dict) -> float | None:

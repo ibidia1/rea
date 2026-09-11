@@ -506,3 +506,49 @@ def test_les_pastilles_de_la_fiche_numerotent_aussi():
     source = (Path(__file__).resolve().parent.parent / "rea" / "ui"
               / "fiche.py").read_text(encoding="utf-8")
     assert "numeros_distincts" in source
+
+
+# --------------------------------------------------------------------------
+# Le mode du drain thoracique dans l'evolution du medecin
+# --------------------------------------------------------------------------
+
+def test_l_evolution_montre_le_dernier_mode_du_drain_thoracique(base):
+    """A cote du volume /24 h, le medecin doit lire dans quoi le drain est
+    branche — le dernier mode note par l'infirmier (demande du service,
+    11 septembre)."""
+    import importlib
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    ev = importlib.import_module("rea.ui.evolution")
+    from rea.ui import contexte
+    sid = _patient(base)
+    contexte.base = lambda: base
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              site="Droit", date_pose="2026-09-08")
+    cle = constantes.cle_etat_drain(drain)
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {},
+                           textes={cle: constantes.etat_drain("siphonnage", False)})
+    constantes.enregistrer(base, sid, "2026-09-08", 16, {},
+                           textes={cle: constantes.etat_drain("clampe", True)})
+    assert ev._dernier_mode_drain(sid, "2026-09-08", drain) == "clampé, bullage"
+
+
+def test_l_evolution_ne_reclame_pas_de_mode_sans_releve(base):
+    import importlib
+    dispositifs = _service("dispositifs")
+    ev = importlib.import_module("rea.ui.evolution")
+    from rea.ui import contexte
+    sid = _patient(base)
+    contexte.base = lambda: base
+    drain = dispositifs.poser(base, sejour_id=sid, type_="drain_thoracique",
+                              date_pose="2026-09-08")
+    assert ev._dernier_mode_drain(sid, "2026-09-08", drain) == ""
+
+
+def test_le_champ_drain_de_l_evolution_affiche_le_mode_thoracique():
+    """Lu en source : le mode s'affiche sous le volume, pour les thoraciques."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "rea" / "ui"
+           / "evolution.py").read_text(encoding="utf-8")
+    assert "_dernier_mode_drain" in src
+    assert 'drain["type"] == "drain_thoracique"' in src
