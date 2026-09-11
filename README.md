@@ -58,20 +58,25 @@ l'audit §10 de FEUILLE_DE_ROUTE.md.
 
 ## Installation sur le poste du service (Windows)
 
-Pas de commande à taper : deux fichiers à double-cliquer, à la racine du
-dépôt.
+Pas de commande à taper : **un double-clic sur `installer.bat`**, une seule
+fois. Il fait quatre choses, dans l'ordre, en affichant ce qu'il fait :
 
-1. **`installer.bat`** — une seule fois. Installe Python si besoin (le
-   fichier le signale et donne le lien), puis tout ce que le logiciel
-   demande. Compter quelques minutes, avec une connexion internet.
-2. **`lancer_reanimation.bat`** — à chaque utilisation. Ouvre le logiciel
-   dans le navigateur. **Ne pas fermer la fenêtre noire** pendant l'usage :
-   la fermer arrête le logiciel pour tout le poste.
+1. il cherche Python — et **l'installe** s'il manque, par winget ou par
+   téléchargement direct ;
+2. il copie le programme dans **`C:\ReaService\programme`**, hors de
+   OneDrive : une base SQLite dans un dossier synchronisé se corrompt en
+   silence ;
+3. il installe les composants du logiciel (il faut Internet à cette étape) ;
+4. il pose l'icône **Réanimation** sur le Bureau, puis ouvre le logiciel.
 
-Pour une icône sur le bureau : clic droit sur `lancer_reanimation.bat` →
-*Envoyer vers* → *Bureau (créer un raccourci)*. Le raccourci peut être
-renommé et son icône changée (clic droit → *Propriétés* → *Changer l'icône*)
-sans toucher au fichier d'origine.
+Ensuite, au quotidien : **l'icône du Bureau**. Elle ouvre le navigateur toute
+seule. **Ne pas fermer la fenêtre noire** pendant l'usage : la fermer arrête
+le logiciel.
+
+Si quelque chose manque — pas d'Internet, pas le droit d'installer un
+programme — l'installateur le dit en clair et s'arrête sans rien abîmer. On
+corrige, on relance le même fichier, et ce qui est déjà fait n'est pas
+refait.
 
 Le logiciel tourne alors **entièrement en local** : aucune donnée ne sort du
 poste (voir *Emplacement des données* ci-dessous et SPEC §2.2).

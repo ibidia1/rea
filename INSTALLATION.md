@@ -37,79 +37,76 @@ la partie 2 de ce guide.
 
 ## 1. Le PC serveur
 
-### 1.1 Choisir l'emplacement
+### 1.1 En un double-clic
 
-**Ne pas installer dans OneDrive, ni dans un dossier synchronisé.** Deux
-raisons : la synchronisation verrouille des fichiers pendant que la base
-écrit, et une base de patients recopiée en permanence vers un cloud est une
-question qu'il vaut mieux ne pas avoir à se poser.
+Tout ce qui suit est fait par **`installer.bat`**. Le lancer une seule fois,
+par un double-clic, depuis le dossier du logiciel :
 
-Emplacement recommandé :
+1. il cherche Python — et **l'installe** s'il manque, sans rien demander ;
+2. il copie le programme dans **`C:\ReaService\programme`** ;
+3. il installe les composants (cette étape a besoin d'Internet) ;
+4. il pose une icône **Réanimation** sur le Bureau ;
+5. il ouvre le logiciel.
 
-```
-C:\rea
-```
+Ensuite, au quotidien : **l'icône du Bureau**, rien d'autre.
 
-### 1.2 Installer Python
+Une fenêtre noire s'ouvre pendant l'installation et affiche ce qu'elle fait.
+Si quelque chose manque, elle le dit en clair et s'arrête sans rien abîmer —
+on corrige le point signalé et on relance le même fichier : ce qui est déjà
+fait n'est pas refait.
 
-Télécharger Python 3.11 ou plus récent sur <https://www.python.org/downloads/>.
+**Vérification.** L'icône *Réanimation* est sur le Bureau, et le navigateur
+s'ouvre sur `http://127.0.0.1:8501`.
 
-À l'écran d'installation, **cocher « Add python.exe to PATH »** avant de
-cliquer sur Install. C'est la case que tout le monde oublie, et sans elle
-rien de ce qui suit ne fonctionne.
+### 1.2 Pourquoi `C:\ReaService` et pas le dossier d'origine
 
-**Vérification.** Ouvrir l'invite de commandes (touche Windows, taper `cmd`,
-Entrée) et saisir :
+**Ne jamais laisser le logiciel dans OneDrive, ni dans aucun dossier
+synchronisé.** La synchronisation recopie les fichiers pendant que la base
+écrit dedans : une base SQLite ainsi recopiée se corrompt en silence, et on
+ne s'en aperçoit que le jour où elle refuse de s'ouvrir. Une base de patients
+recopiée en permanence vers un cloud est par ailleurs une question qu'il vaut
+mieux ne pas avoir à se poser.
 
-```
-python --version
-```
-
-Doit afficher `Python 3.11.x` ou plus. Si la commande n'est pas reconnue,
-réinstaller en cochant la case.
-
-### 1.3 Récupérer le logiciel
-
-Installer Git depuis <https://git-scm.com/download/win> (toutes les options
-par défaut conviennent), puis :
+`installer.bat` copie donc le programme hors de son dossier d'origine :
 
 ```
-cd C:\
-git clone https://github.com/ibidia1/rea.git
-cd rea
+C:\ReaService\
+    programme\      le logiciel
+    donnees\        rea.db — le dossier des patients
+    sauvegardes\
+    exports\
+    pancartes\
 ```
 
-**Vérification.** `dir` doit montrer `rea_app.py`, `SPEC.md`, `requirements.txt`.
+Le dossier `donnees` n'est **jamais** écrasé par une réinstallation.
 
-### 1.4 Créer l'environnement et installer les dépendances
+### 1.3 Si l'installation automatique de Python échoue
+
+Cela arrive sur un poste sans Internet, ou dont le compte n'a pas le droit
+d'installer un programme. L'installateur le dit et donne la marche à suivre :
+
+1. télécharger Python 3.11 ou plus récent sur
+   <https://www.python.org/downloads/> ;
+2. à l'écran d'installation, **cocher « Add python.exe to PATH »** — c'est la
+   case que tout le monde oublie, et sans elle rien ne fonctionne ;
+3. relancer `installer.bat`.
+
+### 1.4 Vérifier que l'installation est saine
+
+Depuis `C:\ReaService\programme`, dans une invite de commandes :
 
 ```
-cd C:\rea
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m pytest -q
 ```
 
-**Vérification.** L'invite doit commencer par `(.venv)`, et :
-
-```
-python -m pytest -q
-```
-
-doit afficher `998 passed` (ou davantage). Si des tests échouent, **arrêter
-ici** et le signaler : l'installation n'est pas saine.
+Doit afficher `1200 passed` ou davantage. Si des tests échouent, **arrêter
+ici** et le signaler : l'installation n'est pas saine, et un logiciel de
+dossier patient ne se met pas en service sur un doute.
 
 ### 1.5 Premier démarrage
 
-```
-cd C:\rea
-.venv\Scripts\activate
-python -m streamlit run rea_app.py
-```
-
-Le navigateur s'ouvre sur `http://localhost:8501`. À la toute première
-ouverture, le logiciel propose le **compte administrateur de départ** :
+L'icône **Réanimation** du Bureau. À la toute première ouverture, le logiciel
+propose le **compte administrateur de départ** :
 
 | | |
 |---|---|
@@ -118,18 +115,6 @@ ouverture, le logiciel propose le **compte administrateur de départ** :
 
 Un clic sur *Créer le compte Slah et entrer*, et vous y êtes. C'est ce compte
 qui créera ensuite tous les autres.
-
-**Ce code ne protège rien** : il est écrit dans le logiciel, donc lisible par
-quiconque ouvre le dépôt. Aussi le compte n'ouvre-t-il aucun écran avant d'en
-recevoir un vrai — il le réclame à la première entrée, et rien d'autre ne
-s'affiche tant qu'il n'est pas posé. Six caractères au minimum, et pas
-`rea123`.
-
-Le volet *Ou choisir un autre nom et son code tout de suite* fait la même
-chose sous le nom de votre choix.
-
-**Vérification.** Le tableau des douze lits s'affiche, et le bouton **Admin**
-est en haut à droite.
 
 ### 1.6 Créer les comptes du service
 
@@ -163,17 +148,11 @@ le dernier, mais rien ne le protège d'un code oublié. Si cela arrive quand
 même, l'annexe donne la porte de secours (`outils/administrateur.py`, à lancer
 sur le PC serveur).
 
-### 1.7 L'icône de bureau
-
-Le dépôt fournit `installer.bat` : double-cliquer dessus crée un raccourci
-« Réanimation » sur le bureau, qui lance l'application sans passer par
-l'invite de commandes.
-
-### 1.8 Les sauvegardes
+### 1.7 Les sauvegardes
 
 Le logiciel sauvegarde tout seul toutes les 15 minutes, à l'ouverture et à la
-fermeture, dans `C:\rea\sauvegardes`. **Ces sauvegardes sont sur le même
-disque que la base : elles ne protègent pas d'un disque en panne.**
+fermeture, dans `C:\ReaService\sauvegardes`. **Ces sauvegardes sont sur le
+même disque que la base : elles ne protègent pas d'un disque en panne.**
 
 Une fois par semaine, faire un vrai export : Administration → Sauvegardes →
 **Préparer le fichier à exporter** → **Télécharger**, et copier le fichier
@@ -278,11 +257,11 @@ défaut.
 C'est ici que tout se joue. On donne au logiciel **l'adresse privée du
 serveur** — et non `0.0.0.0`.
 
-Créer un fichier `C:\rea\lancer_service.bat` contenant :
+Créer un fichier `C:\ReaService\programme\lancer_service.bat` contenant :
 
 ```bat
 @echo off
-cd /d C:\rea
+cd /d C:\ReaService\programme
 call .venv\Scripts\activate
 set REA_HOTE=192.168.50.2
 python -m streamlit run rea_app.py
@@ -365,7 +344,7 @@ comptes, et prévenez le service que la page est visible de tout l'hôpital.
 ## Annexe — Que faire quand
 
 **L'application ne démarre pas.** Vérifier que l'invite affiche `(.venv)`.
-Sinon : `cd C:\rea` puis `.venv\Scripts\activate`.
+Sinon : `cd C:\ReaService\programme` puis `.venv\Scripts\activate`.
 
 **Un téléphone n'atteint pas le serveur.** Dans l'ordre : le téléphone est-il
 sur `REA-SERVICE` et non sur un autre réseau ? `ipconfig` sur le serveur
@@ -398,7 +377,7 @@ Si cela ne suffit pas, la porte de secours se lance **sur le PC serveur**,
 jamais depuis un téléphone :
 
 ```
-cd C:\rea
+cd C:\ReaService\programme
 .venv\Scripts\activate
 python outils\administrateur.py --lister
 python outils\administrateur.py --promouvoir "Dr Karaa"
@@ -420,9 +399,9 @@ directement. Chaque geste est enregistré dans le journal d'audit.
 et après toute mise à jour importante :
 
 ```
-cd C:\rea
+cd C:\ReaService\programme
 .venv\Scripts\activate
-set REA_DIR=C:\rea\essai_charge
+set REA_DIR=C:\ReaService\essai_charge
 python outils\test_de_charge.py
 ```
 
@@ -441,7 +420,7 @@ de douze lits a besoin.
 **Mettre à jour le logiciel.** Fermer l'application, puis :
 
 ```
-cd C:\rea
+cd C:\ReaService\programme
 git pull origin main
 .venv\Scripts\activate
 python -m pip install -r requirements.txt
