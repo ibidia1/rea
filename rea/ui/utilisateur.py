@@ -45,6 +45,12 @@ def _entete_accueil(base: Base) -> None:
     gauche, droite = st.columns([5, 1])
     with gauche:
         st.title("Réanimation polyvalente")
+        # La version ici, et pas seulement dans la barre latérale : c'est le
+        # seul écran qui n'en a pas, et c'est celui qu'on regarde quand on
+        # appelle pour dire que quelque chose manque. « Je ne vois pas la
+        # barre latérale » n'a pas de réponse tant qu'on ignore quelle
+        # version tourne sur le poste (11 septembre).
+        st.caption(f"Version {config.VERSION}")
     with droite:
         if not utilisateurs_service.administrateurs(base):
             return

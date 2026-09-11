@@ -89,7 +89,7 @@ with st.sidebar:
         if st.button("Administration", use_container_width=True):
             contexte.aller_a("administration")
 
-    st.caption(f"Réanimation polyvalente · {config.NB_LITS} lits")
+    st.caption(f"Réanimation polyvalente · {config.NB_LITS} lits · v{config.VERSION}")
     st.caption("SPEC.md — voir le dépôt pour l'état d'avancement")
 
 
