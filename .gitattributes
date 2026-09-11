@@ -1,0 +1,9 @@
+# Les fichiers que Windows execute doivent arriver avec des fins de ligne
+# Windows. Un .bat en fins de ligne Unix marche presque toujours — et rate
+# justement sur les etiquettes (`goto :fin`), c'est-a-dire sur les chemins
+# d'erreur, ceux qu'on ne voit qu'un matin de garde.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Tout le reste en fins de ligne Unix, quel que soit le poste qui clone.
+* text=auto eol=lf
