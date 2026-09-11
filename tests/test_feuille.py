@@ -1170,3 +1170,28 @@ def test_l_image_deposee_sur_le_poste_s_imprime(base, dossier, tmp_path, monkeyp
 def test_le_gabarit_porte_la_variable_logo():
     modele = feuille.MODELE.read_text(encoding="utf-8")
     assert "{{ logo }}" in modele
+
+
+# --------------------------------------------------------------------------
+# Un avis long revient à la ligne
+# --------------------------------------------------------------------------
+
+def test_un_avis_long_revient_a_la_ligne_au_lieu_d_etre_coupe(base, dossier):
+    """Sur une feuille imprimée, un avis coupé au bord du cadre n'est pas « un
+    peu tronqué » : il est perdu. Il doit revenir à la ligne (demande du
+    service, 11 septembre)."""
+    from rea.services import avis as avis_service
+    _pid, sid = dossier
+    long_texte = (
+        "Pas d'indication chirurgicale en urgence, surveillance rapprochée de "
+        "la fonction rénale et de la diurèse, refaire un angioscanner à 48 h et "
+        "rappeler en cas d'aggravation hémodynamique ou de déglobulisation"
+    )
+    avis_service.demander(base, sejour_id=sid, specialite="CCVT",
+                          texte=long_texte, date_avis=AUJ, nom="Dr X",
+                          grade="senior")
+    ctx = feuille.contexte(_dossier(base, sid, AUJ))
+    html_avis = ctx["avisRows"].html
+    assert "white-space:nowrap" not in html_avis          # ne file plus hors cadre
+    assert "overflow-wrap:anywhere" in html_avis          # casse même un mot trop long
+    assert "aggravation hémodynamique" in html_avis       # le texte entier est là
