@@ -187,6 +187,7 @@ def onglet_prescrit(sejour: dict) -> None:
         _afficher_pancarte(
             voies_remplies, pancarte, date_jour_str, sedation, vitesses_jour,
         )
+        _bloc_bilans_pancarte(pancarte)
         _panneau_vitesses(sejour, pancarte, date_jour_str)
         _panneau_posologie(sejour, pancarte, date_jour_str)
 
@@ -205,17 +206,6 @@ def onglet_prescrit(sejour: dict) -> None:
             st.success(f"Feuille enregistrée — version {snap['version']}.")
 
         _pancarte_de_demain(sejour, date_jour_str)
-
-        demandes = pancarte["bilans_demandes"]
-        theme.bloc(
-            "Bilans demandés",
-            [
-                f"{listes.libelle(listes.EXAMENS_A_DEMANDER, b['examen_code'])} "
-                f"<span style='color:{theme.GRIS}'>{b['heure_prelevement']}</span>"
-                for b in demandes
-            ] or ["Aucun bilan demandé"],
-            theme.VIOLET if demandes else theme.GRIS,
-        )
 
         st.divider()
         _panneau_ajouter_ligne(sejour, date_jour_str)
@@ -488,6 +478,45 @@ def _afficher_pancarte(
                             + "</div>" + sous_ligne,
                             unsafe_allow_html=True,
                         )
+
+
+def _bloc_bilans_pancarte(pancarte: dict) -> None:
+    """Les bilans prescrits du jour, écrits dans la pancarte elle-même.
+
+    Un bilan est une prescription au même titre qu'un traitement : il se lit
+    dans la pancarte, sous les voies, et non dans un coin de l'écran (demande
+    du service, 12 septembre). On les groupe par heure de prélèvement — l'ordre
+    où l'infirmier les tire — et l'heure part à droite comme la dose des
+    traitements.
+    """
+    demandes = pancarte["bilans_demandes"]
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="rea-bloc-titre" style="color:{theme.VIOLET}">'
+            "Bilans / examens prescrits</div>",
+            unsafe_allow_html=True,
+        )
+        if not demandes:
+            st.markdown(
+                f'<div style="font-size:.82rem;color:{theme.GRIS};margin-left:.2rem">'
+                "Aucun bilan prescrit ce jour.</div>",
+                unsafe_allow_html=True,
+            )
+            return
+        par_heure: dict[str, list[str]] = {}
+        for b in demandes:
+            heure = b.get("heure_prelevement") or "—"
+            libelle = listes.libelle(
+                listes.EXAMENS_A_DEMANDER, b["examen_code"], b["examen_code"]
+            )
+            par_heure.setdefault(heure, []).append(libelle)
+        for heure in sorted(par_heure):
+            noms = ", ".join(sorted(par_heure[heure]))
+            st.markdown(
+                f'<div class="rea-p-ligne"><span class="rea-p-produit">{noms}</span>'
+                f'<span class="rea-p-dose">{heure}</span></div>',
+                unsafe_allow_html=True,
+            )
 
 
 def _panneau_posologie(sejour: dict, pancarte: dict, date_jour_str: str) -> None:
