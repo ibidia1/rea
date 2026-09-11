@@ -11,6 +11,7 @@ ne se vérifie que sur un poste Windows. Ces tests ne le prétendent pas.
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -159,9 +160,28 @@ def test_le_script_de_raccourci_demande_le_bureau_a_windows():
     assert "USERPROFILE\\Desktop" not in script
 
 
-def test_gitattributes_protege_les_fins_de_ligne():
-    """Sans cela, un clone sous Linux puis copie vers Windows livre des .bat
-    en fins de ligne Unix."""
-    attributs = lire(RACINE / ".gitattributes")
-    assert "*.bat text eol=crlf" in attributs
-    assert "*.ps1 text eol=crlf" in attributs
+@pytest.mark.parametrize("fichier", [
+    "installer.bat", "lancer_reanimation.bat", "outils/raccourcis.ps1",
+])
+def test_git_livrera_ces_fichiers_en_fins_de_ligne_windows(fichier):
+    """On interroge git lui-meme, pas le texte de .gitattributes.
+
+    La regle y etait ecrite, et pourtant sans effet : quand plusieurs lignes
+    correspondent, git retient **la derniere**, et le fourre-tout
+    `* text=auto eol=lf` place en bas annulait les deux exceptions. Lire le
+    fichier n'aurait rien montre ; seul `git check-attr` le dit, et un clone
+    frais livrait des .ps1 en fins de ligne Unix.
+    """
+    sortie = subprocess.run(
+        ["git", "check-attr", "eol", "--", fichier],
+        cwd=RACINE, capture_output=True, text=True, check=True,
+    ).stdout
+    assert sortie.strip().endswith("eol: crlf"), sortie.strip()
+
+
+def test_le_reste_du_depot_reste_en_fins_de_ligne_unix():
+    sortie = subprocess.run(
+        ["git", "check-attr", "eol", "--", "rea_app.py"],
+        cwd=RACINE, capture_output=True, text=True, check=True,
+    ).stdout
+    assert sortie.strip().endswith("eol: lf"), sortie.strip()
