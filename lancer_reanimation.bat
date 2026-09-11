@@ -22,20 +22,31 @@ if not exist ".venv\Scripts\python.exe" (
 
 set "VENV=%~dp0.venv\Scripts\python.exe"
 
+rem Le dossier du programme sur le chemin d'import : sans lui, "import rea"
+rem echoue quand ce fichier est lance depuis un dossier synchronise (OneDrive)
+rem ou dont le nom porte un espace.
+set "PYTHONPATH=%~dp0"
+
 rem L'adresse et le port viennent de rea\config.py, seul endroit ou ils sont
 rem ecrits (SPEC 2.4, invariant 5). 127.0.0.1 : le logiciel n'est joignable que
 rem depuis ce poste. Le jour du multi-postes, une seule ligne change, la-bas.
+rem On insere le dossier explicitement dans sys.path : la sonde ne doit pas
+rem dependre du repertoire courant, qui varie selon la facon dont l'icone
+rem lance ce fichier.
 set "REA_HOTE="
 set "REA_PORT="
-for /f "usebackq delims=" %%h in (`"%VENV%" -c "import rea.config as c; print(c.HOTE)" 2^>nul`) do set "REA_HOTE=%%h"
-for /f "usebackq delims=" %%p in (`"%VENV%" -c "import rea.config as c; print(c.PORT)" 2^>nul`) do set "REA_PORT=%%p"
+for /f "usebackq delims=" %%h in (`"%VENV%" -c "import sys; sys.path.insert(0, r'%~dp0'); import rea.config as c; print(c.HOTE)" 2^>nul`) do set "REA_HOTE=%%h"
+for /f "usebackq delims=" %%p in (`"%VENV%" -c "import sys; sys.path.insert(0, r'%~dp0'); import rea.config as c; print(c.PORT)" 2^>nul`) do set "REA_PORT=%%p"
 
-if not defined REA_HOTE (
-    echo Impossible de lire la configuration ^(rea\config.py^).
-    echo Installation incomplete : relancer "installer.bat".
-    pause
-    exit /b 1
-)
+rem Si la sonde n'a rien rendu, on NE refuse PAS de demarrer : l'application
+rem lit elle-meme sa configuration, et ces deux valeurs ne servent ici qu'a
+rem ouvrir le navigateur. On retombe sur les valeurs par defaut du depot
+rem (127.0.0.1:8501) plutot que d'afficher "installation incomplete" alors
+rem que le logiciel demarre parfaitement (signale par le service le
+rem 11 septembre : l'icone renvoyait cette erreur, il fallait lancer streamlit
+rem a la main).
+if not defined REA_HOTE set "REA_HOTE=127.0.0.1"
+if not defined REA_PORT set "REA_PORT=8501"
 
 echo ================================================
 echo   Demarrage du logiciel de reanimation...
