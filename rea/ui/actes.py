@@ -9,6 +9,7 @@ import streamlit as st
 
 from .. import listes
 from ..domaine import coherence
+from ..domaine import dispositifs as dom_dispositifs
 from ..domaine.dates import format_date_fr
 from ..services import dispositifs as dispositifs_service
 from ..services import explorations as explorations_service
@@ -95,15 +96,21 @@ def onglet_actes(sejour: dict) -> None:
     if not en_place:
         st.caption("Aucun dispositif en place.")
     else:
+        # Deux redons posés le même jour dans le même abdomen donnaient deux
+        # cartes identiques — et c'est ici qu'on choisit lequel retirer.
+        numeros = dom_dispositifs.numeros_distincts(en_place)
         colonnes = st.columns(3)
         for i, (etat_disp, ligne) in enumerate(zip(en_place, lignes_en_place)):
+            numero = numeros.get(etat_disp.id)
+            nom_carte = (etat_disp.texte if numero is None
+                         else f"{etat_disp.texte} {numero}")
             couleur = theme.COULEUR_DISPOSITIF.get(etat_disp.type, theme.GRIS)
             with colonnes[i % 3]:
                 with st.container(border=True):
                     st.markdown(
                         f'<div class="rea-bloc-titre" style="color:{couleur}">'
                         f"{etat_disp.libelle_type}</div>"
-                        f'<div style="font-weight:700;font-size:.95rem">{etat_disp.texte}</div>'
+                        f'<div style="font-weight:700;font-size:.95rem">{nom_carte}</div>'
                         f'<div style="color:{theme.GRIS};font-size:.78rem;margin-bottom:4px">'
                         f"posé le {format_date_fr(etat_disp.date_pose)}</div>",
                         unsafe_allow_html=True,

@@ -110,8 +110,16 @@ Les drains apparaissent tout seuls, dès qu'ils sont posés, et disparaissent
 au retrait : rien à ajouter à la main. Deux redons dans le même abdomen sont
 numérotés — **Redon (abdomen) 1** et **Redon (abdomen) 2** — dans l'ordre où
 le chirurgien les a posés, pour que le volume ne se note pas sur le mauvais.
+Le numéro les suit partout : dans les pastilles en haut de la fiche, dans les
+abords de la visite, et jusque sur la carte où l'on choisit lequel retirer.
 Ce que vous relevez part directement dans le bilan entrées/sorties que le
 médecin lit à la visite.
+
+**Tout ce qui draine a sa ligne**, chacun compté pour lui-même : les redons,
+les drains abdominaux, les drains thoraciques, et la **DVE** — écrite ainsi,
+en abrégé, parce que « Dérivation ventriculaire externe (droite) » tient trois
+lignes sur un téléphone. La sonde urinaire n'y est pas : son volume, c'est la
+diurèse, comptée à part, et l'ajouter la compterait deux fois.
 
 **Un drain thoracique a en plus son état**, sous « Drains thoraciques » :
 dans quoi il est branché — **en siphonnage**, **en aspiration**, **clampé** —

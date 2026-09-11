@@ -236,12 +236,48 @@ def libelles_distincts(etats_en_place: list[EtatDispositif]) -> dict[str, str]:
     date ne les sépare pas, mais lui suit l'ordre de saisie, qui est celui du
     bloc. Sans ce départage, on retombait sur l'identifiant — un UUID, donc
     un ordre tiré au sort, et le premier redon appelé « 2 ».
+
+    Le nom court l'emporte quand le référentiel en donne un : ces libellés
+    servent d'étiquette de ligne dans le tableau de recueil, sur un téléphone,
+    et « Dérivation ventriculaire externe (droite) » y tient trois lignes là
+    où « DVE (droite) » en tient une. Le nom entier reste dans la liste où on
+    pose le dispositif, la seule où il faut le reconnaître sans le connaître.
+    """
+    numeros = numeros_distincts(etats_en_place)
+    libelles: dict[str, str] = {}
+    for etat_ in etats_en_place:
+        if etat_.id is None:
+            continue
+        nom = (listes.TYPES_DISPOSITIF.get(etat_.type, {}).get("libelle_court")
+               or etat_.libelle_type)
+        if etat_.site:
+            nom += f" ({site_en_incise(etat_.site)})"
+        numero = numeros.get(etat_.id)
+        if numero is not None:
+            nom += f" {numero}"
+        libelles[etat_.id] = nom
+    return libelles
+
+
+def numeros_distincts(etats_en_place: list[EtatDispositif]) -> dict[str, int | None]:
+    """id du dispositif -> son numéro, ou None s'il est seul de son espèce.
+
+    Le même comptage que `libelles_distincts`, mais nu : les écrans qui
+    affichent déjà le libellé complet d'un dispositif — « Redon J1 (abdomen) »,
+    avec son compteur de jours — n'ont besoin que du numéro à y ajouter. Deux
+    redons posés le même jour dans le même abdomen y donnaient deux lignes
+    rigoureusement identiques, jusque sur la carte où l'on choisit lequel
+    retirer.
+
+    Un seul comptage pour les deux usages : deux implémentations de la même
+    règle finiraient par numéroter différemment, et c'est le genre d'écart
+    qu'on ne voit qu'au lit du malade.
     """
     par_place: dict[tuple[str, str], list[EtatDispositif]] = {}
     for etat_ in etats_en_place:
         par_place.setdefault((etat_.type, etat_.site or ""), []).append(etat_)
 
-    libelles: dict[str, str] = {}
+    numeros: dict[str, int | None] = {}
     for groupe in par_place.values():
         ordonnes = sorted(
             groupe, key=lambda e: (e.date_pose or "", e.rang, e.id or "")
@@ -249,13 +285,8 @@ def libelles_distincts(etats_en_place: list[EtatDispositif]) -> dict[str, str]:
         for numero, etat_ in enumerate(ordonnes, start=1):
             if etat_.id is None:
                 continue
-            nom = etat_.libelle_type
-            if etat_.site:
-                nom += f" ({etat_.site.lower()})"
-            if len(ordonnes) > 1:
-                nom += f" {numero}"
-            libelles[etat_.id] = nom
-    return libelles
+            numeros[etat_.id] = numero if len(ordonnes) > 1 else None
+    return numeros
 
 
 def duree_totale_jours(lignes: list[dict], type_: str, a_la_date: str | date | None = None) -> int:

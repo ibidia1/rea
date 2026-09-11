@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ..domaine import dispositifs as dom_dispositifs
 from ..domaine.dates import jour_hospitalisation
 from ..services import dispositifs as dispositifs_service, sejours as sejours_service
 from . import contexte, theme
@@ -30,10 +31,15 @@ def bandeau_etat(sejour: dict) -> None:
     )
     if sejour["traumatique"] and sejours_service.est_polytraumatise(contexte.base(), sejour["id"]):
         pastilles.append(("Polytraumatisé", "attention"))
-    for e in dispositifs_service.etats(contexte.base(), sejour["id"]):
-        if e.en_place:
-            style = "attention" if e.type in ("intubation", "sedation", "eer") else "neutre"
-            pastilles.append((e.texte, style))
+    en_place = [e for e in dispositifs_service.etats(contexte.base(), sejour["id"])
+                if e.en_place]
+    # Deux redons dans le même abdomen faisaient deux pastilles identiques,
+    # dans la première ligne qu'on lit de la fiche.
+    numeros = dom_dispositifs.numeros_distincts(en_place)
+    for e in en_place:
+        style = "attention" if e.type in ("intubation", "sedation", "eer") else "neutre"
+        numero = numeros.get(e.id)
+        pastilles.append((e.texte if numero is None else f"{e.texte} {numero}", style))
     theme.chips(pastilles)
 
 

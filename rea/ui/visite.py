@@ -20,6 +20,7 @@ from datetime import date
 import streamlit as st
 
 from .. import analytes, listes
+from ..domaine import dispositifs as dom_dispositifs
 from ..domaine import prescription as dom
 from ..domaine import temperature as temp_dom
 from ..domaine.dates import format_date_fr, jour_hospitalisation
@@ -257,10 +258,22 @@ def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
     etats = dispositifs_service.etats(contexte.base(), sejour["id"], date_jour_str)
     en_place = [e for e in etats if e.en_place]
     if en_place:
+        # Deux redons dans le même abdomen donnaient deux lignes rigoureusement
+        # identiques — « Redon J1 (abdomen) » deux fois — alors que ce sont
+        # deux drains, deux volumes et parfois deux conduites.
+        numeros = dom_dispositifs.numeros_distincts(en_place)
         _bloc("Abords et dispositifs",
               "".join(f'<div class="rea-v-ligne"><span class="rea-v-produit">'
-                      f"{html.escape(e.texte)}</span></div>" for e in en_place),
+                      f"{html.escape(_avec_numero(e, numeros))}</span></div>"
+                      for e in en_place),
               theme.VIOLET)
+
+
+def _avec_numero(etat, numeros: dict) -> str:
+    """« Redon J1 (abdomen) » devient « Redon J1 (abdomen) 2 » — et ne change
+    pas quand il n'y en a qu'un : le 1 donnerait à chercher le 2."""
+    numero = numeros.get(etat.id)
+    return etat.texte if numero is None else f"{etat.texte} {numero}"
 
 
 def _gaz_du_sang(sejour: dict, date_jour_str: str) -> None:
@@ -519,11 +532,8 @@ def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
     # bouche (demande du service, 11 septembre).
     etats = _derniers_etats_de_drain(sejour, date_jour_str)
     for libelle_drain, volume in bilan.detail_drains:
-        etat = etats.get(libelle_drain)
-        valeur = f"{volume:.0f} mL"
-        if etat:
-            valeur += f" <span class='rea-v-detail'>· {html.escape(etat)}</span>"
-        lignes.append(_mesure(libelle_drain, valeur, None))
+        lignes.append(_mesure(libelle_drain, f"{volume:.0f} mL", None,
+                              detail=etats.get(libelle_drain)))
     if bilan.pertes_insensibles_ml is not None:
         lignes.append(_mesure(
             "Pertes insensibles", f"{bilan.pertes_insensibles_ml:.0f} mL", None
@@ -575,12 +585,20 @@ def _bloc(titre: str, corps: str, couleur: str) -> None:
     )
 
 
-def _mesure(nom: str, valeur: str, avant: str | None, *, alerte: str | None = None) -> str:
+def _mesure(nom: str, valeur: str, avant: str | None, *, alerte: str | None = None,
+            detail: str | None = None) -> str:
+    """`detail` et non du HTML dans `valeur` : tout ce qui arrive ici est
+    échappé, et une balise passée dans la valeur s'affichait telle quelle —
+    « 220 mL <span class='rea-v-detail'>· clampé</span> » se lisait ainsi, en
+    toutes lettres, sur l'écran de visite. L'échappement reste dans le helper ;
+    aucun appelant ne lui passe de balise."""
     classe = f"rea-v-val {alerte}" if alerte else "rea-v-val"
+    incise = (f' <span class="rea-v-detail">· {html.escape(detail)}</span>'
+              if detail else "")
     return (
         '<div class="rea-v-mesure">'
         f'<span class="rea-v-nom">{html.escape(nom)}</span>'
-        f'<span class="{classe}">{html.escape(valeur)}</span>'
+        f'<span class="{classe}">{html.escape(valeur)}{incise}</span>'
         + (f'<span class="rea-v-avant">{html.escape(avant)}</span>' if avant else "")
         + "</div>"
     )

@@ -39,6 +39,7 @@ from datetime import datetime
 import streamlit as st
 
 from .. import listes
+from ..domaine import dispositifs as dom_dispositifs
 from ..domaine import vacations as dom_vacations
 from ..domaine.dates import format_date_fr
 from ..services import administrations as adm_service
@@ -568,8 +569,11 @@ def _recueils(patient, heure, saisies, valeurs, jetes, recueils) -> set[str]:
             key=f"cst_{patient['sejour_id']}_{heure}_{cle}",
             placeholder="ce qui est écrit sur la graduation",
         ))
+        # `site_en_incise` et non `.lower()` : un acronyme passé en minuscules
+        # ne se lit plus comme un acronyme — « j'ai vidé (dve (droite)) »
+        # donnait à relire deux fois.
         if st.checkbox(
-            f"J'ai vidé après ce relevé ({libelle.lower()})",
+            f"J'ai vidé après ce relevé ({dom_dispositifs.site_en_incise(libelle)})",
             value=(heure, cle) in jetes,
             key=f"jete_{patient['sejour_id']}_{heure}_{cle}",
         ):

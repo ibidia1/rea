@@ -337,3 +337,172 @@ def test_le_type_du_drain_remonte_pour_savoir_qui_a_un_etat(base):
                       date_pose="2026-09-08")
     types = {d["type"] for d in evolution.drains_du_jour(base, sid, "2026-09-08")}
     assert types == {"drain_thoracique", "redon"}
+
+
+# --------------------------------------------------------------------------
+# La DVE draine comme les autres
+# --------------------------------------------------------------------------
+# Demande du service, 11 septembre 2026 : « si il y a une DVE on doit compter
+# le volume qu'elle sort ». Elle n'a rien de plus — pas d'etat a noter, pas de
+# nature a preciser : un volume, comme un redon.
+
+def test_la_dve_est_un_drain(base):
+    dispositifs = _service("dispositifs")
+    evolution = _service("evolution")
+    sid = _patient(base)
+    dispositifs.poser(base, sejour_id=sid, type_="dve", site="Droite",
+                      date_pose="2026-09-08")
+    lignes = evolution.drains_du_jour(base, sid, "2026-09-08")
+    assert [l["type"] for l in lignes] == ["dve"]
+
+
+def test_ce_que_la_dve_sort_entre_dans_les_sorties(base):
+    """C'est tout ce que le service demande d'elle."""
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    evolution = _service("evolution")
+    sid = _patient(base)
+    dve = dispositifs.poser(base, sejour_id=sid, type_="dve", site="Droite",
+                            date_pose="2026-09-08")
+    cle = constantes.cle_drain(dve)
+    constantes.enregistrer(base, sid, "2026-09-08", 8, {cle: 0})
+    constantes.enregistrer(base, sid, "2026-09-08", 20, {cle: 120})
+
+    bilan = evolution.bilan_hydrique(base, sid, "2026-09-08")
+    assert bilan.drains_ml == 120
+    assert "DVE (droite)" in bilan.texte_drains
+
+
+def test_la_dve_s_appelle_dve_dans_les_lignes_de_recueil():
+    """« Derivation ventriculaire externe (droite) » tient trois lignes dans
+    une colonne de telephone ; le nom entier reste dans la liste ou on la
+    pose."""
+    noms = dom.libelles_distincts([_etat("a", "dve", "Droite")])
+    assert noms == {"a": "DVE (droite)"}
+    assert listes.libelle_dispositif("dve") == "Dérivation ventriculaire externe"
+
+
+def test_chaque_drain_compte_pour_lui_meme(base):
+    """Une DVE, deux redons dans le meme abdomen, un troisieme au thorax, un
+    drain thoracique : cinq lignes, cinq volumes, et leur somme aux sorties.
+    C'est la demande du 11 septembre, en un seul patient."""
+    constantes = _service("constantes")
+    dispositifs = _service("dispositifs")
+    evolution = _service("evolution")
+    sid = _patient(base)
+    poses = {
+        "DVE (droite)": ("dve", "Droite", 120),
+        "Redon (abdomen) 1": ("redon", "Abdomen", 90),
+        "Redon (abdomen) 2": ("redon", "Abdomen", 410),
+        "Redon (thorax)": ("redon", "Thorax", 50),
+        "Drain thoracique (droit)": ("drain_thoracique", "Droit", 180),
+    }
+    for type_, site, volume in poses.values():
+        identifiant = dispositifs.poser(base, sejour_id=sid, type_=type_,
+                                        site=site, date_pose="2026-09-08")
+        cle = constantes.cle_drain(identifiant)
+        constantes.enregistrer(base, sid, "2026-09-08", 8, {cle: 0})
+        constantes.enregistrer(base, sid, "2026-09-08", 14, {cle: volume})
+
+    lignes = evolution.drains_du_jour(base, sid, "2026-09-08")
+    assert {l["libelle"]: l["valeur"] for l in lignes} == {
+        nom: float(volume) for nom, (_t, _s, volume) in poses.items()
+    }
+    assert evolution.bilan_hydrique(base, sid, "2026-09-08").drains_ml == 850
+
+
+def test_seul_le_drain_thoracique_porte_un_etat(base):
+    """L'ecran ne pose la question qu'aux thoraciques — une DVE clampee se
+    note, mais pas ici : le service n'en a pas voulu."""
+    dispositifs = _service("dispositifs")
+    evolution = _service("evolution")
+    sid = _patient(base)
+    for type_ in ("dve", "redon", "drain_abdominal", "drain_thoracique"):
+        dispositifs.poser(base, sejour_id=sid, type_=type_,
+                          date_pose="2026-09-08")
+    lignes = evolution.drains_du_jour(base, sid, "2026-09-08")
+    avec_etat = [l for l in lignes if l["type"] == "drain_thoracique"]
+    assert len(avec_etat) == 1
+    assert len(lignes) == 4
+
+
+def test_l_acronyme_ne_passe_pas_en_minuscules():
+    """« J'ai vide apres ce releve (dve (droite)) » : un acronyme en
+    minuscules ne se lit plus comme un acronyme, et donne a relire deux fois.
+    Vu sur la capture du poste infirmier, 11 septembre."""
+    assert dom.site_en_incise("DVE (droite)") == "DVE (droite)"
+    assert dom.site_en_incise("Redon (abdomen) 1") == "redon (abdomen) 1"
+
+
+def test_l_ecran_infirmier_n_abaisse_pas_les_libelles_a_la_main():
+    """Lu en source : c'est `.lower()` qui avait abime « DVE »."""
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "rea" / "ui"
+              / "infirmier.py").read_text(encoding="utf-8")
+    debut = source.index("J'ai vidé après ce relevé")
+    assert "libelle.lower()" not in source[debut - 200:debut + 200]
+
+
+# --------------------------------------------------------------------------
+# Deux redons identiques a l'ecran
+# --------------------------------------------------------------------------
+
+def test_le_numero_se_lit_sans_refaire_le_libelle():
+    """Les ecrans qui affichent deja « Redon J1 (abdomen) », compteur compris,
+    n'ont besoin que du numero a y ajouter."""
+    a = _etat("a", "redon", "Abdomen", "2026-09-08")
+    b = _etat("b", "redon", "Abdomen", "2026-09-09")
+    seul = _etat("c", "drain_thoracique", "Droit", "2026-09-08")
+    numeros = dom.numeros_distincts([a, b, seul])
+    assert numeros == {"a": 1, "b": 2, "c": None}
+
+
+def test_les_deux_comptages_ne_divergent_pas():
+    """Une seule regle, deux lectures : deux implementations finiraient par
+    numeroter differemment, et l'ecart ne se verrait qu'au lit du malade."""
+    etats = [_etat("a", "redon", "Abdomen", "2026-09-09"),
+             _etat("b", "redon", "Abdomen", "2026-09-08"),
+             _etat("c", "redon", "Abdomen", "2026-09-10")]
+    noms = dom.libelles_distincts(etats)
+    numeros = dom.numeros_distincts(etats)
+    for identifiant, numero in numeros.items():
+        assert noms[identifiant].endswith(str(numero))
+
+
+def test_l_ecran_de_visite_numerote_les_abords():
+    """Lu en source : deux redons y donnaient deux lignes rigoureusement
+    identiques, et c'est aussi la carte ou l'on choisit lequel retirer."""
+    from pathlib import Path
+    racine = Path(__file__).resolve().parent.parent / "rea" / "ui"
+    for fichier in ("visite.py", "actes.py"):
+        source = (racine / fichier).read_text(encoding="utf-8")
+        assert "numeros_distincts" in source, fichier
+
+
+def test_l_etat_du_drain_ne_s_affiche_pas_en_balise():
+    """« 220 mL <span class='rea-v-detail'>· clampe</span> » se lisait ainsi,
+    en toutes lettres, sur l'ecran de visite : la valeur est echappee par le
+    helper, et une balise glissee dedans ressort en texte."""
+    import importlib
+    visite = importlib.import_module("rea.ui.visite")
+    rendu = visite._mesure("Drain thoracique (droit)", "220 mL", None,
+                           detail="clampé")
+    assert '<span class="rea-v-detail">· clampé</span>' in rendu
+    assert "&lt;span" not in rendu
+
+
+def test_le_detail_reste_echappe():
+    """Le helper echappe ce qu'on lui donne — y compris un detail."""
+    import importlib
+    visite = importlib.import_module("rea.ui.visite")
+    rendu = visite._mesure("Drain", "10 mL", None, detail="<b>x</b>")
+    assert "&lt;b&gt;x&lt;/b&gt;" in rendu
+
+
+def test_les_pastilles_de_la_fiche_numerotent_aussi():
+    """La premiere ligne qu'on lit d'une fiche portait deux pastilles
+    identiques pour deux redons differents."""
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "rea" / "ui"
+              / "fiche.py").read_text(encoding="utf-8")
+    assert "numeros_distincts" in source
