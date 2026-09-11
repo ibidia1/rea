@@ -33,6 +33,29 @@ FICHIER_BASE = DOSSIER_DONNEES / "rea.db"
 # Dossier des protocoles, livré avec le code (versionné, signé — SPEC §4.5)
 DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 
+
+# --------------------------------------------------------------------------
+# Version livrée
+# --------------------------------------------------------------------------
+# Affichée sur l'écran d'ouverture et dans la barre latérale. Ce n'est pas un
+# ornement : « je ne vois pas la barre latérale » n'a pas de réponse tant
+# qu'on ignore quelle version tourne sur le poste. Le service a signalé le
+# 11 septembre une barre absente, corrigée le matin même — le poste tournait
+# une version d'avant, et rien à l'écran ne permettait de le dire.
+#
+# Un fichier et non une constante dans le code : l'installateur recopie le
+# dossier tel quel, sans git, et le numéro doit survivre à la copie.
+
+def _version() -> str:
+    fichier = Path(__file__).resolve().parent.parent / "VERSION"
+    try:
+        return fichier.read_text(encoding="utf-8").strip() or "inconnue"
+    except OSError:
+        return "inconnue"
+
+
+VERSION = _version()
+
 # --------------------------------------------------------------------------
 # Réseau et authentification (§2.4 — contraintes d'architecture)
 # --------------------------------------------------------------------------

@@ -3,5 +3,16 @@
 #
 #   python -m pip install -r requirements.txt
 #
+# Version EPINGLEE, et non « au moins 1.40 ». La nuance a coûté une demi-
+# journée : le poste du service installait ce qui était courant le jour de
+# l'installation, le développement vérifiait sur autre chose, et « ça marche
+# ici » ne voulait plus rien dire. Une barre latérale absente ne se
+# reproduisait nulle part. Le service doit faire tourner exactement ce qui a
+# été vérifié.
+#
+# Pour monter de version : changer le numéro ici, lancer la suite de tests,
+# refaire la recette dans un navigateur, puis réinstaller sur le poste. Jamais
+# l'inverse.
+#
 # st.segmented_control (écrans Prescrit et fiche) est arrivé en 1.40.
-streamlit>=1.40
+streamlit==1.63.0

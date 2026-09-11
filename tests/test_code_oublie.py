@@ -221,3 +221,31 @@ def test_la_deconnexion_oublie_le_mode_admin():
     personne suivante, qui ne trouverait plus son nom."""
     debut = ACCUEIL.index("def changer_utilisateur")
     assert "accueil_admin" in ACCUEIL[debut:debut + 500]
+
+
+def test_la_version_se_lit_sur_l_ecran_d_ouverture():
+    """Le seul écran sans barre latérale, et celui qu'on regarde quand on
+    appelle pour dire que quelque chose manque. « Je ne vois pas la barre
+    latérale » n'a pas de réponse tant qu'on ignore quelle version tourne :
+    le service a signalé le 11 septembre une barre absente, corrigée le matin
+    même sur une version que le poste n'avait pas."""
+    assert "config.VERSION" in ACCUEIL
+    assert "config.VERSION" in APPLI
+
+
+def test_la_version_livree_existe_et_se_lit():
+    from rea import config
+    fichier = RACINE / "VERSION"
+    assert fichier.exists(), "le fichier VERSION est livré avec le code"
+    assert config.VERSION == fichier.read_text(encoding="utf-8").strip()
+    assert config.VERSION != "inconnue"
+
+
+def test_la_barre_reste_depliee_sur_un_ecran_etroit():
+    """Mesuré : sans `initial_sidebar_state`, à 430 px la barre sortait de
+    l'écran (x = −300, largeur 0) et aucune flèche ne permettait de la
+    rouvrir. C'est l'écran que le service avait sous les yeux."""
+    assert 'initial_sidebar_state="expanded"' in APPLI
+    # Et l'appel doit être le premier geste Streamlit du fichier : après un
+    # autre, Streamlit refuse la configuration de page.
+    assert APPLI.index("st.set_page_config") < APPLI.index("theme.appliquer()")

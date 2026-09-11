@@ -103,6 +103,20 @@ Doit afficher `1200 passed` ou davantage. Si des tests échouent, **arrêter
 ici** et le signaler : l'installation n'est pas saine, et un logiciel de
 dossier patient ne se met pas en service sur un doute.
 
+### 1.4 bis Mettre à jour un poste déjà installé
+
+**C'est le même geste que l'installation.** Télécharger la nouvelle version du
+dépôt, la décompresser où l'on veut, et double-cliquer `installer.bat`. Le
+dossier `donnees` n'est jamais écrasé : les dossiers patients, les comptes et
+les codes restent en place.
+
+**Quelle version tourne sur le poste ?** Elle est écrite à deux endroits :
+sous le titre de l'écran d'ouverture, avant même d'entrer, et en bas de la
+barre latérale une fois connecté. C'est la première chose à regarder quand
+quelque chose manque à l'écran — le 11 septembre, une barre latérale absente a
+coûté une demi-journée avant qu'on comprenne que le poste tournait une version
+d'avant la correction, et rien ne permettait de le dire.
+
 ### 1.5 Premier démarrage
 
 L'icône **Réanimation** du Bureau. À la toute première ouverture, le logiciel

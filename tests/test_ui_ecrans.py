@@ -131,18 +131,38 @@ def test_le_composant_html_marche_sans_st_iframe(monkeypatch):
     assert evolution._composant_html() is sentinelle
 
 
-def test_le_socle_streamlit_couvre_les_appels_utilises():
-    """`requirements.txt` annonçait 1.36 alors que les écrans appellent
-    `st.segmented_control`, arrivé en 1.40. Un plancher faux ne se voit qu'à
-    l'installation sur un poste neuf, écran blanc à l'appui."""
+def test_la_version_de_streamlit_est_epinglee():
+    """« Au moins 1.40 » laissait le poste du service installer ce qui était
+    courant ce jour-là, pendant que le développement vérifiait sur autre
+    chose. « Ça marche ici » ne voulait plus rien dire, et une barre latérale
+    absente ne se reproduisait nulle part (11 septembre).
+
+    Le plancher reste vérifié : `st.segmented_control` est arrivé en 1.40."""
     racine = pathlib.Path(__file__).resolve().parent.parent
     exigences = (racine / "requirements.txt").read_text(encoding="utf-8")
-    plancher = re.search(r"streamlit\s*>=\s*(\d+)\.(\d+)", exigences)
-    assert plancher, "requirements.txt doit fixer une version minimale de Streamlit"
-    majeure, mineure = int(plancher[1]), int(plancher[2])
+    epingle = re.search(r"streamlit\s*==\s*(\d+)\.(\d+)", exigences)
+    assert epingle, (
+        "requirements.txt doit ÉPINGLER Streamlit (==), pas poser un plancher : "
+        "le service doit faire tourner exactement ce qui a été vérifié"
+    )
+    majeure, mineure = int(epingle[1]), int(epingle[2])
     assert (majeure, mineure) >= (1, 40), (
         "st.segmented_control (rea/ui/fiche.py, rea/ui/prescrit.py) demande "
         "Streamlit 1.40 au minimum"
+    )
+
+
+def test_la_version_installee_est_celle_qui_est_epinglee():
+    """Sinon le test précédent ne vérifie qu'une intention écrite dans un
+    fichier, pendant que la recette tourne sur autre chose."""
+    import streamlit as st
+
+    racine = pathlib.Path(__file__).resolve().parent.parent
+    exigences = (racine / "requirements.txt").read_text(encoding="utf-8")
+    epingle = re.search(r"streamlit\s*==\s*([\d.]+)", exigences)[1]
+    assert st.__version__ == epingle, (
+        f"les tests tournent sur Streamlit {st.__version__} alors que le "
+        f"dépôt livre {epingle} au service"
     )
 
 
