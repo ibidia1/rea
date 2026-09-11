@@ -786,9 +786,15 @@ def _avis_specialises(dossier) -> Brut:
     lignes = [dom_avis.ligne_avis(a) for a in dossier.avis][-LIGNES_AVIS:]
     if not lignes:
         return Brut("")
+    # Un avis long revient à la ligne au lieu de filer hors du cadre : sur une
+    # feuille imprimée, un texte coupé au bord n'est pas « un peu tronqué »,
+    # il est perdu — et un avis chirurgical se lit en entier ou pas du tout
+    # (demande du service, 11 septembre). `overflow-wrap:anywhere` casse aussi
+    # un mot ou une référence trop longue plutôt que de déborder.
     corps = "".join(
-        '<div style="font-size:8.5px;line-height:1.5;padding:0 4px;'
-        'border-bottom:1px solid #d3dcdb;white-space:nowrap;overflow:hidden">'
+        '<div style="font-size:8.5px;line-height:1.4;padding:1px 4px;'
+        'border-bottom:1px solid #d3dcdb;white-space:normal;'
+        'overflow-wrap:anywhere">'
         f"{html.escape(l)}</div>"
         for l in lignes
     )
