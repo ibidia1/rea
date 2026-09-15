@@ -11,7 +11,7 @@ import re
 import pytest
 
 from rea import listes
-from rea.rendu import feuille
+from rea.printing import feuille
 from rea.services import bilans, feuille_dossier, sejours
 
 def _cellules(ligne) -> list[str]:
