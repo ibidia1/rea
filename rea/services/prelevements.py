@@ -21,7 +21,7 @@ from datetime import datetime
 
 from .. import listes
 from ..db import Base
-from ..domaine import vacations as dom_vacations
+from ..models import vacations as dom_vacations
 
 FAIT = "fait"
 NON_FAIT = "non_fait"

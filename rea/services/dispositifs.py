@@ -2,7 +2,7 @@
 
 Pose, retrait, et lecture de l'état d'un séjour. Aucune durée n'est
 stockée : les compteurs (« Intubé J3 », « Extubé J2 ») sont calculés par
-`rea.domaine.dispositifs`.
+`rea.models.dispositifs`.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from ..db import Base
-from ..domaine import dispositifs as dom
+from ..models import dispositifs as dom
 
 
 def poser(

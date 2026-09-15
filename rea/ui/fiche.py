@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ..domaine import dispositifs as dom_dispositifs
-from ..domaine.dates import jour_hospitalisation
+from ..models import dispositifs as dom_dispositifs
+from ..models.dates import jour_hospitalisation
 from ..services import dispositifs as dispositifs_service, sejours as sejours_service
 from . import contexte, theme
 

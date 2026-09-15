@@ -6,8 +6,8 @@ from __future__ import annotations
 import streamlit as st
 
 from .. import config, listes
-from ..domaine import prescription as dom
-from ..domaine.dates import lendemain
+from ..models import prescription as dom
+from ..models.dates import lendemain
 from ..services import bilans as bilans_service
 from ..services import dispositifs as dispositifs_service
 from ..services import lits as lits_service

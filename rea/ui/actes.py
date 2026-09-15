@@ -8,9 +8,9 @@ from datetime import date, datetime
 import streamlit as st
 
 from .. import listes
-from ..domaine import coherence
-from ..domaine import dispositifs as dom_dispositifs
-from ..domaine.dates import format_date_fr
+from ..models import coherence
+from ..models import dispositifs as dom_dispositifs
+from ..models.dates import format_date_fr
 from ..services import dispositifs as dispositifs_service
 from ..services import explorations as explorations_service
 from . import contexte, theme

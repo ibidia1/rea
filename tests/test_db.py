@@ -1,4 +1,4 @@
-from rea.domaine.dates import jour_hospitalisation
+from rea.models.dates import jour_hospitalisation
 
 
 def test_inserer_et_relire(base):

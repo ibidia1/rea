@@ -10,9 +10,9 @@ import streamlit as st
 
 from .. import config, listes, protocoles
 from ..db import ConflitDeVersion
-from ..domaine import avis as dom_avis
-from ..domaine import prescription as dom
-from ..domaine.dates import format_date_fr, parse_date
+from ..models import avis as dom_avis
+from ..models import prescription as dom
+from ..models.dates import format_date_fr, parse_date
 from ..services import aides as aides_service
 from ..services import avis as avis_service
 from ..services import constantes as constantes_service

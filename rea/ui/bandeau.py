@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ..domaine import droits as dom_droits
+from ..models import droits as dom_droits
 from . import contexte
 from . import utilisateur as utilisateur_ui
 

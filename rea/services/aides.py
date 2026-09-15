@@ -17,8 +17,8 @@ from datetime import date
 from .. import aides as fichiers_regles
 from .. import referentiels
 from ..db import Base
-from ..domaine import calculs, regles as moteur
-from ..domaine.dates import age_ans, parse_date
+from ..models import calculs, regles as moteur
+from ..models.dates import age_ans, parse_date
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service
 from . import evolution as evolution_service

@@ -4,7 +4,7 @@ une définition non testée est une définition qui changera silencieusement.
 
 import pytest
 
-from rea.domaine import calculs
+from rea.models import calculs
 
 
 # --- clairance de la créatinine (Cockcroft-Gault, 1976) -------------------

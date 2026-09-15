@@ -1,4 +1,5 @@
-"""Logique métier pure — sans base de données, sans Streamlit.
+"""Couche « models » — logique métier pure, sans base de données ni
+Streamlit. Anciennement `rea/domaine/`.
 
 Chaque fonction ici est testable isolément (voir tests/). C'est
 volontairement la partie la plus couverte par les tests : c'est elle qui

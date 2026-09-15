@@ -23,8 +23,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from ..db import Base
-from ..domaine import prescription as dom
-from ..domaine.dates import format_date_fr, parse_date
+from ..models import prescription as dom
+from ..models.dates import format_date_fr, parse_date
 
 #: Voies qui donnent lieu à une commande à la pharmacie. Les soins, la kiné et
 #: la surveillance n'en sont pas — les faire figurer sur un bon de commande

@@ -5,7 +5,7 @@ volontaires sur dix sont signalées ». C'est littéralement le premier test.
 """
 
 from rea import analytes as cat
-from rea.domaine import coherence as c
+from rea.models import coherence as c
 
 
 def test_dix_erreurs_volontaires_sur_dix_sont_signalees():

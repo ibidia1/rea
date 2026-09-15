@@ -8,8 +8,8 @@ from datetime import datetime
 import streamlit as st
 
 from .. import listes
-from ..domaine import coherence
-from ..domaine.dates import format_date_fr
+from ..models import coherence
+from ..models.dates import format_date_fr
 from ..services import sejours as sejours_service
 from . import contexte
 

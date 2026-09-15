@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from ..db import Base
-from ..domaine import prescription as dom
-from ..domaine.dates import parse_date
+from ..models import prescription as dom
+from ..models.dates import parse_date
 from . import avis as avis_service
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service

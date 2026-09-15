@@ -14,7 +14,7 @@ plus efficace qu'elle n'est :
   jamais.
 """
 
-from rea.domaine import temperature as temp
+from rea.models import temperature as temp
 from rea.services import croisements, evolution, prescriptions, sejours
 
 

@@ -677,7 +677,7 @@ def cloturer_sejour(
 # --------------------------------------------------------------------------
 
 def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
-    from ..domaine.dates import duree_sejour_jours, format_date_fr
+    from ..models.dates import duree_sejour_jours, format_date_fr
 
     sejour = sejour_avec_patient(base, sejour_id)
     duree = duree_sejour_jours(sejour["date_admission"], sejour.get("date_sortie"))

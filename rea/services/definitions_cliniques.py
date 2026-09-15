@@ -10,7 +10,7 @@ approché à partir de ce qu'on a sous la main.
 
 from __future__ import annotations
 
-from ..domaine import definitions as dom
+from ..models import definitions as dom
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service
 from . import evolution as evolution_service

@@ -10,7 +10,7 @@ import json
 import pytest
 
 from rea import aides, protocoles
-from rea.domaine import regles
+from rea.models import regles
 
 
 @pytest.fixture(autouse=True)

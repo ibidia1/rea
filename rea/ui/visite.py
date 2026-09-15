@@ -20,10 +20,10 @@ from datetime import date
 import streamlit as st
 
 from .. import analytes, listes
-from ..domaine import dispositifs as dom_dispositifs
-from ..domaine import prescription as dom
-from ..domaine import temperature as temp_dom
-from ..domaine.dates import format_date_fr, jour_hospitalisation
+from ..models import dispositifs as dom_dispositifs
+from ..models import prescription as dom
+from ..models import temperature as temp_dom
+from ..models.dates import format_date_fr, jour_hospitalisation
 from ..services import avis as avis_service
 from ..services import bilans as bilans_service
 from ..services import constantes as constantes_service

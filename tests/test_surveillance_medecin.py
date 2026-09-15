@@ -31,7 +31,7 @@ def test_la_journee_commence_a_la_prise_de_poste_du_matin():
     grille partant de minuit afficherait la fin de la nuit **avant** le matin
     qui l'a précédée — la courbe se lirait à l'envers.
     """
-    vacations = importlib.import_module("rea.domaine.vacations")
+    vacations = importlib.import_module("rea.models.vacations")
     heures = vacations.heures_du_jour()
     assert len(heures) == 24
     assert len(set(heures)) == 24

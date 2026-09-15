@@ -19,9 +19,9 @@ from datetime import date
 
 from .. import aides as fichiers
 from ..db import Base
-from ..domaine import calculs
-from ..domaine import scores as dom
-from ..domaine.dates import parse_date
+from ..models import calculs
+from ..models import scores as dom
+from ..models.dates import parse_date
 from . import aides as faits_service
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service

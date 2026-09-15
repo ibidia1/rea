@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .. import listes
 from ..db import Base
-from ..domaine.dates import parse_date
+from ..models.dates import parse_date
 
 # Ordre d'écriture d'un antibiogramme : sensible, intermédiaire, résistant.
 # C'est l'ordre dans lequel on le lit à la visite — ce à quoi le germe répond

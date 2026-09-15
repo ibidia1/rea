@@ -139,7 +139,7 @@ def enregistrer(code: str, contenu: dict) -> None:
     imprimée à partir de ce protocole."""
     from datetime import date
 
-    from .domaine.regles import prochaine_version
+    from .models.regles import prochaine_version
 
     contenu = dict(contenu)
     contenu["code"] = code

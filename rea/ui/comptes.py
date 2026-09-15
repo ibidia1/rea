@@ -17,7 +17,7 @@ from __future__ import annotations
 import streamlit as st
 
 from .. import config
-from ..domaine import droits as dom_droits
+from ..models import droits as dom_droits
 from ..services import utilisateurs as utilisateurs_service
 from . import theme
 

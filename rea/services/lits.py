@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .. import config
 from ..db import Base
-from ..domaine.dates import jour_hospitalisation
+from ..models.dates import jour_hospitalisation
 
 
 def etat_des_lits(base: Base) -> list[dict]:

@@ -25,8 +25,8 @@ from __future__ import annotations
 from datetime import date
 
 from ..db import Base
-from ..domaine import prescription as dom
-from ..domaine.dates import lendemain
+from ..models import prescription as dom
+from ..models.dates import lendemain
 from . import vitesses as vitesses_service
 
 

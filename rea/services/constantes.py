@@ -20,8 +20,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from ..db import Base
-from ..domaine import recueil
-from ..domaine import vacations as dom_vacations
+from ..models import recueil
+from ..models import vacations as dom_vacations
 
 #: Ce qui se relève toutes les heures, dans l'ordre du verso de la feuille.
 #:

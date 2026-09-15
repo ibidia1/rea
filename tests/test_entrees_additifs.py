@@ -9,7 +9,7 @@ feuille à l'autre, et ce qui ne se relit pas ne se compte pas.
 import pytest
 
 from rea import listes
-from rea.domaine import prescription as dom
+from rea.models import prescription as dom
 from rea.services import prescriptions, sejours
 
 

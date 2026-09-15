@@ -9,7 +9,7 @@ les cinq autres écrans qui laissent forcer n'en ont aucune.
 
 import pytest
 
-from rea.domaine import coherence
+from rea.models import coherence
 from rea.services import sejours
 from rea.ui import contexte
 

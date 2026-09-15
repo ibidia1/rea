@@ -29,7 +29,7 @@ from datetime import datetime
 
 from .. import config
 from ..db import Base
-from ..domaine import droits as dom_droits
+from ..models import droits as dom_droits
 
 #: Les essais ratés, par compte, en mémoire du processus : nom -> (nombre,
 #: heure du dernier essai). En mémoire et non en base, délibérément — un

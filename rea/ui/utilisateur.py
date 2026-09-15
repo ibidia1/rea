@@ -22,7 +22,7 @@ import streamlit as st
 
 from .. import config
 from ..db import Base
-from ..domaine import droits as dom_droits
+from ..models import droits as dom_droits
 from ..services import utilisateurs as utilisateurs_service
 
 
@@ -462,7 +462,7 @@ def role_essaye() -> str | None:
 
 
 def essayer_role(role: str | None) -> None:
-    from ..domaine import droits as _droits
+    from ..models import droits as _droits
 
     if not dom_droits.peut(role_reel(), "comptes"):
         raise PermissionError("Seul un administrateur peut essayer un rôle.")

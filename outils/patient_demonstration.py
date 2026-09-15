@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rea.db import Base  # noqa: E402
-from rea.domaine import prescription as dom_prescription  # noqa: E402
+from rea.models import prescription as dom_prescription  # noqa: E402
 from rea.services import (  # noqa: E402
     avis, bilans, dispositifs, evolution, explorations, microbiologie,
     prescriptions, sejours, vitesses,

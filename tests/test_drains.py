@@ -8,7 +8,7 @@ voisin.
 import importlib
 
 from rea import listes
-from rea.domaine import dispositifs as dom
+from rea.models import dispositifs as dom
 
 
 def _service(nom):
