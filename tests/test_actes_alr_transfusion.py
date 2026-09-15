@@ -99,6 +99,42 @@ def test_les_produits_sanguins_sont_une_liste_fermee():
         assert any(attendu in o for o in produit["options"])
 
 
+def test_la_transfusion_a_ses_etapes_reserve_puis_transfuse():
+    """Réserve envoyée → prête → transfusé : une liste fermée d'étapes."""
+    statut = next(c for c in listes.champs_exploration("transfusion")
+                  if c["cle"] == "statut")
+    assert statut["type"] == "liste"
+    assert statut["options"] == (
+        "Réserve envoyée", "Réserve prête", "Transfusé")
+
+
+def test_les_transfusions_du_jour_sont_reportees_dans_l_evolution(base, sejour):
+    """Chaque date de transfusion sur une ligne, les poches d'un même jour
+    regroupées par produit — « 15/09 : 4 CGR + 5 PFC »."""
+    for produit, poches in (("CGR (culot globulaire)", 4),
+                            ("PFC (plasma frais congelé)", 5)):
+        explorations.enregistrer(
+            base, sejour_id=sejour, date_heure="2026-09-08T10:00",
+            type_="transfusion",
+            valeurs={"produit": produit, "nb_poches": poches, "statut": "Transfusé"},
+        )
+    box = feuille.contexte(_dossier(base, sejour))["transfusions"].html
+    assert "08/09 : 4 CGR + 5 PFC" in box
+
+
+def test_une_reserve_en_attente_ne_figure_pas_dans_l_evolution(base, sejour):
+    """Une réserve envoyée ou prête n'est pas encore passée au patient : elle
+    ne se reporte pas dans l'évolution."""
+    explorations.enregistrer(
+        base, sejour_id=sejour, date_heure="2026-09-08T10:00", type_="transfusion",
+        valeurs={"produit": "CUP (concentré plaquettaire)", "nb_poches": 1,
+                 "statut": "Réserve envoyée"},
+    )
+    box = feuille.contexte(_dossier(base, sejour))["transfusions"].html
+    assert "CUP" not in box
+    assert box == ""
+
+
 # -- anesthésie locorégionale ------------------------------------------------
 
 def test_un_bloc_en_une_fois_se_note_comme_acte_avec_sa_dose(base, sejour):

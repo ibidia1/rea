@@ -62,6 +62,37 @@ def du_sejour(base: Base, sejour_id: str) -> list[dict]:
     )
 
 
+def transfusions_du_sejour(base: Base, sejour_id: str) -> list[dict]:
+    """Les transfusions et réserves d'un séjour, valeurs déjà résolues.
+
+    Chaque enregistrement porte son produit, son nombre de poches et son étape
+    (réserve envoyée / prête, ou transfusé). La feuille et la visite n'ont plus
+    à repivoter les valeurs — c'est le service qui lit la base (règle R3).
+    Rendus du plus ancien au plus récent : la feuille les empile par date.
+    """
+    lignes = base.requete(
+        "SELECT id, date_heure, conclusion FROM exploration "
+        "WHERE sejour_id = ? AND type = 'transfusion' AND supprime = 0 "
+        "ORDER BY date_heure",
+        (sejour_id,),
+    )
+    resultats = []
+    for ligne in lignes:
+        vals = {
+            v["cle"]: (v["valeur_num"] if v["valeur_num"] is not None
+                       else v["valeur_texte"])
+            for v in valeurs(base, ligne["id"])
+        }
+        resultats.append({
+            "date_heure": ligne["date_heure"],
+            "produit": vals.get("produit"),
+            "nb_poches": vals.get("nb_poches"),
+            "statut": vals.get("statut"),
+            "complication": vals.get("complication"),
+        })
+    return resultats
+
+
 def valeurs(base: Base, exploration_id: str) -> list[dict]:
     return base.requete(
         "SELECT * FROM exploration_valeur WHERE exploration_id = ? AND supprime = 0",
