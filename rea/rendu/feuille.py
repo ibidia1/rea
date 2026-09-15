@@ -378,7 +378,7 @@ def _bande_bilans(dossier) -> Brut:
         sens = "row-reverse" if a_droite else "row"
         aligne = "flex-end" if a_droite else "flex-start"
         etiquettes = "".join(
-            '<span style="background:#fff;box-shadow:0 0 0 1px #fff;font-size:8px;'
+            '<span style="background:#fff;box-shadow:0 0 0 1px #fff;font-size:9.5px;'
             'font-weight:700;line-height:1.15;color:#33403f;padding:0 3px;'
             f'white-space:nowrap">{html.escape(l)}</span>'
             for l in par_heure[h]
@@ -786,7 +786,7 @@ def _motif_transport_atcd(dossier) -> Brut:
     ttt = sejour.get("traitement_habituel")
     if ttt:
         corps += ligne("Ttt habituel", ttt)
-    return Brut(f'<div style="font-size:9.5px;line-height:1.35;overflow:hidden">{corps}</div>')
+    return Brut(f'<div style="font-size:11px;line-height:1.4;overflow:hidden">{corps}</div>')
 
 
 #: Combien d'avis la feuille imprime au plus. Le bloc partage sa hauteur avec
@@ -820,7 +820,7 @@ def _avis_specialises(dossier) -> Brut:
     # (demande du service, 12 septembre). Sobre — pas un surligneur fluo qui
     # traverse la photocopie : une bande légère, lisible aussi en noir et blanc.
     corps = "".join(
-        '<div style="font-size:9.5px;line-height:1.35;padding:2px 5px;'
+        '<div style="font-size:10.5px;line-height:1.4;padding:2px 5px;'
         'border-bottom:1px solid #d3dcdb;background:#f6efda;'
         'border-left:2px solid #b9922e;white-space:normal;'
         'overflow-wrap:anywhere">'
@@ -1051,8 +1051,10 @@ _SLUGS_BLOCS = {
 # (taux de remplissage maximal, taille de police) — la première ligne qui
 # s'applique gagne. Un bloc largement vide n'a aucune raison de garder la
 # petite taille prévue pour un bloc plein : la place est là, autant s'en servir.
-_PALIERS_REMPLISSAGE = ((0.34, 13.5), (0.6, 11.5))
-_TAILLE_DEFAUT = 9.5
+_PALIERS_REMPLISSAGE = ((0.34, 15), (0.6, 13))
+#: Taille de base des lignes de traitement, alignee sur le style en ligne de
+#: la maquette. Un bloc a moitie vide grossit au-dela (paliers ci-dessus).
+_TAILLE_DEFAUT = 11
 
 
 def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
@@ -1065,7 +1067,14 @@ def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
             continue
         taille = next((v for seuil, v in _PALIERS_REMPLISSAGE if taux <= seuil), _TAILLE_DEFAUT)
         if taille != _TAILLE_DEFAUT:
-            regles.append(f".txt-produit-{slug},.txt-dose-{slug}{{font-size:{taille}px}}")
+            # !important : la maquette porte une taille en ligne sur chaque
+            # cellule, et un style en ligne l'emporte sur une regle de classe
+            # sans cette marque — l'agrandissement des blocs vides resterait
+            # sans effet.
+            regles.append(
+                f".txt-produit-{slug},.txt-dose-{slug}"
+                f"{{font-size:{taille}px !important}}"
+            )
     return Brut("".join(regles))
 
 

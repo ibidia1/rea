@@ -547,7 +547,8 @@ def test_bloc_peu_rempli_recoit_un_texte_plus_grand(base, dossier):
     )
     style = feuille.contexte(_dossier(base, sid, AUJ))["styleDynamique"].html
     assert "txt-produit-iv" in style
-    assert "13.5px" in style
+    assert "15px" in style
+    assert "!important" in style  # la maquette porte une taille en ligne a battre
 
 
 def test_bloc_presque_plein_garde_la_taille_normale(base, dossier):
@@ -1231,4 +1232,4 @@ def test_l_avis_est_en_surbrillance_sobre_sur_la_feuille(base, dossier):
     ctx = feuille.contexte(_dossier(base, sid, AUJ))
     html_avis = ctx["avisRows"].html
     assert "background:#f6efda" in html_avis     # surbrillance sobre
-    assert "font-size:9.5px" in html_avis        # un peu plus grande
+    assert "font-size:10.5px" in html_avis       # un peu plus grande
