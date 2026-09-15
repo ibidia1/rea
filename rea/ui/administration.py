@@ -21,9 +21,9 @@ import unicodedata
 
 from .. import aides, config, listes, protocoles, referentiels
 from ..db import Base, inspecter_fichier_base
-from ..domaine import droits as dom_droits
-from ..domaine import regles as regles_dom
-from ..domaine.dates import format_date_fr
+from ..models import droits as dom_droits
+from ..models import regles as regles_dom
+from ..models.dates import format_date_fr
 from ..services import medicaments as medicaments_service
 from ..services import pancarte as pancarte_service
 from . import comptes as comptes_ui

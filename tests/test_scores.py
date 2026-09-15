@@ -6,7 +6,7 @@ n'a aucun symptôme visible — il produit des chiffres plausibles.
 
 
 from rea import aides as fichiers
-from rea.domaine import scores
+from rea.models import scores
 from rea.services import (
     bilans as bilans_service,
     dispositifs as dispositifs_service,

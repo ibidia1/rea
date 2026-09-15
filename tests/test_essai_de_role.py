@@ -91,7 +91,7 @@ def test_l_essai_ne_donne_jamais_plus_que_le_compte(base):
     """Un administrateur les a tous : quel que soit le rôle essayé, l'essai ne
     peut que retirer des droits."""
     ui = _ui()
-    droits = importlib.import_module("rea.domaine.droits")
+    droits = importlib.import_module("rea.models.droits")
     _session(ui, "admin")
     tous = droits.droits_du_role("admin")
     for role in droits.roles():

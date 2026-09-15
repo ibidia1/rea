@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from ..db import Base
-from ..domaine import vacations as dom
+from ..models import vacations as dom
 
 
 def affecter(

@@ -14,7 +14,7 @@ donc pareil — `cible` dit seulement d'où vient ce qui coule.
 from __future__ import annotations
 
 from ..db import Base
-from ..domaine import prescription as dom
+from ..models import prescription as dom
 
 LIGNE = "prescription_ligne"
 DISPOSITIF = "dispositif"

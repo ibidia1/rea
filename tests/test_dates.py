@@ -1,4 +1,4 @@
-from rea.domaine import dates
+from rea.models import dates
 
 
 def test_age_avant_anniversaire():

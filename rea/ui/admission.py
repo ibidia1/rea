@@ -8,7 +8,7 @@ from datetime import date, datetime
 import streamlit as st
 
 from .. import listes, protocoles, referentiels
-from ..domaine import coherence
+from ..models import coherence
 from ..services import protocoles as protocoles_service
 from ..services import sejours as sejours_service
 from . import contexte

@@ -4,7 +4,7 @@ Ce qui compte ici autant que le classement correct : qu'une définition qu'on
 ne peut pas appliquer ne soit jamais comptée comme un cas négatif.
 """
 
-from rea.domaine import definitions as d
+from rea.models import definitions as d
 
 
 # -- Berlin ------------------------------------------------------------------

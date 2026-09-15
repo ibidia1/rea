@@ -1,4 +1,4 @@
-from rea.domaine import dispositifs as dom
+from rea.models import dispositifs as dom
 from rea.services import dispositifs, evolution, explorations, sejours
 
 
@@ -242,7 +242,7 @@ def test_le_motif_ne_saffiche_pas_tant_que_le_dispositif_est_en_place(base):
 
 def test_le_repere_anatomique_garde_ses_majuscules_dans_le_texte(base):
     """« T4-T6 » écrit « t4-t6 » ne se lit plus comme un repère."""
-    from rea.domaine import dispositifs as dom_disp
+    from rea.models import dispositifs as dom_disp
     assert dom_disp.site_en_incise("Thoracique haute (T4-T6)") == "Thoracique haute (T4-T6)"
     assert dom_disp.site_en_incise("Droit") == "droit"
     assert dom_disp.site_en_incise("Jugulaire interne droite") == "jugulaire interne droite"

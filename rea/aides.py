@@ -13,8 +13,8 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from .domaine import regles as domaine_regles
-from .domaine.regles import Regle
+from .models import regles as domaine_regles
+from .models.regles import Regle
 
 DOSSIER = Path(__file__).resolve().parent.parent / "regles"
 

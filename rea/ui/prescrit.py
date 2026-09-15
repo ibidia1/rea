@@ -11,9 +11,9 @@ from datetime import date
 import streamlit as st
 
 from .. import config, listes
-from ..domaine import coherence, prescription as dom
-from ..domaine import vacations as dom_vacations
-from ..domaine.dates import format_date_fr, lendemain
+from ..models import coherence, prescription as dom
+from ..models import vacations as dom_vacations
+from ..models.dates import format_date_fr, lendemain
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import dispositifs as dispositifs_service

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from .. import config, listes
 from ..db import Base
-from ..domaine import calculs
-from ..domaine import dispositifs as dom_dispositifs
-from ..domaine import prescription as dom
-from ..domaine.dates import format_date_fr, jour_hospitalisation
-from ..domaine import avis as dom_avis
+from ..models import calculs
+from ..models import dispositifs as dom_dispositifs
+from ..models import prescription as dom
+from ..models.dates import format_date_fr, jour_hospitalisation
+from ..models import avis as dom_avis
 from . import avis as avis_service
 from . import bilans as bilans_service
 from . import constantes as constantes_service

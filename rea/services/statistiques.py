@@ -22,7 +22,7 @@ from datetime import date
 
 from .. import referentiels
 from ..db import Base
-from ..domaine.dates import age_ans, parse_date
+from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
 from . import microbiologie as micro_service
 from . import prescriptions as prescriptions_service

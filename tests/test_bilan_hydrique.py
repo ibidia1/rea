@@ -12,7 +12,7 @@ donnée. Un chiffre inventé dans un bilan hydrique est pire que pas de chiffre.
 """
 
 from rea import referentiels
-from rea.domaine import prescription as dom
+from rea.models import prescription as dom
 from rea.services import dispositifs, evolution, prescriptions, sejours
 
 REGLAGES = referentiels.charger("bilan_hydrique")

@@ -39,9 +39,9 @@ from datetime import datetime
 import streamlit as st
 
 from .. import listes
-from ..domaine import dispositifs as dom_dispositifs
-from ..domaine import vacations as dom_vacations
-from ..domaine.dates import format_date_fr
+from ..models import dispositifs as dom_dispositifs
+from ..models import vacations as dom_vacations
+from ..models.dates import format_date_fr
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import constantes as constantes_service
@@ -180,7 +180,7 @@ def _bouton_de_prise(base, patient, jour, heure, ligne, notee, utilisateur_id) -
     « Donné — Tienam 1 g » se lit d'un coup d'œil, en plein soleil, et par
     quelqu'un qui distingue mal le rouge du gris.
     """
-    from ..domaine import prescription as dom
+    from ..models import prescription as dom
 
     # Les prises sont groupées par heure juste au-dessus : répéter
     # « (8h-20h) » derrière chaque produit allongerait la ligne pour rien.

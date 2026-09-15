@@ -6,7 +6,7 @@ la descend à 15 à 16 h. Ce qui est vérifié ici, c'est que la feuille sait
 bonne journée, sachant que la journée du service va de 8 h à 8 h.
 """
 
-from rea.domaine import prescription as dom
+from rea.models import prescription as dom
 from rea.services import dispositifs, prescriptions, sejours, vitesses
 
 

@@ -8,7 +8,7 @@ ne savait plus qui avait dit quoi, ni quand.
 
 import pytest
 
-from rea.domaine import avis as dom
+from rea.models import avis as dom
 from rea.printing import feuille
 from rea.services import avis, feuille_dossier, sejours
 

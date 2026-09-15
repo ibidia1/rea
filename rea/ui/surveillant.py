@@ -19,8 +19,8 @@ from datetime import date
 
 import streamlit as st
 
-from ..domaine import vacations as dom_vacations
-from ..domaine.dates import format_date_fr
+from ..models import vacations as dom_vacations
+from ..models.dates import format_date_fr
 from ..services import administrations as adm_service
 from ..services import affectations as affectations_service
 from ..services import supervision as supervision_service

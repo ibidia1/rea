@@ -51,8 +51,8 @@ from dataclasses import dataclass, field
 from .. import analytes as catalogue
 from .. import listes
 from ..db import Base
-from ..domaine import temperature as temp_dom
-from ..domaine.dates import age_ans, parse_date
+from ..models import temperature as temp_dom
+from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
 from . import scores as scores_service
 from . import statistiques as stats

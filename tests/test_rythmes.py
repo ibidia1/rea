@@ -11,7 +11,7 @@ dont l'intervalle ne divise pas la journée ne se donne pas.
 import importlib
 
 from rea import listes
-from rea.domaine import prescription as p
+from rea.models import prescription as p
 
 # Rythmes réguliers : code -> nombre de prises attendu dans la journée.
 REGULIERS = {
@@ -80,7 +80,7 @@ def test_les_horaires_viennent_du_referentiel_pas_du_code():
     par `sys.modules` au moment de l'appel. Remplacer le `charger` d'un
     module périmé ne remplacerait rien du tout.
     """
-    domaine = importlib.import_module("rea.domaine.prescription")
+    domaine = importlib.import_module("rea.models.prescription")
     refs = importlib.import_module("rea.referentiels")
     domaine._horaires_du_referentiel.cache_clear()
     vrai_charger = refs.charger

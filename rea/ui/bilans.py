@@ -8,8 +8,8 @@ from datetime import date, datetime
 import streamlit as st
 
 from .. import analytes as cat, listes
-from ..domaine import calculs, coherence
-from ..domaine.dates import age_ans, format_date_fr
+from ..models import calculs, coherence
+from ..models.dates import age_ans, format_date_fr
 from ..services import analytes_locaux
 from ..services import bilans as bilans_service, microbiologie as micro_service
 from . import contexte, theme

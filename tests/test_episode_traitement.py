@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from rea.domaine import prescription as dom
+from rea.models import prescription as dom
 from rea.services import prescriptions, sejours, statistiques
 
 J1 = "2026-09-01"

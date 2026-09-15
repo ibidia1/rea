@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from rea.domaine import vacations as dom
+from rea.models import vacations as dom
 from rea.services import (administrations, affectations, constantes,
                           prescriptions, sejours, utilisateurs)
 

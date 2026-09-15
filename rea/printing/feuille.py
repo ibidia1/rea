@@ -28,9 +28,9 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import config, listes, referentiels
-from ..domaine import avis as dom_avis
-from ..domaine import calculs, prescription as dom
-from ..domaine.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
+from ..models import avis as dom_avis
+from ..models import calculs, prescription as dom
+from ..models.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
 from .gabarit import Brut, rendre
 
 MODELE = Path(__file__).resolve().parent.parent.parent / "modeles" / "feuille_reanimation_kairouan.html"

@@ -10,7 +10,7 @@ quand (demande du service, 8 septembre).
 from __future__ import annotations
 
 from ..db import Base
-from ..domaine import avis as dom
+from ..models import avis as dom
 
 
 def demander(

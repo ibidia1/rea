@@ -8,7 +8,7 @@ fidèlement, y compris quand un fait manque.
 import pytest
 
 from rea import aides as fichiers_regles
-from rea.domaine import regles
+from rea.models import regles
 
 
 def _regle(**kw):

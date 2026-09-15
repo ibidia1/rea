@@ -16,7 +16,7 @@ import pytest
 
 
 def _dom():
-    return importlib.import_module("rea.domaine.recueil")
+    return importlib.import_module("rea.models.recueil")
 
 
 def _releves(*paires, depart=datetime(2026, 9, 9, 8)):
@@ -215,7 +215,7 @@ def test_le_drapeau_du_sac_jete_se_decoche(base):
 def test_le_bilan_ne_compte_plus_les_jetes_a_part():
     """Ce que le sac a recueilli **est** la diurèse. Le recompter sous le nom
     de « jetés » doublait l'urine du patient dans le total des pertes."""
-    dom = importlib.import_module("rea.domaine.prescription")
+    dom = importlib.import_module("rea.models.prescription")
     bilan = dom.bilan_hydrique([], diurese_ml=1000, poids_kg=70,
                                temperature_c=37.0, date_jour="2026-09-01")
     assert not hasattr(bilan, "jetes_ml")

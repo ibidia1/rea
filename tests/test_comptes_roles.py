@@ -16,7 +16,7 @@ Ce que ces tests protègent, dans l'ordre d'importance :
 
 import pytest
 
-from rea.domaine import droits
+from rea.models import droits
 from rea.services import utilisateurs
 
 

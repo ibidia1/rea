@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from rea.domaine import prescription as dom_p
+from rea.models import prescription as dom_p
 from rea.printing import feuille
 from rea.services import feuille_dossier
 from rea.printing.gabarit import Brut, VariableInconnue, rendre, variables_attendues
@@ -1036,7 +1036,7 @@ def test_un_traitement_introduit_hier_compte_son_deuxieme_jour(base, dossier):
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     assert contexte["ivRows"][0]["produit"] == "Tienam"
     lignes = feuille_dossier.rassembler(base, sid, AUJ).pancarte["lignes"]
-    from rea.domaine import prescription as dom_p
+    from rea.models import prescription as dom_p
     assert dom_p.etiquette_jour(lignes[0], AUJ).texte == "J2"
     assert dom_p.etiquette_jour(lignes[0], J1).texte == "Introduction de"
 

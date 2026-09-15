@@ -1,5 +1,5 @@
 
-from rea.domaine import prescription as p
+from rea.models import prescription as p
 
 
 def test_horaires_x1j():

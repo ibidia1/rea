@@ -13,7 +13,7 @@ import pathlib
 import pytest
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
-DOMAINE = RACINE / "rea" / "domaine"
+MODELS = RACINE / "rea" / "models"
 RENDU = RACINE / "rea" / "printing"
 UI = RACINE / "rea" / "ui"
 
@@ -80,7 +80,7 @@ def test_aucun_ecran_n_ecrit_directement_en_base(chemin):
 
 # -- le domaine reste pur ---------------------------------------------------
 
-@pytest.mark.parametrize("chemin", _fichiers(DOMAINE), ids=lambda p: p.name)
+@pytest.mark.parametrize("chemin", _fichiers(MODELS), ids=lambda p: p.name)
 def test_le_domaine_ignore_la_base_et_les_services(chemin):
     """C'est la propriété la plus précieuse du dépôt : tout le calcul médical
     (scores, cohérence, prescription, règles) se teste sans base."""
