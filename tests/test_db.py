@@ -1,6 +1,15 @@
 from rea.models.dates import jour_hospitalisation
 
 
+def test_le_fichier_de_base_garde_son_nom_rea_db():
+    """Le fichier SQLite s'appelle « rea.db » et ne doit jamais changer de nom :
+    le renommer ferait chercher au logiciel un fichier absent et repartir sur
+    une base vide — les données du service seraient invisibles. (Renommer le
+    *paquet* rea/database/ n'a rien à voir avec le nom du *fichier*.)"""
+    from rea import config
+    assert config.FICHIER_BASE.name == "rea.db"
+
+
 def test_inserer_et_relire(base):
     uid = base.inserer("utilisateur", {"nom": "Dr Test", "role": "interne"})
     ligne = base.une_ligne("SELECT * FROM utilisateur WHERE id = ?", (uid,))
