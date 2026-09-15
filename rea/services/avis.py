@@ -9,7 +9,7 @@ quand (demande du service, 8 septembre).
 
 from __future__ import annotations
 
-from ..db import Base
+from ..database import Base
 from ..models import avis as dom
 
 

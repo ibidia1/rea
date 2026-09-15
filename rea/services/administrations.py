@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from ..db import Base
+from ..database import Base
 
 DONNE = "donne"
 NON_DONNE = "non_donne"

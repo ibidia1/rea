@@ -28,7 +28,7 @@ signe.
 
 from __future__ import annotations
 
-from ..db import Base
+from ..database import Base
 from . import prescriptions as prescriptions_service
 
 

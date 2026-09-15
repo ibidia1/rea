@@ -8,7 +8,7 @@ jour (SPEC §6), bilan du jour (SPEC §7) et prescrit actif.
 from __future__ import annotations
 
 from .. import config, listes
-from ..db import Base
+from ..database import Base
 from ..models import calculs
 from ..models import dispositifs as dom_dispositifs
 from ..models import prescription as dom

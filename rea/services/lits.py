@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import config
-from ..db import Base
+from ..database import Base
 from ..models.dates import jour_hospitalisation
 
 

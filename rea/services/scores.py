@@ -18,7 +18,7 @@ import json
 from datetime import date
 
 from .. import aides as fichiers
-from ..db import Base
+from ..database import Base
 from ..models import calculs
 from ..models import scores as dom
 from ..models.dates import parse_date

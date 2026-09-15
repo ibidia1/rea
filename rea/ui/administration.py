@@ -20,7 +20,7 @@ import re
 import unicodedata
 
 from .. import aides, config, listes, protocoles, referentiels
-from ..db import Base, inspecter_fichier_base
+from ..database import Base, inspecter_fichier_base
 from ..models import droits as dom_droits
 from ..models import regles as regles_dom
 from ..models.dates import format_date_fr

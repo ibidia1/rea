@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from ..db import Base
+from ..database import Base
 from ..models import prescription as dom
 from ..models.dates import parse_date
 from . import avis as avis_service

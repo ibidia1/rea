@@ -13,7 +13,7 @@ def base(monkeypatch, tmp_path):
     for module in list(sys.modules):
         if module == "rea" or module.startswith("rea."):
             del sys.modules[module]
-    from rea.db import Base
+    from rea.database import Base
 
     b = Base()
     yield b

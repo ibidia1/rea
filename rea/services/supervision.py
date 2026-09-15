@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from ..db import Base
+from ..database import Base
 from ..models import prescription as dom
 from ..models.dates import format_date_fr, parse_date
 

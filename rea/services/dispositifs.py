@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from ..db import Base
+from ..database import Base
 from ..models import dispositifs as dom
 
 

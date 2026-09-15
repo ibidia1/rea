@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from .. import listes
-from ..db import Base, maintenant
+from ..database import Base, maintenant
 
 
 # --------------------------------------------------------------------------

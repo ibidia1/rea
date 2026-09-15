@@ -47,7 +47,7 @@ def test_le_rendu_n_ouvre_pas_la_base_ni_n_appelle_un_service(chemin):
     """
     interdits = [
         i for i in _imports(chemin)
-        if "services" in i or i.endswith("db") or i.endswith("db.Base")
+        if "services" in i or i.endswith("database") or i.endswith("database.Base")
     ]
     assert not interdits, (
         f"{chemin.name} va chercher ses données lui-même : {sorted(interdits)}. "
@@ -86,7 +86,7 @@ def test_le_domaine_ignore_la_base_et_les_services(chemin):
     (scores, cohérence, prescription, règles) se teste sans base."""
     interdits = [
         i for i in _imports(chemin)
-        if "services" in i or "streamlit" in i or i.endswith("db")
+        if "services" in i or "streamlit" in i or i.endswith("database")
     ]
     assert not interdits, f"{chemin.name} dépend de : {sorted(interdits)}"
 
@@ -153,7 +153,7 @@ def test_aucun_cycle_d_import_dans_le_paquet():
 import re  # noqa: E402
 import tomllib  # noqa: E402
 
-SCHEMA = (RACINE / "rea" / "schema.sql").read_text(encoding="utf-8")
+SCHEMA = (RACINE / "rea" / "database" / "schema.sql").read_text(encoding="utf-8")
 
 # Quatre tables hors du dispositif de traçabilité, chacune pour sa raison —
 # voir l'en-tête de schema.sql.
@@ -227,7 +227,7 @@ def test_le_numero_dimpression_dune_feuille_nest_pas_un_compteur_de_version(base
     """`pancarte_snapshot.version` désigne le numéro d'impression (v1, v2 de la
     même feuille). L'incrémenter à chaque écriture renumérote des feuilles déjà
     sorties de l'imprimante : la table est explicitement exclue."""
-    from rea.db import TABLES_SANS_COMPTEUR_DE_VERSION
+    from rea.database import TABLES_SANS_COMPTEUR_DE_VERSION
 
     assert "pancarte_snapshot" in TABLES_SANS_COMPTEUR_DE_VERSION
 

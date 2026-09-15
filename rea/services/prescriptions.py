@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from ..db import Base
+from ..database import Base
 from ..models import prescription as dom
 from ..models.dates import lendemain
 from . import vitesses as vitesses_service
@@ -493,7 +493,7 @@ def valider_pancarte_de_demain(
 
 
 def _maintenant() -> str:
-    from ..db import maintenant
+    from ..database import maintenant
 
     return maintenant()
 

@@ -16,7 +16,7 @@ from datetime import date
 
 import streamlit as st
 
-from ..db import Base, obtenir_base
+from ..database import Base, obtenir_base
 
 
 def base() -> Base:

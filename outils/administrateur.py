@@ -41,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rea import config                                    # noqa: E402
-from rea.db import Base                                   # noqa: E402
+from rea.database import Base                                   # noqa: E402
 from rea.services import utilisateurs                     # noqa: E402
 
 

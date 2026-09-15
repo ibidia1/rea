@@ -26,7 +26,7 @@ Utilise sa propre base (REA_DIR) — ne jamais le lancer sur celle du service.
 import os, random, statistics, sys, threading, time
 sys.path.insert(0, "/home/user/rea")
 
-from rea.db import obtenir_base
+from rea.database import obtenir_base
 from rea.services import (administrations, constantes, prelevements,
                           prescriptions, sejours)
 
