@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from ..db import Base
+from ..database import Base
 from ..models import vacations as dom
 
 

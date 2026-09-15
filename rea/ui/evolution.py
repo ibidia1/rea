@@ -9,7 +9,7 @@ import json
 import streamlit as st
 
 from .. import config, listes, protocoles
-from ..db import ConflitDeVersion
+from ..database import ConflitDeVersion
 from ..models import avis as dom_avis
 from ..models import prescription as dom
 from ..models.dates import format_date_fr, parse_date

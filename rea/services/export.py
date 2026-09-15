@@ -34,7 +34,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import aides, analytes as cat, config, referentiels
-from ..db import Base
+from ..database import Base
 from ..models.dates import age_ans
 
 NON_RENSEIGNE = ".NR"

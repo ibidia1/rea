@@ -35,7 +35,7 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass, field
 
-from ..db import Base
+from ..database import Base
 
 
 @dataclass(frozen=True)

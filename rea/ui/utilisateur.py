@@ -21,7 +21,7 @@ from __future__ import annotations
 import streamlit as st
 
 from .. import config
-from ..db import Base
+from ..database import Base
 from ..models import droits as dom_droits
 from ..services import utilisateurs as utilisateurs_service
 

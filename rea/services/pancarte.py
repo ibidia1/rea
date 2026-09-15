@@ -11,7 +11,7 @@ feuille regénérée plus tard à partir de données qui ont bougé depuis.
 from __future__ import annotations
 
 from .. import config
-from ..db import Base, maintenant
+from ..database import Base, maintenant
 from . import feuille_dossier
 
 

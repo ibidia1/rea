@@ -25,7 +25,7 @@ def _conflit_de_version() -> type[Exception]:
     et `pytest.raises` ne l'attraperait pas. Le piège coûte une demi-heure à
     qui le rencontre sans le savoir.
     """
-    return sys.modules["rea.db"].ConflitDeVersion
+    return sys.modules["rea.database"].ConflitDeVersion
 
 JOUR = "2026-09-08"
 

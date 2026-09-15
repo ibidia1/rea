@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from .. import analytes as cat
 from .. import listes
-from ..db import Base
+from ..database import Base
 
 
 # --------------------------------------------------------------------------

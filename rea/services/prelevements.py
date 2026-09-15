@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from .. import listes
-from ..db import Base
+from ..database import Base
 from ..models import vacations as dom_vacations
 
 FAIT = "fait"

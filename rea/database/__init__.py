@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from . import config
+from .. import config
 
 
 # Mots qui commencent une contrainte de table, pas une colonne.

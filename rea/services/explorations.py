@@ -9,7 +9,7 @@ recherche.
 from __future__ import annotations
 
 from .. import listes
-from ..db import Base
+from ..database import Base
 
 
 def enregistrer(

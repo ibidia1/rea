@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-SCHEMA = (Path(__file__).resolve().parent.parent / "rea" / "schema.sql").read_text(
+SCHEMA = (Path(__file__).resolve().parent.parent / "rea" / "database" / "schema.sql").read_text(
     encoding="utf-8"
 )
 

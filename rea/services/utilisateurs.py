@@ -28,7 +28,7 @@ import os
 from datetime import datetime
 
 from .. import config
-from ..db import Base
+from ..database import Base
 from ..models import droits as dom_droits
 
 #: Les essais ratés, par compte, en mémoire du processus : nom -> (nombre,

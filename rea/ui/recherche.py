@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from .. import listes
-from ..db import Base
+from ..database import Base
 from ..services import export as export_service
 from ..services import croisements as croisements_service
 from ..services import statistiques as stats

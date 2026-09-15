@@ -146,7 +146,7 @@ def test_une_base_ancienne_recupere_les_colonnes_ajoutees(base, monkeypatch, tmp
     import sqlite3
     import uuid
 
-    from rea.db import Base, maintenant
+    from rea.database import Base, maintenant
 
     # Une base « d'avant » : le séjour n'a que ses colonnes d'origine.
     chemin = tmp_path / "ancienne.db"
@@ -280,7 +280,7 @@ def test_modifier_admission_ne_touche_pas_au_lit(base):
 # donc avant d'accepter (écran Administration, 9 septembre).
 
 def test_inspecter_refuse_un_fichier_qui_n_est_pas_une_base(tmp_path):
-    from rea.db import inspecter_fichier_base
+    from rea.database import inspecter_fichier_base
 
     faux = tmp_path / "photo.db"
     faux.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 500)
@@ -290,7 +290,7 @@ def test_inspecter_refuse_un_fichier_qui_n_est_pas_une_base(tmp_path):
 
 
 def test_inspecter_refuse_un_fichier_absent(tmp_path):
-    from rea.db import inspecter_fichier_base
+    from rea.database import inspecter_fichier_base
 
     etat = inspecter_fichier_base(tmp_path / "jamais_ecrit.db")
     assert not etat["lisible"]
@@ -300,7 +300,7 @@ def test_inspecter_refuse_un_fichier_absent(tmp_path):
 def test_inspecter_refuse_une_base_sqlite_d_un_autre_logiciel(tmp_path):
     import sqlite3
 
-    from rea.db import inspecter_fichier_base
+    from rea.database import inspecter_fichier_base
 
     autre = tmp_path / "comptabilite.db"
     connexion = sqlite3.connect(str(autre))
@@ -316,7 +316,7 @@ def test_inspecter_refuse_une_base_sqlite_d_un_autre_logiciel(tmp_path):
 def test_inspecter_compte_les_patients_d_une_vraie_base(base):
     """C'est ce chiffre que l'écran affiche avant de remplacer : il arrête
     l'utilisateur quand il s'est trompé de fichier."""
-    from rea.db import inspecter_fichier_base
+    from rea.database import inspecter_fichier_base
     from rea.services import sejours
 
     sejours.creer_patient(base, matricule="M1", nom_affichage="Un",

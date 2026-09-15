@@ -28,7 +28,7 @@ DOSSIER_DONNEES = RACINE / "donnees"
 DOSSIER_SAUVEGARDES = RACINE / "sauvegardes"
 DOSSIER_EXPORTS = RACINE / "exports"
 DOSSIER_PANCARTES = RACINE / "pancartes"
-FICHIER_BASE = DOSSIER_DONNEES / "rea.db"
+FICHIER_BASE = DOSSIER_DONNEES / "rea.database"
 
 # Dossier des protocoles, livré avec le code (versionné, signé — SPEC §4.5)
 DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"

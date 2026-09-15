@@ -17,7 +17,7 @@ from __future__ import annotations
 import unicodedata
 
 from .. import analytes as cat
-from ..db import Base
+from ..database import Base
 
 
 def code_depuis_libelle(libelle: str) -> str:
