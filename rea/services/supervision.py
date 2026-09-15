@@ -90,8 +90,16 @@ def nouveautes(base: Base, *, depuis_jours: int = 2) -> list[dict]:
         "JOIN sejour s ON s.id = l.sejour_id "
         "JOIN patient p ON p.id = s.patient_id "
         "LEFT JOIN utilisateur u ON u.id = l.modifie_par "
+        # La fenêtre de récence se compte sur le moment où l'arrêt a été
+        # *saisi* (modifie_le), pas sur sa date clinique (date_arret) : un arrêt
+        # antidaté à la garde — décidé la nuit, saisi à la relève — doit
+        # remonter au surveillant, exactement comme un ajout se compte sur
+        # cree_le. Sans cela, un arrêt daté de trois jours mais saisi ce matin
+        # passait sous le radar, alors que c'est justement la commande à ne pas
+        # passer aujourd'hui.
         "WHERE l.supprime = 0 AND s.supprime = 0 AND l.statut = 'arretee' "
-        "AND l.date_arret >= ? ORDER BY l.date_arret DESC",
+        "AND COALESCE(l.modifie_le, l.date_arret) >= ? "
+        "ORDER BY COALESCE(l.modifie_le, l.date_arret) DESC",
         (depuis,),
     ):
         evenements.append(
