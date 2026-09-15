@@ -12,9 +12,9 @@ from datetime import date, timedelta
 import pytest
 
 from rea.domaine import prescription as dom_p
-from rea.rendu import feuille
+from rea.printing import feuille
 from rea.services import feuille_dossier
-from rea.rendu.gabarit import Brut, VariableInconnue, rendre, variables_attendues
+from rea.printing.gabarit import Brut, VariableInconnue, rendre, variables_attendues
 from rea.services import bilans, dispositifs, microbiologie, prescriptions, sejours
 
 

@@ -9,7 +9,7 @@ ne savait plus qui avait dit quoi, ni quand.
 import pytest
 
 from rea.domaine import avis as dom
-from rea.rendu import feuille
+from rea.printing import feuille
 from rea.services import avis, feuille_dossier, sejours
 
 AUJ = "2026-09-10"

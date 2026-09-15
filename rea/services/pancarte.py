@@ -27,7 +27,7 @@ def generer_html(base: Base, sejour_id: str, date_jour: str) -> str:
     en base, puis on le passe au rendu — qui n'a plus aucun moyen d'aller
     chercher quoi que ce soit lui-même.
     """
-    from ..rendu import feuille
+    from ..printing import feuille
 
     return feuille.generer(feuille_dossier.rassembler(base, sejour_id, date_jour))
 

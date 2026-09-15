@@ -14,7 +14,7 @@ import pytest
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
 DOMAINE = RACINE / "rea" / "domaine"
-RENDU = RACINE / "rea" / "rendu"
+RENDU = RACINE / "rea" / "printing"
 UI = RACINE / "rea" / "ui"
 
 

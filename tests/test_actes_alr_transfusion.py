@@ -9,7 +9,7 @@ décrivaient la même radio sans jamais se compter ensemble ; un produit sanguin
 import pytest
 
 from rea import listes
-from rea.rendu import feuille
+from rea.printing import feuille
 from rea.services import dispositifs, explorations, feuille_dossier, sejours
 
 AUJ = "2026-09-08"
