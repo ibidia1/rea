@@ -848,6 +848,68 @@ def _avis_specialises(dossier) -> Brut:
     return Brut(corps)
 
 
+def _abrege_produit_sanguin(produit: str | None) -> str:
+    """« CGR (culot globulaire) » → « CGR » : la feuille écrit court."""
+    return (produit or "").split(" (")[0].strip() or "?"
+
+
+def _transfusions_par_date(dossier) -> list[str]:
+    """Les transfusions faites, une ligne par date, produits regroupés.
+
+    « 15/09 : 4 CGR + 5 PFC » : plusieurs poches d'un même jour se comptent
+    ensemble par produit (demande du service, 15 septembre). Les réserves
+    encore en attente — envoyée, prête — n'y figurent pas : seul ce qui est
+    réellement passé au patient est reporté dans l'évolution.
+    """
+    par_date: dict[str, dict[str, float]] = {}
+    for t in dossier.transfusions:
+        statut = (t.get("statut") or "").strip()
+        if statut and statut != "Transfusé":
+            continue  # réserve encore en attente, pas encore transfusée
+        jour = (t.get("date_heure") or "")[:10]
+        if not jour:
+            continue
+        produit = _abrege_produit_sanguin(t.get("produit"))
+        try:
+            poches = float(t.get("nb_poches") or 0)
+        except (TypeError, ValueError):
+            poches = 0
+        produits = par_date.setdefault(jour, {})
+        produits[produit] = produits.get(produit, 0) + poches
+    lignes = []
+    for jour in sorted(par_date):
+        morceaux = [
+            f"{int(n) if float(n).is_integer() else _nombre(n)} {produit}"
+            for produit, n in par_date[jour].items() if n
+        ]
+        if morceaux:
+            lignes.append(f"{format_date_fr(jour)[:5]} : " + " + ".join(morceaux))
+    return lignes
+
+
+def _transfusions_box(dossier) -> Brut:
+    """Le report des transfusions, épinglé au bas de la case « Évolution ».
+
+    La case reste une zone d'écriture manuscrite ; ce report se pose sous les
+    lignes, à part, pour que la date d'une transfusion se retrouve à la visite
+    sans relire tout le dossier.
+    """
+    lignes = _transfusions_par_date(dossier)
+    if not lignes:
+        return Brut("")
+    corps = "".join(
+        f'<div style="font-size:9.5px;line-height:1.4">{html.escape(l)}</div>'
+        for l in lignes
+    )
+    return Brut(
+        '<div style="flex:none;border-top:1px solid #a9b6b5;padding:2px 5px;'
+        'background:#f6efda">'
+        '<div style="font-size:8px;font-weight:700;letter-spacing:.08em;'
+        'text-transform:uppercase;color:#8a6d1f">Transfusions</div>'
+        f"{corps}</div>"
+    )
+
+
 def _abords(dossier) -> list[dict]:
     """Les dispositifs en place, cochés, avec leur compteur de jours.
 
@@ -1033,6 +1095,7 @@ def contexte(dossier) -> dict:
         "scores": dossier.scores,
         "motifTransportAtcd": _motif_transport_atcd(dossier),
         "avisRows": _avis_specialises(dossier),
+        "transfusions": _transfusions_box(dossier),
         "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
