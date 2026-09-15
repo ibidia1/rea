@@ -19,10 +19,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$cible = Join-Path $Programme 'lancer_reanimation.bat'
-if (-not (Test-Path -LiteralPath $cible)) {
-    Write-Host "  lancer_reanimation.bat est introuvable dans $Programme"
-    exit 1
+# Deux facons de lancer EXACTEMENT la meme application, deux icones :
+#
+#   "Reanimation - Local"    poste isole, joignable de ce PC seulement.
+#   "Reanimation - Serveur"  ce PC sert la reanimation au reseau (auto).
+#
+# On ne touche pas au code ni aux donnees : seules les icones different, par
+# le .bat qu'elles appellent.
+$modes = @(
+    @{ Nom = 'Reanimation - Local';   Bat = 'lancer_reanimation_local.bat';
+       Desc = 'Reanimation polyvalente - poste local (ce PC uniquement)';
+       Icone = 171 }
+    @{ Nom = 'Reanimation - Serveur'; Bat = 'lancer_reanimation_serveur.bat';
+       Desc = 'Reanimation polyvalente - serveur du reseau local';
+       Icone = 18 }
+)
+
+foreach ($mode in $modes) {
+    $cible = Join-Path $Programme $mode.Bat
+    if (-not (Test-Path -LiteralPath $cible)) {
+        Write-Host "  $($mode.Bat) est introuvable dans $Programme"
+        exit 1
+    }
 }
 
 $cree = @()
@@ -32,16 +50,24 @@ foreach ($nom in @('Desktop', 'Programs')) {
     if ([string]::IsNullOrWhiteSpace($dossier)) { continue }
     if (-not (Test-Path -LiteralPath $dossier)) { continue }
 
+    # L'ancienne icone unique "Reanimation.lnk", si elle traine d'une
+    # installation precedente : on la retire pour ne pas laisser trois icones
+    # dont une qui prete a confusion.
+    $ancienne = Join-Path $dossier 'Reanimation.lnk'
+    if (Test-Path -LiteralPath $ancienne) { Remove-Item -LiteralPath $ancienne -Force }
+
     $shell = New-Object -ComObject WScript.Shell
-    $lien = $shell.CreateShortcut((Join-Path $dossier 'Reanimation.lnk'))
-    $lien.TargetPath = $cible
-    $lien.WorkingDirectory = $Programme
-    $lien.Description = 'Logiciel de service - Reanimation polyvalente'
-    # Une icone de Windows plutot qu'un fichier livre : rien a copier, et
-    # elle survit a un deplacement du dossier.
-    $lien.IconLocation = "$env:SystemRoot\System32\shell32.dll,171"
-    $lien.Save()
-    $cree += $lien.FullName
+    foreach ($mode in $modes) {
+        $lien = $shell.CreateShortcut((Join-Path $dossier ($mode.Nom + '.lnk')))
+        $lien.TargetPath = Join-Path $Programme $mode.Bat
+        $lien.WorkingDirectory = $Programme
+        $lien.Description = $mode.Desc
+        # Une icone de Windows plutot qu'un fichier livre : rien a copier, et
+        # elle survit a un deplacement du dossier.
+        $lien.IconLocation = "$env:SystemRoot\System32\shell32.dll,$($mode.Icone)"
+        $lien.Save()
+        $cree += $lien.FullName
+    }
 }
 
 if ($cree.Count -eq 0) {

@@ -24,9 +24,14 @@ def lire(chemin: Path) -> str:
     return chemin.read_text(encoding="utf-8")
 
 
-def test_il_y_a_bien_les_deux_fichiers():
+def test_il_y_a_bien_les_fichiers_attendus():
     noms = {chemin.name for chemin in BATCHS}
-    assert noms == {"installer.bat", "lancer_reanimation.bat"}
+    assert noms == {
+        "installer.bat",
+        "lancer_reanimation.bat",
+        "lancer_reanimation_local.bat",
+        "lancer_reanimation_serveur.bat",
+    }
 
 
 @pytest.mark.parametrize("chemin", BATCHS, ids=lambda c: c.name)
@@ -69,7 +74,7 @@ def test_chaque_etiquette_definie_sert(chemin):
 def test_l_installateur_appelle_des_fichiers_qui_existent():
     texte = lire(RACINE / "installer.bat")
     for attendu in ("outils\\raccourcis.ps1", "requirements.txt",
-                    "rea_app.py", "lancer_reanimation.bat"):
+                    "rea_app.py", "lancer_reanimation_local.bat"):
         assert attendu in texte, f"installer.bat ne parle pas de {attendu}"
         assert (RACINE / attendu.replace("\\", "/")).exists(), f"{attendu} n'existe pas"
 
@@ -161,7 +166,9 @@ def test_le_script_de_raccourci_demande_le_bureau_a_windows():
 
 
 @pytest.mark.parametrize("fichier", [
-    "installer.bat", "lancer_reanimation.bat", "outils/raccourcis.ps1",
+    "installer.bat", "lancer_reanimation.bat",
+    "lancer_reanimation_local.bat", "lancer_reanimation_serveur.bat",
+    "outils/raccourcis.ps1", "outils/adresse_reseau.ps1",
 ])
 def test_git_livrera_ces_fichiers_en_fins_de_ligne_windows(fichier):
     """On interroge git lui-meme, pas le texte de .gitattributes.
@@ -208,3 +215,71 @@ def test_la_sonde_de_config_insere_le_dossier_dans_le_chemin():
     lanceur = lire(RACINE / "lancer_reanimation.bat")
     assert "sys.path.insert(0, r'%~dp0')" in lanceur
     assert 'set "PYTHONPATH=%~dp0"' in lanceur
+
+
+# --------------------------------------------------------------------------
+# Deux facons de lancer la meme application : local et serveur
+# --------------------------------------------------------------------------
+
+def test_le_lanceur_local_force_la_boucle_locale():
+    """Le mode local n'ecoute que sur ce poste : il impose 127.0.0.1, sans
+    demander l'adresse a config.py — c'est le mode d'un poste isole."""
+    lanceur = lire(RACINE / "lancer_reanimation_local.bat")
+    assert 'set "REA_HOTE=127.0.0.1"' in lanceur
+    assert "--server.address 127.0.0.1" in lanceur
+    # Un mode local qui ecoute sur le reseau serait un contresens.
+    assert "0.0.0.0" not in lanceur
+
+
+def test_le_lanceur_serveur_detecte_l_adresse_sans_en_coder_aucune():
+    """Le mode serveur ne connait aucune IP a l'avance : il la detecte au
+    lancement (outils\\adresse_reseau.ps1) et la donne par REA_HOTE. Aucune
+    adresse d'hopital n'est ecrite dans le depot."""
+    lanceur = lire(RACINE / "lancer_reanimation_serveur.bat")
+    assert "adresse_reseau.ps1" in lanceur
+    assert 'set "REA_HOTE=!ADRESSE!"' in lanceur
+    # Le launcher passe l'adresse detectee a Streamlit.
+    assert "--server.address !REA_HOTE!" in lanceur
+    # Aucune adresse privee codee en dur (hors la boucle locale et le repli
+    # 0.0.0.0 quand la detection echoue).
+    ips = re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", lanceur)
+    assert set(ips) <= {"127.0.0.1", "0.0.0.0", "8.8.8.8"}, ips
+
+
+def test_le_lanceur_serveur_ouvre_le_navigateur_lui_meme():
+    lanceur = lire(RACINE / "lancer_reanimation_serveur.bat")
+    assert "Start-Process '!URL_NAVIGATEUR!'" in lanceur
+    assert "TcpClient" in lanceur
+
+
+def test_le_lanceur_serveur_affiche_l_adresse_pour_les_autres_postes():
+    """Les autres appareils n'installent rien : ils ouvrent une adresse. Le
+    launcher doit donc l'afficher clairement."""
+    lanceur = lire(RACINE / "lancer_reanimation_serveur.bat")
+    assert "ADRESSE_AFFICHEE" in lanceur
+
+
+def test_la_detection_reseau_ne_code_aucune_adresse_d_hopital():
+    """Le script de detection ne doit contenir aucune IP privee en dur : il la
+    trouve, il ne la connait pas d'avance. Seules restent la cible du sondage
+    (8.8.8.8) et l'auto-config 169.254 qu'on ecarte."""
+    script = lire(RACINE / "outils" / "adresse_reseau.ps1")
+    ips = re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", script)
+    assert set(ips) <= {"8.8.8.8", "127.0.0.1", "0.0.0.0", "169.254"}, ips
+
+
+def test_la_detection_reseau_est_en_ascii():
+    """Meme regle que raccourcis.ps1 : Windows PowerShell 5.1 lit un .ps1 sans
+    BOM en page de codes ANSI, pas en UTF-8."""
+    script = lire(RACINE / "outils" / "adresse_reseau.ps1")
+    fautifs = sorted({c for c in script if ord(c) > 126})
+    assert not fautifs, f"adresse_reseau.ps1 contient {fautifs}"
+
+
+def test_les_raccourcis_exposent_les_deux_modes():
+    """Une icone par mode, chacune vers son .bat."""
+    script = lire(RACINE / "outils" / "raccourcis.ps1")
+    assert "Reanimation - Local" in script
+    assert "Reanimation - Serveur" in script
+    assert "lancer_reanimation_local.bat" in script
+    assert "lancer_reanimation_serveur.bat" in script

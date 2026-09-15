@@ -142,14 +142,15 @@ rem ---------------------------------------------------------------------------
 rem  4. L'icone du Bureau
 rem ---------------------------------------------------------------------------
 set "ETAPE=4"
-echo  [4/4] Icone sur le Bureau...
+echo  [4/4] Icones sur le Bureau...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PROGRAMME%\outils\raccourcis.ps1" -Programme "%PROGRAMME%"
 if errorlevel 1 (
-    echo        [Avertissement] L'icone n'a pas pu etre creee.
+    echo        [Avertissement] Les icones n'ont pas pu etre creees.
     echo        Le logiciel s'ouvre quand meme par
-    echo        %PROGRAMME%\lancer_reanimation.bat
+    echo        %PROGRAMME%\lancer_reanimation_local.bat   (ce poste)
+    echo        %PROGRAMME%\lancer_reanimation_serveur.bat (serveur reseau)
 ) else (
-    echo        Icone "Reanimation" posee sur le Bureau.
+    echo        Icones "Reanimation - Local" et "Reanimation - Serveur" posees.
 )
 echo.
 
@@ -164,14 +165,17 @@ echo.
 echo    Programme : %PROGRAMME%
 echo    Donnees   : %RACINE%\donnees
 echo.
-echo    Au quotidien : l'icone "Reanimation" sur le Bureau.
+echo    Au quotidien, deux icones sur le Bureau :
+echo      - "Reanimation - Local"   : ce poste uniquement (isole) ;
+echo      - "Reanimation - Serveur" : ce poste sert la reanimation au
+echo                                  reseau (auto-detection de l'adresse).
 echo.
 echo    A la premiere ouverture, le logiciel propose le compte
 echo    administrateur Slah - qui reclamera aussitot un vrai code.
 echo.
 set "LANCER="
-set /p "LANCER=Ouvrir le logiciel maintenant ? (O/n) : "
-if /i not "%LANCER%"=="n" start "" "%PROGRAMME%\lancer_reanimation.bat"
+set /p "LANCER=Ouvrir le logiciel maintenant (mode local) ? (O/n) : "
+if /i not "%LANCER%"=="n" start "" "%PROGRAMME%\lancer_reanimation_local.bat"
 endlocal
 exit /b 0
 
