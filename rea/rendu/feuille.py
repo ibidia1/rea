@@ -83,7 +83,7 @@ def _grille_heures(heures: set[int], *, symbole: str = "○") -> Brut:
     cases = []
     for heure in ORDRE_HEURES:
         contenu = (
-            f'<span style="font-size:15px;font-weight:700;line-height:1;'
+            f'<span style="font-size:19px;font-weight:700;line-height:1;'
             f'color:#14595c">{symbole}</span>'
             if heure in heures else ""
         )
@@ -256,16 +256,11 @@ def _lignes_prescription(dossier) -> dict:
             )
             produit = ligne.get("produit") or ""
             if voie == "ENTREES":
-                # La colonne Voie a disparu (les blocs sont déjà organisés par
-                # voie) ; ce qu'elle portait d'utile pour les entrées —
-                # perfusion ou nutrition — reste lisible, accolé au produit.
-                # L'unité qui suit le libellé du sous-type est déjà dans la
-                # colonne Dose : la répéter mangeait la place des additifs.
-                if ligne.get("sous_type"):
-                    sous_type = listes.libelle(
-                        listes.SOUS_TYPES_ENTREES, ligne["sous_type"]
-                    ).split(" (")[0]
-                    produit = f"{produit} ({sous_type.lower()})"
+                # Le sous-type — « perfusion », « nutrition parentérale » — ne
+                # s'accole plus au produit : il alourdissait la ligne sans rien
+                # dire que le nom du produit ne dise déjà (demande du service,
+                # 15 septembre). Les additifs, eux, restent : ils disent ce
+                # qu'on a mis dans le flacon.
                 # Ce qu'on a mis dans le flacon se lit sur la même ligne que le
                 # flacon. Écrit nulle part sur la feuille imprimée jusqu'ici :
                 # l'infirmière préparait d'après la pancarte, et la pancarte ne
@@ -315,10 +310,11 @@ def _dose(ligne: dict) -> str:
     milligrammes ne dit pas combien de boîtes ouvrir.
     """
     if ligne.get("vitesse"):
-        morceaux = [f"{_nombre(ligne['vitesse'])} cc/h"]
-        if ligne.get("dilution"):
-            morceaux.append(str(ligne["dilution"]))
-        return " · ".join(morceaux)
+        # Une seringue électrique écrit son débit heure par heure dans la
+        # grille : la colonne dose ne le répète pas, elle ne porte que la
+        # dilution — ce qu'il y a dans la seringue (demande du service,
+        # 15 septembre).
+        return str(ligne["dilution"]) if ligne.get("dilution") else ""
 
     morceaux = []
     if ligne.get("dose"):
@@ -341,6 +337,31 @@ def _dose(ligne: dict) -> str:
     return " · ".join(morceaux)
 
 
+#: Abréviations des bilans sur la grille du recto : la place y est comptée, et
+#: le service les lit ainsi (« GDS », « Rthorax », « Hémoc », « PCT »…). Un code
+#: absent garde son libellé complet.
+_ABREGE_BILAN = {
+    "gds": "GDS",
+    "rx_thorax": "Rthorax",
+    "hemoculture": "Hémoc",
+    "procalcitonine": "PCT",
+    "ionogramme": "Iono",
+    "creatinine": "Créat",
+    "uree": "Urée",
+    "bilan_hepatique": "BH",
+    "tp_inr": "TP/INR",
+    "echo_tdm": "Écho/TDM",
+    "bilan_complet": "Bilan complet",
+    "acsos": "ACSOS",
+}
+
+
+def _abrege_bilan(code: str) -> str:
+    return _ABREGE_BILAN.get(
+        code, listes.libelle(listes.EXAMENS_A_DEMANDER, code, code)
+    )
+
+
 def _bande_bilans(dossier) -> Brut:
     """Les bilans demandés, écrits à leur heure sur la grille du recto.
 
@@ -361,10 +382,7 @@ def _bande_bilans(dossier) -> Brut:
             h = heure_defaut
         if h == heure_defaut:
             continue  # le prélèvement de 8 h est déjà dans « Bilan du jour »
-        libelle = listes.libelle(
-            listes.EXAMENS_A_DEMANDER, demande["examen_code"],
-            demande["examen_code"],
-        )
+        libelle = _abrege_bilan(demande["examen_code"])
         par_heure.setdefault(h, []).append(libelle)
     if not par_heure:
         return Brut("")

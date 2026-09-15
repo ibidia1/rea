@@ -187,8 +187,9 @@ def test_les_bilans_demandes_sont_ecrits_a_leur_heure(base, dossier):
         base, sid, AUJ, [("nfs", "06:00"), ("ionogramme", "06:00")]
     )
     bande = feuille.contexte(_dossier(base, sid, AUJ))["bilanPrescRows"][0]["grille"].html
-    # Le nom est écrit sur la grille, pas dans une colonne à gauche.
-    assert "NFS" in bande and "Ionogramme" in bande
+    # Le nom est écrit sur la grille, en abrégé (la place y est comptée) :
+    # « Iono » pour l'ionogramme, « NFS » qui l'est déjà.
+    assert "NFS" in bande and "Iono" in bande
     assert "◻" in bande
     # Placés à la colonne de 6 h (la grille commence à 8 h).
     col = _colonne(6)
@@ -201,6 +202,21 @@ def test_le_prelevement_de_8h_ne_charge_pas_la_bande(base, dossier):
     prescriptions.definir_bilans_demandes(base, sid, AUJ, [("nfs", "08:00")])
     bande = feuille.contexte(_dossier(base, sid, AUJ))["bilanPrescRows"][0]["grille"].html
     assert "NFS" not in bande
+
+
+def test_les_bilans_de_la_bande_sont_abreges(base, dossier):
+    """La place est comptée sur la grille : le service lit « GDS », « Rthorax »,
+    « Hémoc », « PCT » (demande du service, 15 septembre)."""
+    _pid, sid = dossier
+    prescriptions.definir_bilans_demandes(base, sid, AUJ, [
+        ("gds", "14:00"), ("rx_thorax", "20:00"),
+        ("hemoculture", "20:00"), ("procalcitonine", "22:00"),
+    ])
+    bande = feuille.contexte(_dossier(base, sid, AUJ))["bilanPrescRows"][0]["grille"].html
+    for abrege in ("GDS", "Rthorax", "Hémoc", "PCT"):
+        assert abrege in bande
+    for entier in ("Gaz du sang", "Hémoculture", "Procalcitonine"):
+        assert entier not in bande
 
 
 def test_les_cases_du_bilan_du_jour_sont_cochees(base, dossier):
@@ -464,16 +480,21 @@ def test_dose_affiche_le_nombre_d_ampoules_ailleurs_qu_en_po(base, dossier):
     assert "1 amp" in dose
 
 
-def test_dose_privilegie_la_vitesse_sur_le_reste(base, dossier):
-    """Sur une seringue électrique, la vitesse est le seul nombre qu'un
-    infirmier règle : elle doit passer avant tout le reste."""
+def test_la_dose_pse_ne_porte_que_la_dilution(base, dossier):
+    """Sur une seringue électrique, le débit s'écrit heure par heure dans la
+    grille : la colonne dose ne le répète pas, elle ne porte que la dilution —
+    ce qu'il y a dans la seringue (demande du service, 15 septembre)."""
     _pid, sid = dossier
     prescriptions.ajouter_ligne(
         base, sejour_id=sid, voie="PSE", produit="Noradrénaline",
         dilution="8 mg/50 cc", vitesse=12, rythme="continu", date_debut=J2,
     )
     dose = feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]["dose"]
-    assert "12 cc/h" in dose
+    assert dose == "8 mg/50 cc"
+    assert "cc/h" not in dose      # le débit vit dans la grille, pas ici
+    # Mais le débit reste écrit dans la grille des heures.
+    grille = feuille.contexte(_dossier(base, sid, AUJ))["pseRows"][0]["grille"].html
+    assert "12" in grille
 
 
 def test_abords_abrege_le_kt_central_avec_son_site(base, dossier):
@@ -1122,7 +1143,9 @@ def test_les_additifs_sont_imprimes_avec_leur_perfusion(base, dossier):
     )
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     ligne = contexte["entRows"][0]
-    assert ligne["produit"] == "Ringer Lactate (perfusion) + (1 NaCl + 2 KCl)"
+    # Plus de « (perfusion) » accolé au produit : seuls le produit et ses
+    # additifs (demande du service, 15 septembre).
+    assert ligne["produit"] == "Ringer Lactate + (1 NaCl + 2 KCl)"
 
 
 def test_le_tableau_de_biologie_se_remplit_depuis_le_bord_gauche(base, dossier):
