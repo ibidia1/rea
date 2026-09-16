@@ -41,6 +41,11 @@ DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 # elle ira (demande du service, 11 septembre).
 NOMS_LOGO = ("logo.png", "logo.jpg", "logo.jpeg")
 
+# Dossier du programme (livré avec le code) : un logo.png déposé ici est le
+# logo par défaut de TOUTE installation. Un poste peut le remplacer en déposant
+# le sien dans RACINE (les données), qui a la priorité.
+RACINE_PROGRAMME = Path(__file__).resolve().parent.parent
+
 # Le nom du responsable du service, imprimé sous le logo sur la feuille.
 # Vide → rien ne s'affiche. Un réglage, pas un code en dur : un autre service
 # qui reprend le logiciel y met le sien (demande du service, 16 septembre).

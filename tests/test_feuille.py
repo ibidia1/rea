@@ -1188,14 +1188,34 @@ def test_sans_glasgow_initial_la_ligne_nest_pas_imprimee(base, dossier):
 # (demande du service, 11 septembre).
 
 def test_sans_image_le_cadre_du_logo_montre_l_emplacement(base, dossier, tmp_path, monkeypatch):
-    # RACINE isolée : sans image déposée, le cadre pointillé doit apparaître —
-    # et aucun logo laissé par un autre test ne doit fausser le résultat.
+    # Les DEUX sources de logo isolées vers des dossiers vides : sans aucune
+    # image (ni côté données, ni livrée avec le programme), le cadre pointillé
+    # doit apparaître, et aucun logo d'un autre test ne doit fausser le résultat.
     monkeypatch.setattr(feuille.config, "RACINE", tmp_path)
+    monkeypatch.setattr(feuille.config, "RACINE_PROGRAMME", tmp_path / "vide")
     _pid, sid = dossier
     ctx = feuille.contexte(_dossier(base, sid, AUJ))
     assert "LOGO" in ctx["logo"].html
     assert "dashed" in ctx["logo"].html
     assert "<img" not in ctx["logo"].html
+
+
+def test_le_logo_livre_avec_le_programme_sert_de_defaut(base, dossier, tmp_path, monkeypatch):
+    """Un logo.png livré dans le dossier du programme s'affiche partout, même
+    si le poste n'a rien déposé dans ses données."""
+    png_1x1 = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000d49444154789c63f8cfc0f01f0005000100ff9a9c1c0000000049454e44ae426082"
+    )
+    programme = tmp_path / "programme"
+    programme.mkdir()
+    (programme / "logo.png").write_bytes(png_1x1)
+    monkeypatch.setattr(feuille.config, "RACINE", tmp_path / "donnees_sans_logo")
+    monkeypatch.setattr(feuille.config, "RACINE_PROGRAMME", programme)
+    _pid, sid = dossier
+    ctx = feuille.contexte(_dossier(base, sid, AUJ))
+    assert '<img src="data:image/png;base64,' in ctx["logo"].html
+    assert "LOGO" not in ctx["logo"].html
 
 
 def test_l_image_deposee_sur_le_poste_s_imprime(base, dossier, tmp_path, monkeypatch):
@@ -1219,7 +1239,9 @@ def test_le_nom_du_responsable_s_imprime_sous_le_logo(base, dossier, monkeypatch
     renseigné, il s'imprime sous le logo ; vide, rien ne s'affiche."""
     _pid, sid = dossier
     monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "Pr.Ag Slah Soui")
-    assert "Pr.Ag Slah Soui" in feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
+    html = feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
+    assert "Pr.Ag Slah Soui" in html
+    assert "font-style:italic" in html      # le nom du chef en italique
     monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "")
     assert "Slah" not in feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
 
