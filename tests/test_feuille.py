@@ -1238,9 +1238,9 @@ def test_le_nom_du_responsable_s_imprime_sous_le_logo(base, dossier, monkeypatch
     """Le nom vient de config.NOM_RESPONSABLE (un réglage, pas un code en dur) ;
     renseigné, il s'imprime sous le logo ; vide, rien ne s'affiche."""
     _pid, sid = dossier
-    monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "Pr.Ag Slah Soui")
+    monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "Pr. Ag. Slah Souii")
     html = feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
-    assert "Pr.Ag Slah Soui" in html
+    assert "Pr. Ag. Slah Souii" in html
     assert "font-style:italic" in html      # le nom du chef en italique
     monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "")
     assert "Slah" not in feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
