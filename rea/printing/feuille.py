@@ -1021,7 +1021,7 @@ def _avec_date(libelle: str, date_heure: str) -> str:
 # --------------------------------------------------------------------------
 
 #: L'emplacement du logo, aux dimensions du cadre de l'en-tête (88 × 60 px).
-_CADRE_LOGO = "width:88px;height:60px;flex:none"
+_CADRE_LOGO = "width:110px;height:76px;flex:none"
 
 
 def _cadre_logo() -> str:
@@ -1051,7 +1051,7 @@ def _cadre_logo() -> str:
                 f'<div style="{_CADRE_LOGO};display:flex;align-items:center;'
                 f'justify-content:center">'
                 f'<img src="data:{mime};base64,{b64}" alt="Logo de l\'hôpital" '
-                f'style="max-width:88px;max-height:60px;object-fit:contain"></div>'
+                f'style="max-width:110px;max-height:76px;object-fit:contain"></div>'
             )
     # Aucune image : on garde le cadre pointillé, qui dit exactement où elle va.
     return (
@@ -1067,7 +1067,7 @@ def _logo() -> Brut:
     RESPONSABLE) s'il est renseigné — vide, rien ne s'imprime."""
     nom = (getattr(config, "NOM_RESPONSABLE", "") or "").strip()
     sous_titre = (
-        f'<div style="width:88px;text-align:center;font-size:8px;font-weight:600;'
+        f'<div style="width:110px;text-align:center;font-size:10px;font-weight:600;'
         f'font-style:italic;color:#14595c;line-height:1.2;margin-top:2px;'
         f'overflow:hidden">{html.escape(nom)}</div>'
         if nom else ""
