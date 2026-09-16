@@ -1024,9 +1024,9 @@ def _avec_date(libelle: str, date_heure: str) -> str:
 _CADRE_LOGO = "width:88px;height:60px;flex:none"
 
 
-def _logo() -> Brut:
-    """Le logo de l'hôpital s'il a été déposé sur le poste, sinon le cadre
-    pointillé qui montre où le déposer.
+def _cadre_logo() -> str:
+    """Le cadre du logo : l'image de l'hôpital si elle a été déposée sur le
+    poste, sinon le cadre pointillé qui montre où la déposer.
 
     On embarque l'image dans la page en base64 : la feuille est un seul fichier
     HTML qu'on imprime ou qu'on ouvre ailleurs, et un `<img src=fichier>` s'y
@@ -1040,18 +1040,34 @@ def _logo() -> Brut:
             continue
         mime = "image/png" if nom.endswith(".png") else "image/jpeg"
         b64 = base64.b64encode(donnees).decode("ascii")
-        return Brut(
+        return (
             f'<div style="{_CADRE_LOGO};display:flex;align-items:center;'
             f'justify-content:center">'
             f'<img src="data:{mime};base64,{b64}" alt="Logo de l\'hôpital" '
             f'style="max-width:88px;max-height:60px;object-fit:contain"></div>'
         )
     # Aucune image : on garde le cadre pointillé, qui dit exactement où elle va.
-    return Brut(
+    return (
         f'<div style="{_CADRE_LOGO};border:1px dashed #8a9998;display:flex;'
         'align-items:center;justify-content:center;text-align:center;'
         'font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#6d7c7b;'
         'letter-spacing:.06em;line-height:1.3">LOGO<br>HÔPITAL</div>'
+    )
+
+
+def _logo() -> Brut:
+    """Le logo, et sous lui le nom du responsable du service (config.NOM_
+    RESPONSABLE) s'il est renseigné — vide, rien ne s'imprime."""
+    nom = (getattr(config, "NOM_RESPONSABLE", "") or "").strip()
+    sous_titre = (
+        f'<div style="width:88px;text-align:center;font-size:8px;font-weight:600;'
+        f'color:#14595c;line-height:1.2;margin-top:2px;overflow:hidden">'
+        f"{html.escape(nom)}</div>"
+        if nom else ""
+    )
+    return Brut(
+        '<div style="flex:none;display:flex;flex-direction:column;'
+        f'align-items:center">{_cadre_logo()}{sous_titre}</div>'
     )
 
 
