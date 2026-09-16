@@ -14,13 +14,17 @@ feuille imprimée est celle du service (maquette A3 de Kairouan, dans
 
 ### Organisation du code
 
-- `rea/domaine/` — tout le calcul médical (scores, cohérence, prescription,
+Le code est rangé **par couches**, chacune dans son paquet sous `rea/` :
+
+- `rea/models/` — tout le calcul médical (scores, cohérence, prescription,
   règles). Ne connaît ni la base ni les écrans : c'est ce qui le rend
   vérifiable.
 - `rea/services/` — la seule couche qui écrit, toujours dans une transaction
   et toujours avec une trace au journal.
-- `rea/rendu/` — remplit la maquette imprimée avec un dossier qu'on lui donne ;
-  ne lit rien par lui-même.
+- `rea/database/` — la couche SQLite (une connexion, un fichier `rea.db`) et le
+  schéma (`schema.sql`).
+- `rea/printing/` — remplit la maquette imprimée avec un dossier qu'on lui
+  donne ; ne lit rien par lui-même.
 - `rea/ui/` — un module par écran ; `rea_app.py` ne fait plus que le montage.
 
 Ces séparations sont vérifiées par `tests/test_architecture.py`, pas seulement
@@ -28,8 +32,13 @@ Ces séparations sont vérifiées par `tests/test_architecture.py`, pas seulemen
 
 *Soin quotidien* : Lits, Admission, Prescrit (toutes voies, bilan hydrique,
 impression), Explorations et actes (dispositifs invasifs avec compteurs de
-jours calculés), Bilans (saisie, cinétique, microbiologie, texte généré),
-Évolution (check-list FAST HUG, rappels, scores, quatre plans), Sortie.
+jours calculés ; transfusion à étapes réserve → prête → transfusé), Bilans
+(saisie, cinétique, microbiologie, texte généré), Évolution (rappels, scores,
+quatre plans), Visite (la pancarte à l'écran, sans papier), Sortie.
+
+*Feuille imprimée* : personnalisable sans reprogrammer — déposer un `logo.png`
+(racine du programme, ou `C:\ReaService\` pour le remplacer sur un poste) et
+régler `NOM_RESPONSABLE` dans `rea/config.py` (imprimé sous le logo).
 
 *Analyse* : écran **Recherche** — cohortes, tableau descriptif STROBE, taux
 d'infections liées aux dispositifs, consommation d'antibiotiques, export
@@ -67,11 +76,17 @@ fois. Il fait quatre choses, dans l'ordre, en affichant ce qu'il fait :
    OneDrive : une base SQLite dans un dossier synchronisé se corrompt en
    silence ;
 3. il installe les composants du logiciel (il faut Internet à cette étape) ;
-4. il pose l'icône **Réanimation** sur le Bureau, puis ouvre le logiciel.
+4. il pose **deux icônes** sur le Bureau, puis ouvre le logiciel :
+   - **Réanimation - Local** — le poste pour lui seul (`127.0.0.1`), sans code
+     d'accès ;
+   - **Réanimation - Serveur** — ce poste sert la réanimation au réseau du
+     service : il **détecte tout seul** son adresse, l'affiche pour les
+     téléphones et les autres postes, et **exige alors un code** sur tous les
+     comptes (voir INSTALLATION.md §2).
 
-Ensuite, au quotidien : **l'icône du Bureau**. Elle ouvre le navigateur toute
-seule. **Ne pas fermer la fenêtre noire** pendant l'usage : la fermer arrête
-le logiciel.
+Ensuite, au quotidien : **l'icône du Bureau** (Local le plus souvent). Elle
+ouvre le navigateur toute seule. **Ne pas fermer la fenêtre noire** pendant
+l'usage : la fermer arrête le logiciel.
 
 Si quelque chose manque — pas d'Internet, pas le droit d'installer un
 programme — l'installateur le dit en clair et s'arrête sans rien abîmer. On
