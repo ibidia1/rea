@@ -1032,20 +1032,27 @@ def _cadre_logo() -> str:
     HTML qu'on imprime ou qu'on ouvre ailleurs, et un `<img src=fichier>` s'y
     afficherait cassé une fois le fichier parti. Lecture d'un fichier local,
     pas de la base : la règle R3 interdit à la couche rendu de requêter le
-    dossier, pas de lire l'image que l'installateur a posée."""
-    for nom in config.NOMS_LOGO:
-        try:
-            donnees = (config.RACINE / nom).read_bytes()
-        except OSError:
-            continue
-        mime = "image/png" if nom.endswith(".png") else "image/jpeg"
-        b64 = base64.b64encode(donnees).decode("ascii")
-        return (
-            f'<div style="{_CADRE_LOGO};display:flex;align-items:center;'
-            f'justify-content:center">'
-            f'<img src="data:{mime};base64,{b64}" alt="Logo de l\'hôpital" '
-            f'style="max-width:88px;max-height:60px;object-fit:contain"></div>'
-        )
+    dossier, pas de lire l'image que l'installateur a posée.
+
+    Deux endroits, dans l'ordre : le dossier des données du poste
+    (`config.RACINE`), pour qu'un service dépose SON logo, puis le dossier du
+    programme (`config.RACINE_PROGRAMME`), qui porte le logo livré par défaut
+    avec le logiciel. Le premier trouvé gagne : un logo propre au poste
+    l'emporte sur le logo livré."""
+    for racine in (config.RACINE, config.RACINE_PROGRAMME):
+        for nom in config.NOMS_LOGO:
+            try:
+                donnees = (racine / nom).read_bytes()
+            except OSError:
+                continue
+            mime = "image/png" if nom.endswith(".png") else "image/jpeg"
+            b64 = base64.b64encode(donnees).decode("ascii")
+            return (
+                f'<div style="{_CADRE_LOGO};display:flex;align-items:center;'
+                f'justify-content:center">'
+                f'<img src="data:{mime};base64,{b64}" alt="Logo de l\'hôpital" '
+                f'style="max-width:88px;max-height:60px;object-fit:contain"></div>'
+            )
     # Aucune image : on garde le cadre pointillé, qui dit exactement où elle va.
     return (
         f'<div style="{_CADRE_LOGO};border:1px dashed #8a9998;display:flex;'
@@ -1061,8 +1068,8 @@ def _logo() -> Brut:
     nom = (getattr(config, "NOM_RESPONSABLE", "") or "").strip()
     sous_titre = (
         f'<div style="width:88px;text-align:center;font-size:8px;font-weight:600;'
-        f'color:#14595c;line-height:1.2;margin-top:2px;overflow:hidden">'
-        f"{html.escape(nom)}</div>"
+        f'font-style:italic;color:#14595c;line-height:1.2;margin-top:2px;'
+        f'overflow:hidden">{html.escape(nom)}</div>'
         if nom else ""
     )
     return Brut(
