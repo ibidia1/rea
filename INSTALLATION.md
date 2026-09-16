@@ -45,18 +45,23 @@ par un double-clic, depuis le dossier du logiciel :
 1. il cherche Python — et **l'installe** s'il manque, sans rien demander ;
 2. il copie le programme dans **`C:\ReaService\programme`** ;
 3. il installe les composants (cette étape a besoin d'Internet) ;
-4. il pose une icône **Réanimation** sur le Bureau ;
-5. il ouvre le logiciel.
+4. il pose **deux icônes** sur le Bureau :
+   - **Réanimation - Local** — le poste pour lui seul (`127.0.0.1`) ;
+   - **Réanimation - Serveur** — ce poste sert la réanimation au réseau
+     (détection automatique de l'adresse ; voir §2) ;
+5. il ouvre le logiciel en mode local.
 
-Ensuite, au quotidien : **l'icône du Bureau**, rien d'autre.
+Ensuite, au quotidien : **l'icône du Bureau**. Un poste isolé se sert de
+**Réanimation - Local** ; le poste qui sert le réseau du service se lance par
+**Réanimation - Serveur**.
 
 Une fenêtre noire s'ouvre pendant l'installation et affiche ce qu'elle fait.
 Si quelque chose manque, elle le dit en clair et s'arrête sans rien abîmer —
 on corrige le point signalé et on relance le même fichier : ce qui est déjà
 fait n'est pas refait.
 
-**Vérification.** L'icône *Réanimation* est sur le Bureau, et le navigateur
-s'ouvre sur `http://127.0.0.1:8501`.
+**Vérification.** Les icônes *Réanimation - Local* et *Réanimation - Serveur*
+sont sur le Bureau, et le navigateur s'ouvre sur `http://127.0.0.1:8501`.
 
 ### 1.2 Pourquoi `C:\ReaService` et pas le dossier d'origine
 
@@ -119,8 +124,8 @@ d'avant la correction, et rien ne permettait de le dire.
 
 ### 1.5 Premier démarrage
 
-L'icône **Réanimation** du Bureau. À la toute première ouverture, le logiciel
-propose le **compte administrateur de départ** :
+L'icône **Réanimation - Local** du Bureau. À la toute première ouverture, le
+logiciel propose le **compte administrateur de départ** :
 
 | | |
 |---|---|
@@ -268,10 +273,15 @@ défaut.
 
 ### 2.6 Lancer l'application sur le réseau du service
 
-C'est ici que tout se joue. On donne au logiciel **l'adresse privée du
-serveur** — et non `0.0.0.0`.
+**Le plus simple : l'icône *Réanimation - Serveur* du Bureau.** Elle détecte
+toute seule l'adresse réseau du poste, la donne au logiciel, ouvre le
+navigateur et **affiche l'adresse** à taper depuis les téléphones et les
+autres postes. Aucune adresse à écrire : c'est le mode à préférer.
 
-Créer un fichier `C:\ReaService\programme\lancer_service.bat` contenant :
+**Variante à adresse fixe (avancé).** Si le poste a une adresse figée sur le
+routeur (§2.4) et qu'on veut la lui imposer explicitement plutôt que la
+laisser détecter, on lui donne **l'adresse privée du serveur** — et non
+`0.0.0.0`. Créer un fichier `C:\ReaService\programme\lancer_service.bat` :
 
 ```bat
 @echo off
