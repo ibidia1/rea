@@ -1214,6 +1214,16 @@ def test_l_image_deposee_sur_le_poste_s_imprime(base, dossier, tmp_path, monkeyp
     assert "LOGO" not in ctx["logo"].html
 
 
+def test_le_nom_du_responsable_s_imprime_sous_le_logo(base, dossier, monkeypatch):
+    """Le nom vient de config.NOM_RESPONSABLE (un réglage, pas un code en dur) ;
+    renseigné, il s'imprime sous le logo ; vide, rien ne s'affiche."""
+    _pid, sid = dossier
+    monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "Pr.Ag Slah Soui")
+    assert "Pr.Ag Slah Soui" in feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
+    monkeypatch.setattr(feuille.config, "NOM_RESPONSABLE", "")
+    assert "Slah" not in feuille.contexte(_dossier(base, sid, AUJ))["logo"].html
+
+
 def test_le_gabarit_porte_la_variable_logo():
     modele = feuille.MODELE.read_text(encoding="utf-8")
     assert "{{ logo }}" in modele

@@ -41,6 +41,11 @@ DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 # elle ira (demande du service, 11 septembre).
 NOMS_LOGO = ("logo.png", "logo.jpg", "logo.jpeg")
 
+# Le nom du responsable du service, imprimé sous le logo sur la feuille.
+# Vide → rien ne s'affiche. Un réglage, pas un code en dur : un autre service
+# qui reprend le logiciel y met le sien (demande du service, 16 septembre).
+NOM_RESPONSABLE = "Pr.Ag Slah Soui"
+
 
 # --------------------------------------------------------------------------
 # Version livrée
