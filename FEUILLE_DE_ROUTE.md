@@ -8,8 +8,8 @@ Ce document fixe **l'ordre de construction** et **les règles d'isolation entre
 couches**. Le SPEC dit *quoi*. Celui-ci dit *dans quel ordre* et *sans casser
 quoi*.
 
-> **État d'application au 3 septembre 2026** — voir §10, ajouté à la reprise du
-> document dans le dépôt : ce qui est conforme, ce qui ne l'est pas encore.
+> **État d'application au 27 septembre 2026** — voir §10 : audit complet du
+> code, ce qui a été corrigé pendant l'audit, et ce qui reste à faire.
 
 ---
 
@@ -437,82 +437,120 @@ le coder ?**
 | # | Question | Bloque | État |
 |---|---|---|---|
 | A | Le socle de variables de recherche est-il validé par le chef ? | Bloc 9 | ouverte |
-| B | Source des fichiers CIM-10, LOINC et ATC ? | §5, blocs 6 et 12 | ouverte — colonnes créées, mapping LOINC provisoire à valider |
+| B | Source des fichiers CIM-10, LOINC et ATC ? | §5, blocs 6 et 12 | ouverte — mapping LOINC provisoire ; code ATC jamais renseigné ; la saisie CIM-10 a été retirée de l'écran Identité à la demande du service (la colonne reste) |
 | C | Heure de départ pour un rythme ×4/j | Bloc 3 | tranchée — 6-12-18-24 |
 | D | Bornes de normalité pour signaler les valeurs anormales | Blocs 4 et 10 | ouverte — bornes usuelles provisoires |
 | E | Poste du chef de service : copie lecture seule ou rien ? | Bloc 0 | ouverte |
 | F | Qui maintient le programme en l'absence de l'auteur ? | Tout | ouverte |
 | G | Démarches auprès de l'autorité de protection des données | Blocs 13 et suivants | ouverte |
+| H | Règles et protocoles modifiés sur place : où les ranger ? | Blocs 7 et 0 | **ouverte** — l'éditeur écrit dans le dossier du programme : une mise à jour écrase ces modifications, et aucune sauvegarde ne les emporte (voir §10) |
 
 ---
 
-## 10. ÉTAT D'APPLICATION AU 4 SEPTEMBRE 2026
+## 10. ÉTAT D'APPLICATION AU 27 SEPTEMBRE 2026
 
-Audit du code contre les règles de ce document. Refait à chaque session ; la
-version précédente (3 septembre) signalait deux prérequis violés, R2 et R4,
-tous deux levés depuis.
+Audit complet, refait sur le code tel qu'il est — pas sur ce que disaient les
+versions précédentes de ce paragraphe (4 septembre), dont plusieurs lignes
+étaient devenues fausses (check-list FAST HUG retirée, `rea/db.py` devenu
+`rea/database/`, feuille du service fournie).
 
-### Blocs faits, partiels, ou non commencés
+### Comment l'audit a été fait
+
+- **Tests** : 1 407, tous verts — dont 28 nouveaux qui lancent l'application
+  entière. Couverture par couche : impression 95 %, métier 94 %, services
+  92 %, base 91 % — **écrans 15 % avant l'audit, 53 % après** (total 61 → 77 %).
+- **Analyse statique** : pyflakes sans remarque ; ruff (règles bugs et
+  sécurité) — les SQL construits par chaîne sont tous sur des noms de table ou
+  de colonne en liste blanche, aucune injection possible.
+- **Charge** : une base synthétique de **trois ans** (1 500 séjours, 210 000
+  résultats de bilan) : 252 Mo, dont la moitié pour le journal d'audit.
+- **L'application entière lancée**, pour chaque rôle et chaque écran — ce
+  qu'aucun test ne faisait jusqu'ici.
+
+### Corrigé pendant l'audit
+
+| Gravité | Défaut | Correction |
+|---|---|---|
+| **Bloquant** | `rea_app.py` importait `rea.domaine`, renommé `rea.models` : **l'application plantait juste après la connexion** sur un poste installé de neuf (masqué ailleurs par l'ancien dossier resté en place) | import corrigé ; `tests/test_ecrans.py` lance désormais l'application entière (5 rôles, 7 onglets de fiche, 10 vues de recherche, admission, administration, supervision, poste infirmier) et vérifie que chaque `import rea.…` désigne un module qui existe |
+| **Élevée** | L'installateur (`robocopy /E`) laissait sur le poste les modules supprimés : c'est ce qui masquait l'erreur ci-dessus | le dossier `rea/` est désormais remis à l'identique (`/PURGE`) ; `regles/` et `protocoles/` ne sont pas purgés (question H) |
+| **Élevée** | La compression des sauvegardes se faisait sous le verrou de la base : sur une base de trois ans, **tous les écrans figés ~7 s toutes les 15 min** | seule la copie SQLite (0,6 s mesurée) tient le verrou ; la copie en cours porte `.tmp` et n'apparaît jamais dans la liste des restaurations |
+| **Élevée** | Le **statut à J28** n'avait aucun écran de saisie : la mortalité à J28 ne comptait que les décès en réanimation | devenir déduit quand on le sait (décès en réanimation avant J28, patient encore hospitalisé à J28) ; seuls les patients sortis vivants avant J28 sont à vérifier — saisie dans l'onglet Sortie et en liste dans Recherche → Qualité des données |
+| **Élevée** | Un décès après la sortie, une fois saisi en J28, aurait été compté comme **décès en réanimation** (mortalité, rapport O/A, carte de contrôle) | « décès en réanimation » et « décès avant J28 » séparés ; les jours sans ventilation suivent la définition de Schoenfeld (décès **avant J28** = 0) |
+| Moyenne | Date/heure de sortie tapées au format `AAAA-MM-JJTHH:MM` : une faute de frappe faisait planter l'écran | sélecteurs de date et d'heure |
+| Moyenne | La Recherche (ajout du 27 septembre) utilisait Altair, écarté le 6 septembre après un plantage sur le poste du service | cartes en SVG, comme le reste du logiciel |
+| Faible | Libellés de tranches des croisements (noms de germes, produits, antécédents tapés à la main) insérés en HTML sans échappement | échappés |
+| Faible | Rapport O/A : l'IGS II prédit la mortalité hospitalière, l'observé est la mortalité en réanimation | écrit à l'écran : le rapport est un peu sous-estimé |
+
+### Blocs
 
 | Bloc | État réel |
 |---|---|
-| 0 Noyau | ✅ fait — restauration **testée**, journal consultable, écran Administration. Les colonnes manquantes d'une base ancienne sont rattrapées à l'ouverture |
-| 1 Référentiels | ✅ fait — 32 fichiers dans `referentiels/`, `listes.py` réduit à un module d'accès, versions affichées à l'écran |
-| 2 Lits, admission | ✅ fait |
-| 3 Prescription | ✅ fait — impression en mise en page **provisoire**, PDF réel du prescrit toujours attendu |
-| 4 Contrôles de cohérence | ✅ fait — câblés sur les six écritures qui portent des dates |
-| 5 Évolution | ✅ fait |
-| 6 Bilans | ✅ fait — albumine et glycémie présentes, microbiologie faite (bloc 14) |
-| 7 Rappels / FAST HUG | ✅ fait — moteur déclaratif, 16 rappels et la check-list en fichiers |
-| 8 Sortie | ✅ fait |
-| 9 Socle recherche | ✅ fait — SOFA, IGS II, mortalité prédite, jours sans ventilation, tous testés |
-| 10 Courbes | ✅ fait |
-| 11 Explorations | ✅ fait |
-| 12 Antécédents, CIM-10 | ◐ recherche CIM-10 faite, mais sur un **sous-ensemble partiel** de 58 codes à vérifier et compléter |
-| 13 Export recherche | ✅ fait — pseudonymisation, dictionnaire, manifeste versionné, gel de base |
-| 14 Microbiologie | ◐ saisie et consommation faites ; la consommation est en **DOT**, la table des DDD de l'OMS reste à saisir |
-| 15 Définitions | ✅ fait — Berlin, KDIGO, qSOFA, Sepsis-3, avec leurs références |
-| 16 Taux ECDC | ✅ fait — dénominateur en jours-dispositif, délai de 48 h respecté |
-| 17 Cohortes | ✅ fait |
-| 18 STROBE / Table 1 | ✅ fait |
-| 19-20 | ❌ non commencés (v2 : multi-postes, reprise après incident) |
+| 0 Noyau | ✅ — restauration testée, journal consultable ; sauvegardes compressées, rétention étagée (1 an), gels jamais effacés |
+| 1 Référentiels | ✅ |
+| 2-3 Lits, admission, prescription | ✅ — feuille du service (maquette Kairouan) ; heure d'admission et bande « ADMISSION » |
+| 4 Cohérence | ✅ |
+| 5-8 Évolution, bilans, rappels, sortie | ✅ — check-list FAST HUG retirée à la demande du service ; suppression logique d'un bilan erroné |
+| 9 Socle recherche | ✅ — **devenir à J28 désormais recueilli** |
+| 10-11 Courbes, explorations | ✅ |
+| 12 Antécédents, CIM-10 | ◐ antécédents faits ; CIM-10 : 58 codes, saisie retirée de l'écran |
+| 13 Export | ✅ |
+| 14 Microbiologie | ◐ consommation en DOT ; table DDD de l'OMS à saisir |
+| 15-18 Définitions, taux ECDC, cohortes, STROBE | ✅ — intervalles de confiance, carte de contrôle, calibration IGS II, Kaplan-Meier, qualité des données |
+| 19-20 | ❌ v2 (multi-postes, reprise après incident) |
 
 ### Règles de modularité
 
 | Règle | État |
 |---|---|
-| R1 une seule couche écrit | ✅ respectée — seuls les services écrivent ; `pancarte.imprimer()` est un service, il appelle le rendu puis écrit, il ne rend pas lui-même |
-| R2 référentiels en fichiers | ✅ **levée** — plus aucune liste dans du `.py`, un test garde le fichier sous 250 lignes |
-| R3 le rendu ne calcule rien | ◐ respectée pour la mise en forme, mais `pancarte.generer_html()` lit encore la base directement au lieu de recevoir des données préparées. Gap connu, sans conséquence fonctionnelle, à reprendre si la pancarte est retouchée |
-| R4 aides déclaratives | ✅ **levée** — moteur générique, règles et barèmes en JSON, aucune règle dans le code |
-| R5 export lit le schéma | ✅ respectée — l'export lit `PRAGMA table_info` et non une liste de colonnes écrite à la main ; le dictionnaire se remplit tout seul |
+| R1 une seule couche écrit | ✅ vérifiée par `tests/test_architecture.py` |
+| R2 référentiels en fichiers | ✅ |
+| R3 le rendu ne calcule rien | ✅ — la feuille reçoit un `DossierFeuille` préparé par `services/feuille_dossier.py`, vérifié par test |
+| R4 aides déclaratives | ✅ |
+| R5 export lit le schéma | ✅ |
 
-### §5 « à câbler tôt » — état
+### Mesures sur trois ans de données
 
-| Élément | État |
-|---|---|
-| Code ATC sur médicament | ✅ colonne posée — non renseignée à la saisie |
-| Code LOINC sur analyte | ✅ mapping présent mais **provisoire** (`LOINC_VALIDE = False`) |
-| Code CIM-10 diagnostics | ✅ colonne posée et **saisissable** (bloc 12) |
-| Unités UCUM | ✅ posées |
-| Dates pose/retrait dispositif | ✅ fait — c'est ce qui rend les taux ECDC calculables |
-| Créatinine de base | ✅ posée et saisie à l'admission — c'est elle qui rend KDIGO applicable |
-| Journal d'audit | ✅ rempli **et** consultable |
-| Type d'admission, maladie chronique IGS II | ✅ ajoutés — irrécupérables après coup, d'où leur saisie à l'admission |
+| | Mesure | Lecture |
+|---|---|---|
+| Taille de la base | 252 Mo (journal d'audit : ~160 Mo avec ses index) | normal pour SQLite ; le journal est le prix de la traçabilité |
+| Sauvegarde compressée | 57 Mo, 7 s de compression (hors verrou) | ~110 fichiers conservés ≈ 6 Go au bout de trois ans : réduire les paliers `RETENTION_*` si le disque est petit |
+| Écran de la fiche, feuille imprimée | < 0,1 s | — |
+| Recherche : tableau descriptif, mortalité, calibration, qualité | ~2,5 s chacun | l'IGS II est recalculé pour chaque séjour à chaque affichage ; à mettre en cache si l'attente gêne |
 
-### Ce qui reste, et qui ne dépend plus de moi
+### Ce qui reste à faire, par priorité
 
-1. **Le PDF réel du prescrit** — la mise en page imprimée restera provisoire
-   tant qu'il n'aura pas été fourni.
-2. **Validation par un senior** : bornes de normalité des bilans, barème IGS II,
-   seuils des rappels, correspondances LOINC. Tout est marqué non validé à
-   l'écran ; rien n'est à reprogrammer, seulement à relire et à signer.
-3. **La CIM-10 complète** et la **table des DDD de l'OMS** : deux fichiers à
-   remplir depuis leur source officielle, sans toucher au code.
-4. **Le dossier de protection des données** et le test sur patients réels.
+**À faire avant l'usage réel**
+1. **Recette sur le poste du service** après réinstallation (`installer.bat`,
+   qui purge maintenant le code périmé) : ouvrir chaque écran avec un compte
+   de chaque rôle, imprimer une feuille, restaurer une sauvegarde.
+2. **Question H** : ranger les règles et protocoles modifiés sur place dans
+   `C:\ReaService` (à côté des données) plutôt que dans le programme, pour
+   qu'une mise à jour ne les écrase plus et qu'ils soient sauvegardés.
+3. **Déconnexion après inactivité** en mode réseau : aujourd'hui une session
+   ouverte sur un téléphone ou un poste partagé le reste indéfiniment, et
+   tout ce qui s'y écrit est signé du nom de celui qui l'a ouverte.
+
+**Souhaitable**
+4. **HTTPS sur le Wi-Fi** : les codes d'accès circulent en clair sur le réseau
+   du service (Streamlit sait servir en HTTPS avec un certificat local).
+5. **Annuler une sortie faite par erreur** (senior), comme on supprime une
+   admission : aujourd'hui, seule une restauration de sauvegarde le permet.
+6. **Mettre en cache l'IGS II** dans la Recherche (2,5 s par vue à trois ans).
+7. Remplacer `use_container_width` (54 appels, obsolète) **avant** toute
+   montée de version de Streamlit — la version épinglée l'accepte encore.
+
+**Ne dépend pas du développement**
+8. Validation par un senior : bornes des bilans, barème IGS II, seuils des
+   rappels, correspondances LOINC.
+9. CIM-10 complète, table des DDD et codes ATC depuis leur source officielle.
+10. Dossier de protection des données (question G) et avis du comité
+    d'éthique avant toute exploitation scientifique.
+11. Désigner qui maintient le logiciel (question F) : le code est documenté,
+    testé et découpé en couches, mais personne ne le connaît encore à part
+    son auteur.
 
 ---
 
-*Fin du document — Feuille de route v1.0, audit du 4 septembre 2026*
+*Fin du document — Feuille de route v1.0, audit du 27 septembre 2026*
 *Toute décision prise en session est reportée ici et dans le SPEC avant la fin
 de la session.*

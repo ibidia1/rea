@@ -204,6 +204,18 @@ if errorlevel 8 (
     echo.
     exit /b 1
 )
+rem Le dossier du code, lui, est remis EXACTEMENT a l'identique (/PURGE) :
+rem un module supprime ou renomme dans une nouvelle version restait sinon sur
+rem le poste, et masquait une erreur d'import que le poste suivant, installe
+rem de neuf, aurait rencontree (audit du 27 septembre). Seul "rea" est purge :
+rem regles et protocoles peuvent porter des modifications faites sur place.
+robocopy "%SOURCE%rea" "%PROGRAMME%\rea" /E /PURGE /NFL /NDL /NJH /NJS /NP /XD "__pycache__" >nul
+if errorlevel 8 (
+    echo.
+    echo  [ECHEC] La mise a jour du dossier du code a echoue.
+    echo.
+    exit /b 1
+)
 echo        Programme copie dans %PROGRAMME%
 exit /b 0
 

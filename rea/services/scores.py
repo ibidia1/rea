@@ -20,6 +20,7 @@ from datetime import date
 from .. import aides as fichiers
 from ..database import Base
 from ..models import calculs
+from ..models import devenir as dom_devenir
 from ..models import scores as dom
 from ..models.dates import parse_date
 from . import aides as faits_service
@@ -173,11 +174,10 @@ def jours_sans_ventilation(base: Base, sejour_id: str, duree: int = 28) -> int |
     admission = parse_date(sejour["date_admission"])
     fin_suivi = parse_date(sejour.get("date_sortie")) or date.today()
     jours_observes = (fin_suivi - admission).days if admission else None
-    decede = (
-        sejour.get("mode_sortie") == "deces"
-        or sejour.get("deces_reanimation") == 1
-        or sejour.get("statut_j28") == "decede"
-    )
+    # Décédé **avant J28** — la définition des jours sans ventilation
+    # (Schoenfeld, Crit Care Med 2002). Un décès en réanimation au 40e jour
+    # laisse un patient vivant à J28 : ses jours sans ventilation se comptent.
+    decede = dom_devenir.decede_avant_j28(sejour)
     return dom.jours_sans_ventilation(
         jours_ventile=dispositifs_service.duree_ventilation_jours(base, sejour_id),
         decede=decede,

@@ -62,7 +62,7 @@ bandeau_ui.haut_de_page()
 # --------------------------------------------------------------------------
 
 with st.sidebar:
-    from rea.domaine import droits as dom_droits
+    from rea.models import droits as dom_droits
 
     st.write(f"**{utilisateur_ui.nom_utilisateur_courant()}**")
     st.caption(dom_droits.libelle(utilisateur_ui.role_courant()))

@@ -22,6 +22,7 @@ from datetime import date, timedelta
 
 from .. import referentiels
 from ..database import Base
+from ..models import devenir as dom_devenir
 from ..models import inference
 from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
@@ -73,7 +74,8 @@ def cohorte(base: Base, filtres: Filtres | None = None) -> list[dict]:
     """Les séjours retenus, avec leur patient. Les filtres sont combinés par ET."""
     filtres = filtres or Filtres()
     sejours = base.requete(
-        "SELECT s.*, p.date_naissance, p.sexe, p.identifiant_etude, p.matricule "
+        "SELECT s.*, p.date_naissance, p.sexe, p.identifiant_etude, p.matricule, "
+        "       p.nom_affichage "
         "FROM sejour s JOIN patient p ON p.id = s.patient_id "
         "WHERE s.supprime = 0 ORDER BY s.date_admission"
     )
@@ -119,11 +121,13 @@ def cohorte(base: Base, filtres: Filtres | None = None) -> list[dict]:
 
 
 def _est_decede(sejour: dict) -> bool:
-    return (
-        sejour.get("mode_sortie") == "deces"
-        or sejour.get("deces_reanimation") == 1
-        or sejour.get("statut_j28") == "decede"
-    )
+    """Décédé **en réanimation**. Le statut à J28 n'entre pas ici : un patient
+    sorti vivant puis décédé à J20 dans le service d'aval n'est pas un décès
+    de réanimation — le compter ferait monter la mortalité du service, le
+    rapport O/A et la carte de contrôle d'autant de décès qui ne sont pas les
+    siens (correction du 27 septembre). La mortalité à J28 a sa propre
+    variable (`devenir.statut_j28`)."""
+    return dom_devenir.deces_en_reanimation(sejour)
 
 
 def duree_sejour_jours(sejour: dict, a_la_date: str | None = None) -> int | None:
@@ -607,10 +611,13 @@ def qualite_des_donnees(base: Base, sejours: list[dict]) -> list[dict]:
          lambda s: scores_service.igs2(base, s["id"]).complet),
         ("Mode de sortie", lambda s: bool(s.get("date_sortie")),
          lambda s: bool(s.get("mode_sortie"))),
+        # Seuls comptent ceux qu'il faut vraiment relancer : sortis vivants
+        # avant J28. Un décès en réanimation ou un patient encore là à J28 a
+        # un statut connu sans que personne ait à le saisir.
         ("Statut à J28", lambda s: (
             (parse_date(s.get("date_admission")) or aujourdhui)
             <= aujourdhui - timedelta(days=DELAI_STATUT_J28)),
-         lambda s: s.get("statut_j28") not in (None, "")),
+         lambda s: dom_devenir.statut_j28(s, aujourdhui) is not None),
     ]
     resultat = []
     for libelle, concerne, present in regles:
@@ -623,3 +630,13 @@ def qualite_des_donnees(base: Base, sejours: list[dict]) -> list[dict]:
             "manquants": manquants,
         })
     return resultat
+
+
+def a_relancer_j28(sejours: list[dict]) -> list[dict]:
+    """Les séjours dont le devenir à J28 reste à vérifier : sortis vivants
+    avant J28, J28 passé, rien de saisi. Les plus anciens d'abord — plus on
+    attend, plus un patient se perd de vue."""
+    return sorted(
+        (s for s in sejours if dom_devenir.a_relancer(s)),
+        key=lambda s: s.get("date_admission") or "",
+    )

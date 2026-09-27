@@ -680,6 +680,34 @@ def cloturer_sejour(
     )
 
 
+def noter_statut_j28(
+    base: Base,
+    sejour_id: str,
+    *,
+    statut: str,
+    date_statut: str | None = None,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Le devenir à J28 d'un patient sorti vivant avant J28 (SPEC §9.2).
+
+    C'est la seule donnée du socle de recherche qui se recueille **après** le
+    séjour, par un appel ou un dossier consulté. Elle n'avait jusqu'ici aucun
+    écran pour s'écrire : la mortalité à J28 ne pouvait compter que les décès
+    en réanimation (audit du 27 septembre). « perdu_de_vue » se dit : ce
+    n'est pas « vivant », et le confondre ferait baisser la mortalité.
+    """
+    from ..models import devenir as dom_devenir
+
+    if statut not in dom_devenir.STATUTS:
+        raise ValueError(f"Statut J28 inconnu : {statut}")
+    base.mettre_a_jour(
+        "sejour", sejour_id,
+        {"statut_j28": statut,
+         "date_statut_j28": date_statut or date.today().isoformat()},
+        utilisateur_id=utilisateur_id, action="suivi_j28",
+    )
+
+
 # --------------------------------------------------------------------------
 # Compte rendu de sortie (SPEC §4.7) — généré, bouton « copier »
 # --------------------------------------------------------------------------
