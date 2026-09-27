@@ -18,10 +18,11 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from .. import referentiels
 from ..database import Base
+from ..models import inference
 from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
 from . import microbiologie as micro_service
@@ -72,7 +73,7 @@ def cohorte(base: Base, filtres: Filtres | None = None) -> list[dict]:
     """Les séjours retenus, avec leur patient. Les filtres sont combinés par ET."""
     filtres = filtres or Filtres()
     sejours = base.requete(
-        "SELECT s.*, p.date_naissance, p.sexe, p.identifiant_etude "
+        "SELECT s.*, p.date_naissance, p.sexe, p.identifiant_etude, p.matricule "
         "FROM sejour s JOIN patient p ON p.id = s.patient_id "
         "WHERE s.supprime = 0 ORDER BY s.date_admission"
     )
@@ -267,6 +268,12 @@ class Taux:
         return round(self.numerateur / self.denominateur * 1000, 2)
 
     @property
+    def intervalle(self) -> inference.Intervalle | None:
+        """Intervalle exact de Poisson : 2 infections sur 150 jours et 20 sur
+        1500 donnent le même taux, pas la même certitude."""
+        return inference.taux(self.numerateur, self.denominateur, 1000)
+
+    @property
     def texte(self) -> str:
         if self.valeur is None:
             return f"{self.libelle} : incalculable (aucun jour-dispositif enregistré)"
@@ -390,7 +397,10 @@ def mortalite(base: Base, sejours: list[dict]) -> dict:
         if p is not None:
             predits.append(p)
     attendus = sum(predits) if predits else None
+    complet = bool(attendus) and len(predits) == len(clos)
     return {
+        "ic_mortalite": inference.wilson(len(deces), len(clos)),
+        "ic_rapport": inference.rapport_standardise(len(deces), attendus) if complet else None,
         "sejours_clos": len(clos),
         "deces": len(deces),
         "mortalite_observee": round(len(deces) / len(clos), 3) if clos else None,
@@ -405,3 +415,211 @@ def mortalite(base: Base, sejours: list[dict]) -> dict:
             "complet." if len(predits) != len(clos) else ""
         ),
     }
+
+
+# --------------------------------------------------------------------------
+# Ventilation : indicateurs de qualité (27 septembre)
+# --------------------------------------------------------------------------
+
+#: Délai en deçà duquel une réintubation signe un échec d'extubation.
+DELAI_ECHEC_EXTUBATION_JOURS = 2
+
+
+def indicateurs_ventilation(base: Base, sejours: list[dict]) -> dict:
+    """Les indicateurs de qualité de la ventilation, avec leur précision.
+
+    * **Ratio d'utilisation** (jours de VM / journées d'hospitalisation) : le
+      dénominateur ECDC, qui dit si le service ventile beaucoup — sans lui, un
+      taux de PAVM ne se compare à rien.
+    * **Extubations non programmées** pour 100 jours de ventilation.
+    * **Échec d'extubation** : réintubation dans les 48 h d'une extubation
+      programmée. Trop bas peut vouloir dire qu'on extube trop tard ; trop
+      haut, trop tôt — les deux se lisent ensemble.
+    """
+    journees = journees_hospitalisation(base, sejours)
+    jours_vm = 0
+    non_programmees = 0
+    programmees = 0
+    echecs = 0
+    for sejour in sejours:
+        intubations = sorted(
+            (d for d in dispositifs_service.du_sejour(base, sejour["id"])
+             if d["type"] == "intubation"),
+            key=lambda d: d["date_pose"] or "",
+        )
+        jours_vm += dispositifs_service.duree_ventilation_jours(base, sejour["id"])
+        for rang, d in enumerate(intubations):
+            if not d.get("date_retrait"):
+                continue
+            if d.get("motif_retrait") == "accidentelle":
+                non_programmees += 1
+                continue
+            programmees += 1
+            suivante = intubations[rang + 1] if rang + 1 < len(intubations) else None
+            retrait, repose = parse_date(d["date_retrait"]), parse_date(
+                (suivante or {}).get("date_pose"))
+            if retrait and repose and (repose - retrait).days <= DELAI_ECHEC_EXTUBATION_JOURS:
+                echecs += 1
+    return {
+        "jours_vm": jours_vm,
+        "journees": journees,
+        # Pas d'intervalle ici : les journées d'un même patient ne sont pas
+        # indépendantes, un IC binomial serait faussement étroit.
+        "ratio_utilisation": round(jours_vm / journees, 2) if journees else None,
+        "extubations_non_programmees": non_programmees,
+        "taux_non_programmees": inference.taux(non_programmees, jours_vm, 100),
+        "extubations_programmees": programmees,
+        "echecs_extubation": echecs,
+        "taux_echec": inference.wilson(echecs, programmees),
+    }
+
+
+# --------------------------------------------------------------------------
+# L'IGS II sur nos patients : calibration et discrimination
+# --------------------------------------------------------------------------
+
+#: Classes de risque prédit pour le tableau de calibration.
+CLASSES_RISQUE = (0.10, 0.25, 0.50, 0.75)
+
+
+def calibration_igs2(base: Base, sejours: list[dict]) -> dict:
+    """Le score prédit-il bien la mortalité **de ce service** ?
+
+    Deux questions distinctes, qu'un seul rapport O/A mélange :
+    * **Calibration** — par classe de risque prédit, décès observés contre
+      attendus. Un O/A global à 1 peut cacher une surmortalité chez les
+      moins graves compensée chez les plus graves.
+    * **Discrimination** — l'aire sous la courbe ROC : le score classe-t-il
+      plus haut ceux qui meurent ?
+    Seuls les séjours clos avec un IGS II complet entrent.
+    """
+    paires = []
+    for s in sejours:
+        if not s.get("date_sortie"):
+            continue
+        p = scores_service.mortalite_predite(base, s["id"])
+        if p is not None:
+            paires.append((p, _est_decede(s)))
+    bornes = (0.0, *CLASSES_RISQUE, 1.01)
+    classes = []
+    for bas, haut in zip(bornes, bornes[1:]):
+        dedans = [(p, d) for p, d in paires if bas <= p < haut]
+        if not dedans:
+            continue
+        observes = sum(1 for _p, d in dedans if d)
+        attendus = sum(p for p, _d in dedans)
+        classes.append({
+            "classe": f"{bas * 100:.0f}–{min(haut, 1) * 100:.0f} %",
+            "n": len(dedans),
+            "observes": observes,
+            "attendus": round(attendus, 1),
+            "mortalite": inference.wilson(observes, len(dedans)),
+            "predite": attendus / len(dedans),
+        })
+    return {
+        "n": len(paires),
+        "classes": classes,
+        "auroc": inference.auroc([p for p, d in paires if d],
+                                 [p for p, d in paires if not d]),
+    }
+
+
+# --------------------------------------------------------------------------
+# Mois par mois — cartes de contrôle
+# --------------------------------------------------------------------------
+
+def tendances_mensuelles(base: Base, sejours: list[dict]) -> list[dict]:
+    """Une ligne par mois : admissions, sorties, décès, durée de séjour,
+    patients ventilés. La mortalité est rattachée au mois de **sortie** (c'est
+    là que l'issue est connue), les admissions et la ventilation au mois
+    d'**admission**."""
+    mois: dict[str, dict] = {}
+
+    def ligne(cle: str) -> dict:
+        return mois.setdefault(cle, {"mois": cle, "admissions": 0, "ventiles": 0,
+                                     "sorties": 0, "deces": 0, "durees": []})
+
+    for s in sejours:
+        admission = (s.get("date_admission") or "")[:7]
+        if admission:
+            m = ligne(admission)
+            m["admissions"] += 1
+            if dispositifs_service.duree_ventilation_jours(base, s["id"]) > 0:
+                m["ventiles"] += 1
+        sortie = (s.get("date_sortie") or "")[:7]
+        if sortie:
+            m = ligne(sortie)
+            m["sorties"] += 1
+            m["deces"] += int(_est_decede(s))
+            duree = duree_sejour_jours(s)
+            if duree is not None:
+                m["durees"].append(duree)
+    resultat = []
+    for cle in sorted(mois):
+        m = mois[cle]
+        m["duree_mediane"] = statistics.median(m["durees"]) if m["durees"] else None
+        del m["durees"]
+        resultat.append(m)
+    return resultat
+
+
+def carte_mortalite(tendances: list[dict]):
+    """La carte p de la mortalité mensuelle (mois de sortie)."""
+    return inference.carte_p(
+        [(m["mois"], m["sorties"], m["deces"]) for m in tendances]
+    )
+
+
+# --------------------------------------------------------------------------
+# Qualité des données — ce qui manque pour que les chiffres tiennent
+# --------------------------------------------------------------------------
+
+#: Au-delà de ce délai après l'admission, le statut à J28 devrait être connu.
+DELAI_STATUT_J28 = 28
+
+
+def qualite_des_donnees(base: Base, sejours: list[dict]) -> list[dict]:
+    """Pour chaque donnée qui conditionne une analyse : combien de dossiers
+    concernés l'ont, et lesquels ne l'ont pas.
+
+    Une analyse ne vaut que ce que valent ses données manquantes : un IGS II
+    incomplet sur un tiers des patients rend le rapport O/A incalculable, un
+    statut J28 manquant biaise la mortalité à J28 vers les survivants (on
+    relance plus volontiers les vivants). Cette liste dit **quels dossiers
+    compléter** avant d'exploiter la base.
+    """
+    from . import sejours as sejours_service
+
+    aujourdhui = date.today()
+    regles = [
+        ("Âge (date de naissance)", lambda s: True,
+         lambda s: bool(s.get("date_naissance"))),
+        ("Sexe", lambda s: True,
+         lambda s: s.get("sexe") not in (None, "", "non_renseigne")),
+        ("Poids", lambda s: True, lambda s: bool(s.get("poids_kg"))),
+        ("Heure d'admission", lambda s: True, lambda s: bool(s.get("heure_admission"))),
+        ("Motif d'admission", lambda s: True,
+         lambda s: bool(sejours_service.motifs_du_sejour(base, s["id"])
+                        or sejours_service.regions_traumatiques(base, s["id"]))),
+        ("Antécédents renseignés", lambda s: True,
+         lambda s: sejours_service.etat_antecedents(base, s["patient_id"]) != "non_renseigne"),
+        ("IGS II complet", lambda s: True,
+         lambda s: scores_service.igs2(base, s["id"]).complet),
+        ("Mode de sortie", lambda s: bool(s.get("date_sortie")),
+         lambda s: bool(s.get("mode_sortie"))),
+        ("Statut à J28", lambda s: (
+            (parse_date(s.get("date_admission")) or aujourdhui)
+            <= aujourdhui - timedelta(days=DELAI_STATUT_J28)),
+         lambda s: s.get("statut_j28") not in (None, "")),
+    ]
+    resultat = []
+    for libelle, concerne, present in regles:
+        concernes = [s for s in sejours if concerne(s)]
+        manquants = [s for s in concernes if not present(s)]
+        resultat.append({
+            "donnee": libelle,
+            "concernes": len(concernes),
+            "renseignes": len(concernes) - len(manquants),
+            "manquants": manquants,
+        })
+    return resultat
