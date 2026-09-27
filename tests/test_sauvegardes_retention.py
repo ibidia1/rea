@@ -83,3 +83,55 @@ def test_la_derniere_sauvegarde_est_toujours_gardee():
     maintenant = datetime(2027, 10, 1)
     vieux = maintenant - timedelta(days=900)
     assert sauvegardes_a_supprimer([(_nom(vieux), vieux)], maintenant) == []
+
+
+def test_la_compression_ne_bloque_pas_les_autres_ecrans(base, monkeypatch):
+    """Sur une base de quelques années, compresser prend plusieurs secondes :
+    pendant ce temps, les autres postes doivent pouvoir lire la base."""
+    import gzip
+    import threading
+
+    import rea.database as db
+
+    libre_pendant_compression = []
+    ouvrir = gzip.open
+
+    def espion(*args, **kwargs):
+        resultat = []
+        t = threading.Thread(target=lambda: resultat.append(
+            base._verrou.acquire(timeout=1) and (base._verrou.release() or True)))
+        t.start()
+        t.join()
+        libre_pendant_compression.append(bool(resultat and resultat[0]))
+        return ouvrir(*args, **kwargs)
+
+    monkeypatch.setattr(db.gzip, "open", espion)
+    base.sauvegarder(motif="periodique")
+    assert libre_pendant_compression == [True]
+
+
+def test_une_sauvegarde_en_cours_n_apparait_pas_dans_la_liste(base):
+    """La copie brute porte « .tmp » : elle ne peut pas être restaurée à
+    moitié écrite."""
+    from rea import config as cfg        # rechargé par le fixture sur le dossier de test
+
+    cfg.DOSSIER_SAUVEGARDES.mkdir(parents=True, exist_ok=True)
+    base.sauvegarder(motif="manuelle")
+    (cfg.DOSSIER_SAUVEGARDES / "rea-20270101-000000-periodique.db.gz.tmp").write_bytes(b"x")
+    noms = [s["nom"] for s in base.sauvegardes_disponibles()]
+    assert noms and all(not n.endswith(".tmp") for n in noms)
+
+
+def test_une_copie_interrompue_est_nettoyee(base):
+    import os
+    import time
+
+    from rea import config as cfg        # rechargé par le fixture sur le dossier de test
+
+    cfg.DOSSIER_SAUVEGARDES.mkdir(parents=True, exist_ok=True)
+    reste = cfg.DOSSIER_SAUVEGARDES / "rea-20260101-000000-periodique.db.gz.tmp"
+    reste.write_bytes(b"x")
+    vieux = time.time() - 7200
+    os.utime(reste, (vieux, vieux))
+    base.sauvegarder(motif="manuelle")
+    assert not reste.exists()

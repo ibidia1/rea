@@ -995,6 +995,30 @@ En fin de session :
 
 # JOURNAL DES VERSIONS
 
+**v3.33 — 27 septembre 2026 — audit final : l'application entière testée, le devenir à J28 recueilli**
+
+Les changements du 11 au 27 septembre (feuille du service, lanceurs, logo,
+admission horodatée, recherche) sont décrits dans l'historique Git, une
+demande par PR. Cette entrée ne retient que l'audit, détaillé au §10 de
+FEUILLE_DE_ROUTE.md.
+
+* **Bloquant corrigé** — `rea_app.py` importait encore `rea.domaine`, renommé
+  `rea.models` : sur un poste installé de neuf, l'application plantait juste
+  après la connexion. Aucun test ne lançait le point d'entrée ;
+  `tests/test_ecrans.py` le fait désormais pour chaque rôle et chaque écran,
+  et vérifie que chaque `import rea.…` désigne un module existant.
+  L'installateur purge maintenant le dossier `rea/` : un module périmé ne
+  masque plus une erreur d'import.
+* **Sauvegardes** — la compression ne tient plus le verrou de la base (sur
+  trois ans de données, elle figeait tous les écrans ~7 s toutes les 15 min).
+* **Devenir à J28 (§9.2)** — il n'avait aucun écran de saisie. Il est
+  désormais déduit quand on le sait (décès en réanimation avant J28, patient
+  hospitalisé à J28) et demandé seulement pour les patients sortis vivants
+  avant J28 (onglet Sortie, et liste dans Recherche → Qualité des données).
+  « Décès en réanimation » et « décès avant J28 » ne se confondent plus.
+* Date et heure de sortie choisies au calendrier ; graphiques de la
+  Recherche en SVG (Altair écarté depuis le 6 septembre) ; libellés échappés.
+
 **v3.32 — 10 septembre 2026 — l'audit du même motif partout, et le garde-fou qui l'empêche de revenir**
 
 Corriger ce que le test de charge avait trouvé ne suffisait pas : cinq

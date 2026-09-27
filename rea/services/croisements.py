@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from .. import analytes as catalogue
 from .. import listes
 from ..database import Base
+from ..models import devenir as dom_devenir
 from ..models import inference
 from ..models import temperature as temp_dom
 from ..models.dates import age_ans, parse_date
@@ -591,8 +592,10 @@ def valeur_resultat(base: Base, sejour: dict, code: str):
             return None          # séjour en cours : l'issue n'est pas connue
         return bool(stats._est_decede(sejour))
     if code == "deces_j28":
-        statut = sejour.get("statut_j28")
-        if statut in (None, "", "perdu_de_vue"):
+        # Saisi, ou déduit quand on le sait déjà (décès en réanimation avant
+        # J28, patient encore hospitalisé à J28).
+        statut = dom_devenir.statut_j28(sejour)
+        if statut in (None, "perdu_de_vue"):
             return None          # perdu de vue n'est pas « vivant »
         return statut == "decede"
     if code == "duree_sejour":

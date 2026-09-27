@@ -379,13 +379,20 @@ rappel qui vient de le déclencher.
 
 ### Sortie
 
-Mode de sortie, destination, complications, compte rendu.
+Mode de sortie, date et heure choisies au calendrier, destination,
+complications, compte rendu.
+
+**Devenir à J28.** Pour un patient sorti **vivant avant J28**, l'onglet Sortie
+demande, une fois J28 passé, s'il est vivant, décédé ou perdu de vue (un appel,
+le dossier du service d'aval). Les autres cas se déduisent seuls : décédé en
+réanimation avant J28, ou encore hospitalisé à J28. La liste de tous les
+patients à vérifier est dans Recherche → Qualité des données.
 
 ### Recherche
 
-Cohortes, tableau descriptif, indicateurs de service (mortalité, rapport
-observé/attendu, infections liées aux dispositifs, consommation
-antibiotique), croisements et délai d'apyrexie. Voir la section du senior.
+Cohortes, tableau descriptif, indicateurs de service, mois par mois, gravité
+et mortalité, croisements, délai d'apyrexie, qualité des données et un guide
+de méthode. Voir la section du senior.
 
 ---
 
@@ -557,7 +564,20 @@ comme « non ».
 
 **Indicateurs de service** — mortalité observée, rapport observé/attendu sur
 l'IGS II, infections liées aux dispositifs pour 1 000 jours-dispositif
-(dénominateur ECDC), consommation antibiotique en DDD.
+(dénominateur ECDC), indicateurs de ventilation (extubations non programmées,
+échecs d'extubation). Chaque chiffre porte son **intervalle de confiance à
+95 %** : sur dix patients, 30 % veut dire « entre 11 et 60 % ».
+
+**Mois par mois** — la carte de contrôle de la mortalité : un point rouge est
+un vrai signal, le reste est la variation du hasard.
+
+**Gravité et mortalité** — l'IGS II prédit-il bien la mortalité de nos
+patients ? Calibration par classe de risque et discrimination (aire ROC).
+
+**Qualité des données** — ce qui manque et chez qui, et la liste des devenirs
+à J28 à vérifier, saisissables sur place. À regarder chaque semaine.
+
+**Méthode** — dix règles pour lire ces chiffres sans se tromper.
 
 **Croisements** — la famille de questions qu'on se pose en staff : *la
 mortalité change-t-elle avec le PaO₂/FiO₂ ? avec un antécédent ? la durée de
@@ -574,8 +594,12 @@ telle molécule », décrocher voulant dire ne plus être fébrile. Les trois
 états sont ceux du service : apyrétique en dessous de 38 °C, subfébrile de 38
 à 38,5 inclus, fébrile au-dessus de 38,5. Un patient
 subfébrile n'a pas décroché ; une température non mesurée n'est jamais lue
-comme une apyrexie ; et **ceux qui ne décrochent jamais sont comptés à côté
-de la médiane** — c'est le piège classique de ce calcul.
+comme une apyrexie ; et **ceux qui ne décrochent jamais comptent** : le délai
+médian est calculé en Kaplan-Meier — c'est le piège classique de ce calcul.
+
+**Antibiotiques** — jours de traitement (DOT) pour 1 000 journées
+d'hospitalisation, par molécule. La DDD viendra quand la table officielle de
+l'OMS aura été saisie.
 
 **Export** — pseudonymisé : ni matricule, ni nom, ni date de naissance.
 L'export emporte son dictionnaire des données et la version de chaque
@@ -590,6 +614,6 @@ colonne.
 2. **Il n'affiche pas de chiffre incalculable.** Un bilan hydrique sans
    diurèse dit ce qui manque plutôt que d'afficher un nombre faux.
 3. **Il n'affiche pas de pourcentage sous cinq patients**, et ne calcule
-   aucun test statistique. Un croisement descriptif, univarié, monocentrique
-   et non ajusté fabrique une hypothèse — il ne démontre rien, et chaque
-   tableau le dit.
+   aucune p-value : il donne des intervalles de confiance. Un croisement
+   descriptif, univarié, monocentrique et non ajusté fabrique une hypothèse —
+   il ne démontre rien, et chaque tableau le dit.

@@ -9,6 +9,8 @@ compris quand ils rendent « incalculable ».
 from __future__ import annotations
 
 
+import html
+
 import streamlit as st
 
 from .. import listes
@@ -218,11 +220,9 @@ def _apyrexie(base: Base, selection: list[dict]) -> None:
              "décroché — c'est en soi le résultat.",
     )
     if km.temps:
-        st.caption("Part des patients apyrétiques selon le jour de traitement :")
-        st.line_chart(
-            {"jour": [0, *km.temps], "apyrétiques (%)": [0, *[round((1 - s) * 100) for s in km.survie]]},
-            x="jour", y="apyrétiques (%)", height=220,
-        )
+        st.caption("Part des patients apyrétiques selon le jour de traitement "
+                   "(Kaplan-Meier) :")
+        theme.courbe_escalier(km.temps, [round((1 - s) * 100) for s in km.survie])
     if r.delais:
         st.caption(
             "Délais observés chez ceux qui ont décroché (jours) : "
@@ -257,13 +257,16 @@ def _afficher_croisement(croisement) -> None:
     # abréviations — « selon pao₂/fio₂ le plus bas ».
     st.markdown(
         f"#### {croisement.resultat.libelle} selon {croisement.facteur.libelle}"
+        .replace("<", "&lt;")
     )
     lignes = "".join(
         f"<tr>"
-        f"<td style='padding:.35rem .6rem'>{s.libelle}</td>"
+        # Échappés : une tranche peut porter un nom de germe, de produit ou
+        # d'antécédent tapé à la main — du texte, jamais du HTML.
+        f"<td style='padding:.35rem .6rem'>{html.escape(str(s.libelle))}</td>"
         f"<td style='padding:.35rem .6rem;text-align:right'>{s.effectif}</td>"
         f"<td style='padding:.35rem .6rem;"
-        f"color:{'#94a3b8' if not s.interpretable else 'inherit'}'>{s.texte}</td>"
+        f"color:{'#94a3b8' if not s.interpretable else 'inherit'}'>{html.escape(s.texte)}</td>"
         f"</tr>"
         for s in croisement.strates
     )
@@ -362,6 +365,9 @@ def _indicateurs(base: Base, selection: list[dict]) -> None:
                 f"{morts['deces']} décès observés pour {morts['deces_attendus']} attendus",
                 "Un intervalle qui contient 1 ne permet de dire ni mieux ni "
                 "moins bien que prévu.",
+                "L'IGS II prédit la mortalité **hospitalière** ; l'observé est "
+                "ici la mortalité en réanimation, qui ne compte pas les décès "
+                "après la sortie : le rapport est donc un peu sous-estimé.",
                 "Un rapport < 1 ne prouve pas une meilleure prise en charge : "
                 "l'étalonnage de l'IGS II vieillit et dépend du recrutement.",
             ],
@@ -410,44 +416,22 @@ def _mois_par_mois(base: Base, selection: list[dict]) -> None:
     points hors limites, ou une série de huit du même côté, méritent qu'on
     cherche une cause.
     """
-    import altair as alt
-    import pandas as pd
-
     tendances = stats.tendances_mensuelles(base, selection)
     if len(tendances) < 3:
         st.info("Il faut au moins trois mois de données pour lire une tendance.")
         return
     centre, points = stats.carte_mortalite(tendances)
     st.caption(
-        "**Carte de contrôle de la mortalité** (mois de sortie). La ligne est "
-        "la moyenne de la période, la bande grise la variation attendue du "
-        "seul fait du hasard (± 3 écarts-types, plus large les mois à petit "
-        "effectif). Un point rouge est un **signal** : hors de la bande, ou "
-        "dans une série d'au moins huit mois du même côté de la moyenne. Le "
-        "reste est du bruit — ne pas chercher d'explication mois par mois."
+        "**Carte de contrôle de la mortalité** (mois de sortie). La ligne "
+        "pointillée est la moyenne de la période, la bande grise la variation "
+        "attendue du seul fait du hasard (± 3 écarts-types, plus large les "
+        "mois à petit effectif). Un point rouge est un **signal** : hors de la "
+        "bande, ou dans une série d'au moins huit mois du même côté de la "
+        "moyenne. Le reste est du bruit — ne pas chercher d'explication mois "
+        "par mois."
     )
-    lignes = [
-        {"mois": p.periode, "mortalité": p.proportion * 100 if p.proportion is not None else None,
-         "bas": (p.limite_basse or 0) * 100, "haut": (p.limite_haute or 0) * 100,
-         "sorties": p.n, "décès": p.evenements, "signal": p.signal or "—"}
-        for p in points if p.n
-    ]
-    if centre is not None and lignes:
-        df = pd.DataFrame(lignes)
-        base_chart = alt.Chart(df).encode(x=alt.X("mois:O", title=None))
-        bande = base_chart.mark_area(opacity=0.18, color="#64748b").encode(
-            y=alt.Y("bas:Q", title="Mortalité (%)"), y2="haut:Q")
-        moyenne = alt.Chart(pd.DataFrame({"m": [centre * 100]})).mark_rule(
-            color="#475569", strokeDash=[4, 3]).encode(y="m:Q")
-        ligne = base_chart.mark_line(color="#1d4ed8").encode(y="mortalité:Q")
-        pts = base_chart.mark_circle(size=70).encode(
-            y="mortalité:Q",
-            color=alt.condition(alt.datum.signal != "—", alt.value("#dc2626"),
-                                alt.value("#1d4ed8")),
-            tooltip=["mois", "sorties", "décès", alt.Tooltip("mortalité:Q", format=".0f"),
-                     "signal"],
-        )
-        st.altair_chart(bande + moyenne + ligne + pts, use_container_width=True)
+    if centre is not None:
+        theme.carte_controle(points, centre)
         signaux = [p for p in points if p.signal]
         if signaux:
             st.warning("Signaux : " + " · ".join(f"{p.periode} ({p.signal})" for p in signaux))
@@ -514,12 +498,47 @@ def _gravite(base: Base, selection: list[dict]) -> None:
         )
     st.caption(
         "L'IGS II date de 1993 : il surestime souvent la mortalité actuelle. "
-        "Un écart ici décrit l'outil autant que le service."
+        "Un écart ici décrit l'outil autant que le service. Il prédit la "
+        "mortalité hospitalière, et l'observé est ici la mortalité en "
+        "réanimation : les décès après la sortie n'y sont pas."
     )
+
+
+def _suivi_j28(selection: list[dict]) -> None:
+    """Les patients sortis vivants avant J28 dont le devenir reste à vérifier,
+    avec de quoi le noter sur place."""
+    from .sortie import suivi_j28
+
+    a_relancer = stats.a_relancer_j28(selection)
+    st.markdown("##### Devenir à J28 à vérifier")
+    if not a_relancer:
+        st.success("Aucun : tous les devenirs à J28 sont connus (saisis ou déduits).")
+        return
+    st.caption(
+        f"**{len(a_relancer)} patient(s)** sortis vivants avant J28, J28 passé. "
+        "Un appel ou le dossier du service d'aval suffit ; « perdu de vue » "
+        "se dit, il ne se confond pas avec « vivant ». Les décès en "
+        "réanimation et les patients encore hospitalisés à J28 n'y figurent "
+        "pas : leur devenir est déduit du séjour."
+    )
+    for sejour in a_relancer[:25]:
+        with st.container(border=True):
+            st.markdown(
+                f"**{html.escape(sejour.get('nom_affichage') or '')}** · "
+                f"{html.escape(sejour.get('matricule') or '')} · admis le "
+                f"{(sejour.get('date_admission') or '')[:10]}, sorti le "
+                f"{(sejour.get('date_sortie') or '')[:10]}"
+                + (f" → {html.escape(sejour['destination'])}" if sejour.get("destination") else "")
+            )
+            suivi_j28(sejour, cle=f"rech_{sejour['id']}")
+    if len(a_relancer) > 25:
+        st.caption(f"… et {len(a_relancer) - 25} autre(s), les plus récents.")
 
 
 def _qualite(base: Base, selection: list[dict]) -> None:
     """Ce qui manque, et chez qui : compléter avant d'analyser."""
+    _suivi_j28(selection)
+    st.divider()
     st.caption(
         "Une analyse ne vaut que ce que valent ses données manquantes. Un "
         "IGS II incomplet rend le rapport observé/attendu incalculable ; un "

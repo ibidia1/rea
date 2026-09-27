@@ -18,6 +18,8 @@ Trois contraintes, dans cet ordre :
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 from .. import listes
@@ -385,6 +387,106 @@ def courbe(points: list[tuple[str, float]], *, hauteur: int = 160, couleur: str 
     st.caption(
         f"{points[0][0]} → {points[-1][0]} · min {_virgule(minimum)} · "
         f"max {_virgule(maximum)}"
+    )
+
+
+def carte_controle(points, centre: float, *, hauteur: int = 240) -> None:
+    """Carte de contrôle p en SVG : la bande des limites, la moyenne en
+    pointillé, la série, et les signaux en rouge. Du SVG et non Altair, pour
+    la même raison que `courbe` (remarque du service, 6 septembre).
+
+    `points` : objets portant periode, n, proportion, limite_basse,
+    limite_haute, signal (voir `models.inference.carte_p`)."""
+    points = [p for p in points if p.n and p.proportion is not None]
+    if len(points) < 2:
+        st.caption("Pas assez de mois pour tracer une carte.")
+        return
+    largeur, gauche, droite, haut, bas = 720, 40, 12, 10, 36
+    plafond = min(1.0, max(max(p.limite_haute for p in points),
+                           max(p.proportion for p in points)) * 1.1) or 1.0
+    pas = (largeur - gauche - droite) / (len(points) - 1)
+
+    def x(i: int) -> float:
+        return gauche + i * pas
+
+    def y(v: float) -> float:
+        return haut + (1 - v / plafond) * (hauteur - haut - bas)
+
+    bande = " ".join(f"{x(i):.1f},{y(p.limite_haute):.1f}" for i, p in enumerate(points))
+    bande += " " + " ".join(
+        f"{x(i):.1f},{y(p.limite_basse):.1f}" for i, p in reversed(list(enumerate(points))))
+    serie = " ".join(f"{x(i):.1f},{y(p.proportion):.1f}" for i, p in enumerate(points))
+    cercles = "".join(
+        f'<circle cx="{x(i):.1f}" cy="{y(p.proportion):.1f}" r="4.5" '
+        f'fill="{ROUGE if p.signal else BLEU}"><title>{html.escape(p.periode)} : '
+        f"{p.evenements}/{p.n} ({p.proportion * 100:.0f} %)"
+        f"{' — ' + html.escape(p.signal) if p.signal else ''}</title></circle>"
+        for i, p in enumerate(points)
+    )
+    graduations = "".join(
+        f'<text x="{gauche - 6}" y="{y(v) + 4:.1f}" font-size="11" text-anchor="end" '
+        f'fill="{GRIS}">{v * 100:.0f} %</text>'
+        f'<line x1="{gauche}" y1="{y(v):.1f}" x2="{largeur - droite}" y2="{y(v):.1f}" '
+        f'stroke="{BORDURE}" stroke-width="0.5"/>'
+        for v in (0, plafond / 2, plafond)
+    )
+    etiquettes = "".join(
+        f'<text x="{x(i):.1f}" y="{hauteur - bas + 16}" font-size="10" '
+        f'text-anchor="middle" fill="{GRIS}">{html.escape(p.periode[2:])}</text>'
+        for i, p in enumerate(points)
+    )
+    st.markdown(
+        f'<svg viewBox="0 0 {largeur} {hauteur}" style="width:100%;max-width:{largeur}px">'
+        f"{graduations}"
+        f'<polygon points="{bande}" fill="{GRIS}" fill-opacity="0.16"/>'
+        f'<line x1="{gauche}" y1="{y(centre):.1f}" x2="{largeur - droite}" '
+        f'y2="{y(centre):.1f}" stroke="{GRIS}" stroke-dasharray="5 4"/>'
+        f'<polyline points="{serie}" fill="none" stroke="{BLEU}" stroke-width="2"/>'
+        f"{cercles}{etiquettes}</svg>",
+        unsafe_allow_html=True,
+    )
+
+
+def courbe_escalier(temps: list[float], valeurs: list[float], *, unite_x: str = "j",
+                    hauteur: int = 200) -> None:
+    """Une courbe en marches (Kaplan-Meier), l'axe des x proportionnel au
+    temps — `courbe` espace ses points régulièrement, ce qui déformerait les
+    délais. `valeurs` en pourcentage (0 à 100)."""
+    if not temps:
+        st.caption("Pas de point à tracer.")
+        return
+    largeur, gauche, droite, haut, bas = 720, 40, 12, 10, 28
+    t_max = max(temps) or 1
+
+    def x(t: float) -> float:
+        return gauche + t / t_max * (largeur - gauche - droite)
+
+    def y(v: float) -> float:
+        return haut + (1 - v / 100) * (hauteur - haut - bas)
+
+    coords = [(x(0), y(0))]
+    precedent = 0.0
+    for t, v in zip(temps, valeurs):
+        coords += [(x(t), y(precedent)), (x(t), y(v))]
+        precedent = v
+    marches = " ".join(f"{a:.1f},{b:.1f}" for a, b in coords)
+    graduations = "".join(
+        f'<text x="{gauche - 6}" y="{y(v) + 4:.1f}" font-size="11" text-anchor="end" '
+        f'fill="{GRIS}">{v} %</text>'
+        f'<line x1="{gauche}" y1="{y(v):.1f}" x2="{largeur - droite}" y2="{y(v):.1f}" '
+        f'stroke="{BORDURE}" stroke-width="0.5"/>'
+        for v in (0, 50, 100)
+    )
+    axe = "".join(
+        f'<text x="{x(t):.1f}" y="{hauteur - 8}" font-size="10" text-anchor="middle" '
+        f'fill="{GRIS}">{_virgule(t)} {unite_x}</text>'
+        for t in sorted(set(temps))
+    )
+    st.markdown(
+        f'<svg viewBox="0 0 {largeur} {hauteur}" style="width:100%;max-width:{largeur}px">'
+        f'{graduations}<polyline points="{marches}" fill="none" stroke="{BLEU}" '
+        f'stroke-width="2"/>{axe}</svg>',
+        unsafe_allow_html=True,
     )
 
 

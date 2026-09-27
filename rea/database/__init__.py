@@ -475,16 +475,24 @@ class Base:
             destination = (
                 config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}-{rang}{extension}"
             )
-        copie = destination.with_name(destination.name[:-3]) if compresser else destination
+        # La copie brute porte « .tmp » tant qu'elle n'est pas finie : une
+        # sauvegarde à moitié écrite ne doit jamais apparaître dans la liste
+        # de celles qu'on peut restaurer.
+        copie = destination.with_name(destination.name + ".tmp") if compresser else destination
+        # Seule la copie SQLite tient le verrou (moins d'une seconde pour une
+        # base de 250 Mo, mesuré). La compression, elle, prend plusieurs
+        # secondes sur une base de quelques années : faite sous le verrou, elle
+        # figeait tous les écrans du service toutes les quinze minutes.
         with self._verrou:
             sauvegarde_connexion = sqlite3.connect(str(copie))
             with sauvegarde_connexion:
                 self.connexion.backup(sauvegarde_connexion)
             sauvegarde_connexion.close()
-            if compresser:
-                with open(copie, "rb") as brut, gzip.open(destination, "wb", compresslevel=6) as gz:
-                    shutil.copyfileobj(brut, gz)
-                copie.unlink()
+        if compresser:
+            with open(copie, "rb") as brut, gzip.open(destination, "wb", compresslevel=6) as gz:
+                shutil.copyfileobj(brut, gz)
+            copie.unlink()
+        with self._verrou:
             self.connexion.execute(
                 "INSERT INTO sauvegarde(id, date_heure, fichier, taille, motif) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -506,6 +514,16 @@ class Base:
         ]
         for fichier in sauvegardes_a_supprimer(fichiers, datetime.now()):
             fichier.unlink(missing_ok=True)
+        # Une copie « .tmp » vieille de plus d'une heure est celle d'une
+        # compression interrompue (logiciel fermé, poste éteint) : elle ne
+        # sera jamais terminée, et elle occupe la taille d'une base entière.
+        limite = datetime.now().timestamp() - 3600
+        for reste in config.DOSSIER_SAUVEGARDES.glob("rea-*.tmp"):
+            try:
+                if reste.stat().st_mtime < limite:
+                    reste.unlink()
+            except OSError:
+                pass
 
     def demarrer_sauvegardes_periodiques(self) -> None:
         """À appeler une fois à l'ouverture. Programme une sauvegarde toutes
