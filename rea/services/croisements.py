@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from .. import analytes as catalogue
 from .. import listes
 from ..database import Base
+from ..models import inference
 from ..models import temperature as temp_dom
 from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
@@ -661,7 +662,9 @@ def croiser(
         )
     croisement.avertissements.append(
         "Descriptif, univarié, non ajusté et monocentrique : ce tableau "
-        "fabrique une hypothèse, il ne démontre rien."
+        "fabrique une hypothèse, il ne démontre rien. Deux tranches dont les "
+        "intervalles de confiance se recouvrent largement ne sont pas "
+        "différentes au vu de ces données."
     )
     return croisement
 
@@ -717,9 +720,14 @@ def _resumer(libelle: str, couples: list, resultat: Variable) -> Strate:
                 None, False,
             )
         part = positifs / len(renseignes)
+        # L'intervalle à côté du pourcentage : deux tranches à 30 % et 45 %
+        # sur huit patients chacune se recouvrent entièrement, et c'est ce que
+        # le lecteur doit voir avant de conclure à une différence.
+        ic = inference.wilson(positifs, len(renseignes))
         return Strate(
             libelle, effectif, len(renseignes),
-            f"{positifs}/{len(renseignes)} ({part * 100:.0f} %)", part * 100,
+            f"{positifs}/{len(renseignes)} ({part * 100:.0f} %"
+            f" · IC95 {ic.bas * 100:.0f}–{ic.haut * 100:.0f} %)", part * 100,
         )
 
     mediane = statistics.median(renseignes)
@@ -768,9 +776,25 @@ class Apyrexie:
     sans_temperature: int = 0    # température non mesurée au départ
     avertissements: list[str] = field(default_factory=list)
 
+    #: (délai, décroché ?) de chaque épisode : les patients qui n'ont pas
+    #: décroché sont censurés à la fin de leur traitement.
+    observations: list[tuple[int, bool]] = field(default_factory=list)
+
     @property
     def delai_median(self) -> float | None:
+        """Médiane des seuls patients qui ont décroché — trompeuse seule."""
         return statistics.median(self.delais) if self.delais else None
+
+    @property
+    def kaplan_meier(self) -> inference.KaplanMeier:
+        return inference.kaplan_meier(self.observations)
+
+    @property
+    def delai_median_km(self) -> float | None:
+        """Médiane de Kaplan-Meier : tient compte de ceux qui n'ont pas
+        décroché. None quand moins de la moitié décroche — la médiane n'est
+        alors pas estimable, ce qui est en soi le résultat."""
+        return self.kaplan_meier.mediane
 
     @property
     def part_decroches(self) -> float | None:
@@ -836,12 +860,16 @@ def _compter_episode(base: Base, sejour: dict, episode: dict, resultat: Apyrexie
     jours = sorted(j for j in temperatures if debut <= j <= str(fin)[:10])
     for jour in jours:
         if temp_dom.est_apyretique(temperatures[jour]):
+            delai = (parse_date(jour) - parse_date(debut)).days + 1
             resultat.decroches += 1
-            resultat.delais.append(
-                (parse_date(jour) - parse_date(debut)).days + 1
-            )
+            resultat.delais.append(delai)
+            resultat.observations.append((delai, True))
             return
     resultat.jamais_decroches += 1
+    # Censuré au dernier jour suivi sous le traitement.
+    dernier = jours[-1] if jours else debut
+    resultat.observations.append(
+        ((parse_date(dernier) - parse_date(debut)).days + 1, False))
 
 
 def _temperatures_du_sejour(base: Base, sejour_id: str) -> dict[str, float]:

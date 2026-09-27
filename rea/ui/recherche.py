@@ -34,9 +34,13 @@ def ecran(base: Base, utilisateur_id: str | None = None) -> None:
     vues = {
         "Tableau descriptif": lambda: _table_1(base, selection),
         "Indicateurs de service": lambda: _indicateurs(base, selection),
+        "Mois par mois": lambda: _mois_par_mois(base, selection),
+        "Gravité et mortalité": lambda: _gravite(base, selection),
         "Croisements": lambda: _croisements(base, selection),
         "Délai d'apyrexie": lambda: _apyrexie(base, selection),
         "Antibiotiques": lambda: _antibiotiques(base, selection),
+        "Qualité des données": lambda: _qualite(base, selection),
+        "Méthode": _methode,
         "Export": lambda: _export(base, selection, filtres, utilisateur_id),
     }
     noms = list(vues)
@@ -205,15 +209,28 @@ def _apyrexie(base: Base, selection: list[dict]) -> None:
         f"{r.decroches}/{r.episodes}"
         + (f" ({r.part_decroches * 100:.0f} %)" if r.part_decroches is not None else ""),
     )
+    km = r.kaplan_meier
     c3.metric(
-        "Délai médian",
-        f"{r.delai_median:.0f} j" if r.delai_median is not None else "—",
-        help="parmi ceux qui ont décroché uniquement",
+        "Délai médian (Kaplan-Meier)",
+        f"{km.mediane:.0f} j" if km.mediane is not None else "non atteint",
+        help="Tient compte des patients qui n'ont pas décroché (censurés à la "
+             "fin du traitement). « Non atteint » : moins de la moitié a "
+             "décroché — c'est en soi le résultat.",
     )
+    if km.temps:
+        st.caption("Part des patients apyrétiques selon le jour de traitement :")
+        st.line_chart(
+            {"jour": [0, *km.temps], "apyrétiques (%)": [0, *[round((1 - s) * 100) for s in km.survie]]},
+            x="jour", y="apyrétiques (%)", height=220,
+        )
     if r.delais:
-        st.caption("Délais observés (jours) : " + ", ".join(
-            str(d) for d in sorted(r.delais)
-        ))
+        st.caption(
+            "Délais observés chez ceux qui ont décroché (jours) : "
+            + ", ".join(str(d) for d in sorted(r.delais))
+            + (f" · médiane de ces seuls patients : {r.delai_median:.0f} j — "
+               "optimiste, elle ignore ceux qui n'ont pas décroché."
+               if r.delai_median is not None else "")
+        )
     for note in r.avertissements:
         st.caption(note)
 
@@ -299,6 +316,14 @@ def _indicateurs(base: Base, selection: list[dict]) -> None:
         f"{morts['mortalite_observee'] * 100:.0f} %" if morts["mortalite_observee"] is not None else "—",
         help=f"sur {morts['sejours_clos']} séjours clos",
     )
+    if morts["ic_mortalite"]:
+        ic = morts["ic_mortalite"]
+        st.caption(
+            f"Mortalité : {morts['deces']}/{morts['sejours_clos']} — intervalle de "
+            f"confiance à 95 % : **{ic.bas * 100:.0f} à {ic.haut * 100:.0f} %**. "
+            "C'est la fourchette compatible avec ces données : plus la cohorte "
+            "est petite, plus elle est large."
+        )
 
     st.subheader("Infections liées aux dispositifs")
     st.caption(
@@ -309,10 +334,12 @@ def _indicateurs(base: Base, selection: list[dict]) -> None:
     for taux in stats.taux_infections_dispositifs(base, selection):
         couleur = theme.GRIS if taux.valeur is None else theme.BLEU
         valeur = "—" if taux.valeur is None else f"{taux.valeur}"
+        ic = taux.intervalle
         detail = (
             "Incalculable : aucun jour-dispositif enregistré."
             if taux.valeur is None
             else f"{taux.numerateur} infections / {taux.denominateur} jours-dispositif"
+                 f" · IC95 {ic.bas:.1f}–{ic.haut:.1f}".replace(".", ",")
         )
         theme.bloc_html(
             taux.libelle,
@@ -322,13 +349,19 @@ def _indicateurs(base: Base, selection: list[dict]) -> None:
             couleur,
         )
 
+    _ventilation(base, selection)
+
     st.subheader("Mortalité")
     if morts["rapport_observe_attendu"] is not None:
+        ic = morts["ic_rapport"]
         theme.bloc(
             "Rapport observé / attendu (IGS II)",
             [
-                f"{morts['rapport_observe_attendu']}",
+                f"{morts['rapport_observe_attendu']}"
+                + (f" — IC95 {ic.bas:.2f} à {ic.haut:.2f}".replace(".", ",") if ic else ""),
                 f"{morts['deces']} décès observés pour {morts['deces_attendus']} attendus",
+                "Un intervalle qui contient 1 ne permet de dire ni mieux ni "
+                "moins bien que prévu.",
                 "Un rapport < 1 ne prouve pas une meilleure prise en charge : "
                 "l'étalonnage de l'IGS II vieillit et dépend du recrutement.",
             ],
@@ -336,6 +369,252 @@ def _indicateurs(base: Base, selection: list[dict]) -> None:
         )
     else:
         st.info(morts["note"] or "Rapport observé/attendu non calculable.")
+
+
+def _ventilation(base: Base, selection: list[dict]) -> None:
+    st.subheader("Ventilation mécanique")
+    v = stats.indicateurs_ventilation(base, selection)
+    c1, c2, c3 = st.columns(3)
+    c1.metric(
+        "Ratio d'utilisation", f"{v['ratio_utilisation']:.2f}".replace(".", ",")
+        if v["ratio_utilisation"] is not None else "—",
+        help="Jours de ventilation / journées d'hospitalisation (ECDC). C'est "
+             "le contexte de tout taux de PAVM : un service qui ventile peu "
+             "et un service qui ventile beaucoup ne se comparent pas.",
+    )
+    tnp = v["taux_non_programmees"]
+    c2.metric(
+        "Extubations non programmées",
+        f"{tnp.valeur:.1f} / 100 j VM".replace(".", ",") if tnp else "—",
+        help=(f"{v['extubations_non_programmees']} sur {v['jours_vm']} jours de "
+              f"ventilation · IC95 {tnp.bas:.1f}–{tnp.haut:.1f}".replace(".", ",")
+              if tnp else "aucun jour de ventilation"),
+    )
+    echec = v["taux_echec"]
+    c3.metric(
+        "Échec d'extubation (réintubation ≤ 48 h)",
+        f"{v['echecs_extubation']}/{v['extubations_programmees']}"
+        + (f" ({echec.valeur * 100:.0f} %)" if echec else ""),
+        help=(f"IC95 {echec.bas * 100:.0f}–{echec.haut * 100:.0f} %. Repère "
+              "habituel : 10 à 20 %. Trop bas peut signifier qu'on extube "
+              "trop tard, trop haut trop tôt." if echec else None),
+    )
+
+
+def _mois_par_mois(base: Base, selection: list[dict]) -> None:
+    """Carte de contrôle : distinguer un vrai changement du bruit.
+
+    Un mois à 40 % de mortalité après un mois à 15 % n'est pas forcément un
+    signal — avec huit sorties, c'est souvent le hasard. La carte trace la
+    moyenne et des limites qui dépendent de l'effectif du mois ; seuls les
+    points hors limites, ou une série de huit du même côté, méritent qu'on
+    cherche une cause.
+    """
+    import altair as alt
+    import pandas as pd
+
+    tendances = stats.tendances_mensuelles(base, selection)
+    if len(tendances) < 3:
+        st.info("Il faut au moins trois mois de données pour lire une tendance.")
+        return
+    centre, points = stats.carte_mortalite(tendances)
+    st.caption(
+        "**Carte de contrôle de la mortalité** (mois de sortie). La ligne est "
+        "la moyenne de la période, la bande grise la variation attendue du "
+        "seul fait du hasard (± 3 écarts-types, plus large les mois à petit "
+        "effectif). Un point rouge est un **signal** : hors de la bande, ou "
+        "dans une série d'au moins huit mois du même côté de la moyenne. Le "
+        "reste est du bruit — ne pas chercher d'explication mois par mois."
+    )
+    lignes = [
+        {"mois": p.periode, "mortalité": p.proportion * 100 if p.proportion is not None else None,
+         "bas": (p.limite_basse or 0) * 100, "haut": (p.limite_haute or 0) * 100,
+         "sorties": p.n, "décès": p.evenements, "signal": p.signal or "—"}
+        for p in points if p.n
+    ]
+    if centre is not None and lignes:
+        df = pd.DataFrame(lignes)
+        base_chart = alt.Chart(df).encode(x=alt.X("mois:O", title=None))
+        bande = base_chart.mark_area(opacity=0.18, color="#64748b").encode(
+            y=alt.Y("bas:Q", title="Mortalité (%)"), y2="haut:Q")
+        moyenne = alt.Chart(pd.DataFrame({"m": [centre * 100]})).mark_rule(
+            color="#475569", strokeDash=[4, 3]).encode(y="m:Q")
+        ligne = base_chart.mark_line(color="#1d4ed8").encode(y="mortalité:Q")
+        pts = base_chart.mark_circle(size=70).encode(
+            y="mortalité:Q",
+            color=alt.condition(alt.datum.signal != "—", alt.value("#dc2626"),
+                                alt.value("#1d4ed8")),
+            tooltip=["mois", "sorties", "décès", alt.Tooltip("mortalité:Q", format=".0f"),
+                     "signal"],
+        )
+        st.altair_chart(bande + moyenne + ligne + pts, use_container_width=True)
+        signaux = [p for p in points if p.signal]
+        if signaux:
+            st.warning("Signaux : " + " · ".join(f"{p.periode} ({p.signal})" for p in signaux))
+        else:
+            st.success(
+                f"Aucun signal : la mortalité varie autour de {centre * 100:.0f} % "
+                "dans les limites du hasard."
+            )
+    st.caption("Activité mois par mois :")
+    st.dataframe(
+        {
+            "mois": [m["mois"] for m in tendances],
+            "admissions": [m["admissions"] for m in tendances],
+            "ventilés": [m["ventiles"] for m in tendances],
+            "sorties": [m["sorties"] for m in tendances],
+            "décès": [m["deces"] for m in tendances],
+            "durée médiane (j)": [m["duree_mediane"] for m in tendances],
+        },
+        use_container_width=True, hide_index=True,
+    )
+
+
+def _gravite(base: Base, selection: list[dict]) -> None:
+    """L'IGS II sur nos patients : prédit-il bien, et pour qui ?"""
+    cal = stats.calibration_igs2(base, selection)
+    if cal["n"] < 10:
+        st.info(
+            f"{cal['n']} séjour(s) clos avec un IGS II complet : il en faut "
+            "au moins une dizaine pour lire une calibration. Compléter l'IGS II "
+            "(voir « Qualité des données »)."
+        )
+        if not cal["n"]:
+            return
+    st.caption(
+        "**Calibration** : dans chaque classe de risque prédit, les décès "
+        "observés face aux décès attendus. Un rapport O/A global proche de 1 "
+        "peut cacher une surmortalité chez les patients peu graves compensée "
+        "chez les plus graves — c'est ce tableau qui le montre."
+    )
+    corps = "".join(
+        f"<tr><td>{c['classe']}</td><td style='text-align:right'>{c['n']}</td>"
+        f"<td style='text-align:right'>{c['predite'] * 100:.0f} %</td>"
+        f"<td style='text-align:right'>{c['observes']}/{c['n']} ({c['mortalite'].valeur * 100:.0f} %)</td>"
+        f"<td style='text-align:right;color:#64748b'>{c['mortalite'].bas * 100:.0f}–"
+        f"{c['mortalite'].haut * 100:.0f} %</td>"
+        f"<td style='text-align:right'>{c['attendus']}</td></tr>"
+        for c in cal["classes"]
+    )
+    st.markdown(
+        "<table style='width:100%;font-size:.9rem'><tr style='color:#64748b'>"
+        "<th style='text-align:left'>Risque prédit</th><th>n</th>"
+        "<th>Mortalité prédite</th><th>Observée</th><th>IC95</th>"
+        "<th>Décès attendus</th></tr>" + corps + "</table>",
+        unsafe_allow_html=True,
+    )
+    auc = cal["auroc"]
+    if auc:
+        st.metric(
+            "Discrimination (aire sous la courbe ROC)",
+            f"{auc.valeur:.2f}".replace(".", ","),
+            help=f"IC95 {auc.bas:.2f}–{auc.haut:.2f}. 0,5 = pas mieux que le "
+                 "hasard ; ≥ 0,8 = bonne discrimination. Le score classe-t-il "
+                 "plus haut ceux qui meurent ?".replace(".", ","),
+        )
+    st.caption(
+        "L'IGS II date de 1993 : il surestime souvent la mortalité actuelle. "
+        "Un écart ici décrit l'outil autant que le service."
+    )
+
+
+def _qualite(base: Base, selection: list[dict]) -> None:
+    """Ce qui manque, et chez qui : compléter avant d'analyser."""
+    st.caption(
+        "Une analyse ne vaut que ce que valent ses données manquantes. Un "
+        "IGS II incomplet rend le rapport observé/attendu incalculable ; un "
+        "statut J28 manquant biaise la mortalité à J28 vers les survivants. "
+        "Cette liste dit **quels dossiers compléter** — idéalement chaque "
+        "semaine, pendant que le dossier est encore frais."
+    )
+    for ligne in stats.qualite_des_donnees(base, selection):
+        concernes, renseignes = ligne["concernes"], ligne["renseignes"]
+        if not concernes:
+            continue
+        part = renseignes / concernes
+        couleur = theme.VERT if part >= 0.95 else theme.ORANGE if part >= 0.8 else theme.ROUGE
+        manquants = ligne["manquants"]
+        titre = (f"{ligne['donnee']} — {renseignes}/{concernes} "
+                 f"({part * 100:.0f} %)")
+        if not manquants:
+            theme.bloc_html(titre, "Complet.", couleur)
+            continue
+        with st.expander(f"{'🟢' if part >= 0.95 else '🟠' if part >= 0.8 else '🔴'} {titre}"):
+            st.dataframe(
+                {
+                    "lit": [s.get("lit_admission") for s in manquants],
+                    "matricule": [s.get("matricule") or "" for s in manquants],
+                    "admission": [(s.get("date_admission") or "")[:10] for s in manquants],
+                    "sortie": [(s.get("date_sortie") or "")[:10] for s in manquants],
+                },
+                use_container_width=True, hide_index=True,
+            )
+
+
+def _methode() -> None:
+    """Comment tirer de ces données ce qu'elles peuvent vraiment dire."""
+    st.markdown(METHODE)
+
+
+#: Le guide de lecture, affiché tel quel.
+METHODE = """
+#### Bien utiliser les chiffres du service
+
+**1. Poser la question avant de regarder les données.** Écrire en une phrase
+la question, le critère de jugement (ex. mortalité à J28) et la population
+*avant* de filtrer. Tester vingt croisements jusqu'à en trouver un « qui
+marche », c'est fabriquer un faux positif : sur vingt essais, un sort au hasard.
+
+**2. Lire l'intervalle de confiance, pas seulement le pourcentage.** Dans un
+service de 12 lits, « 30 % de mortalité » sur 10 patients veut dire « entre 11
+et 60 % ». Deux groupes dont les intervalles se recouvrent largement ne sont
+pas différents au vu de ces données.
+
+**3. Distinguer un signal du bruit dans le temps.** Un mauvais mois n'est pas
+une dégradation : la carte de contrôle (*Mois par mois*) dit si l'écart dépasse
+ce que le hasard produit. Ne réagir qu'aux signaux.
+
+**4. Ajuster sur la gravité avant de comparer.** Une mortalité brute plus haute
+cette année peut simplement refléter des patients plus graves. Le rapport
+observé/attendu (IGS II) et le tableau de calibration (*Gravité et mortalité*)
+en tiennent compte ; un croisement univarié, non.
+
+**5. Rapporter aux bons dénominateurs.** Infections pour 1000 jours-dispositif
+(ECDC), antibiotiques pour 1000 journées, extubations non programmées pour 100
+jours de ventilation — jamais « pour 100 patients ».
+
+**6. Tenir compte des délais incomplets.** Pour un délai (apyrexie, sevrage),
+les patients chez qui l'événement n'est pas survenu comptent : c'est ce que fait
+Kaplan-Meier. La médiane des seuls « répondeurs » est toujours trop optimiste.
+
+**7. Association n'est pas causalité.** Les patients qui reçoivent tel
+antibiotique sont souvent les plus graves : leur mortalité plus haute ne dit
+rien du médicament (biais d'indication). Les croisements fabriquent des
+**hypothèses** ; les confirmer demande un ajustement multivarié (régression
+logistique, sur l'export) ou un essai.
+
+**8. Des données complètes d'abord.** Compléter chaque semaine ce que liste
+*Qualité des données* — surtout l'IGS II, le mode de sortie et le **statut à
+J28** (appeler les patients sortis). Au-delà de 10–20 % de manquants sur une
+variable, un résultat qui en dépend est fragile.
+
+**9. Pour un mémoire, une thèse ou un article.**
+- geler la base (*Export → Geler la base*) le jour de l'analyse : le chiffre
+  publié doit pouvoir être retrouvé ;
+- exporter la cohorte pseudonymisée et analyser sous R, SPSS ou Stata ;
+- suivre la check-list **STROBE** (études observationnelles) et décrire les
+  données manquantes ;
+- règle pratique pour une régression logistique : environ **10 événements par
+  variable** (30 décès → 3 variables d'ajustement au plus) ;
+- une étude sur les données du service relève d'un avis du comité d'éthique
+  de l'hôpital, même rétrospective.
+
+**10. Ce que ces données permettent bien.** Audit de pratiques et
+indicateurs qualité (infections, extubations, antibiotiques), description
+d'une population (Tableau descriptif), comparaison avant/après un changement
+de protocole (carte de contrôle), et génération d'hypothèses pour une étude
+prospective.
+"""
 
 
 def _antibiotiques(base: Base, selection: list[dict]) -> None:

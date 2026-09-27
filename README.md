@@ -41,7 +41,11 @@ quatre plans), Visite (la pancarte à l'écran, sans papier), Sortie.
 régler `NOM_RESPONSABLE` dans `rea/config.py` (imprimé sous le logo).
 
 *Analyse* : écran **Recherche** — cohortes, tableau descriptif STROBE, taux
-d'infections liées aux dispositifs, consommation d'antibiotiques, export
+d'infections liées aux dispositifs, consommation d'antibiotiques, indicateurs de
+ventilation (extubations non programmées, échecs d'extubation), **intervalles de
+confiance** sur chaque proportion et chaque taux, **carte de contrôle** mois par
+mois, **calibration et discrimination de l'IGS II**, délais en **Kaplan-Meier**,
+**qualité des données** (dossiers à compléter), un guide de méthode, export
 pseudonymisé avec dictionnaire des données, gel de base.
 
 *Administration* : sauvegardes et **restauration**, journal d'audit
