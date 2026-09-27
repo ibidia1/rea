@@ -38,38 +38,40 @@ def test_chaque_rythme_regulier_donne_le_bon_nombre_de_prises():
 
 
 def test_x24j_est_bien_toutes_les_heures():
-    assert p.horaires_pour_rythme("x24/j") == tuple(range(1, 25))
+    assert sorted(p.horaires_pour_rythme("x24/j")) == list(range(1, 25))
+    assert p.horaires_pour_rythme("x24/j")[0] == 8
 
 
 def test_x8j_toutes_les_trois_heures():
-    assert p.horaires_pour_rythme("x8/j") == (3, 6, 9, 12, 15, 18, 21, 24)
+    assert p.horaires_pour_rythme("x8/j") == (8, 11, 14, 17, 20, 23, 2, 5)
 
 
 def test_x12j_toutes_les_deux_heures():
-    assert p.horaires_pour_rythme("x12/j") == (2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24)
+    assert p.horaires_pour_rythme("x12/j") == (8, 10, 12, 14, 16, 18, 20, 22, 24, 2, 4, 6)
 
 
 def test_les_horaires_sont_dans_la_journee_et_ordonnes():
+    """Dans l'ordre de la journée du service : 8 h d'abord, 7 h en dernier
+    (minuit s'écrit 24)."""
+    def rang(h):
+        return (h % 24 - 8) % 24
+
     for code in listes.codes(listes.RYTHMES):
         heures = p.horaires_pour_rythme(code)
-        assert list(heures) == sorted(heures), code
+        assert list(heures) == sorted(heures, key=rang), code
         assert len(set(heures)) == len(heures), f"{code} : heure en double"
         for h in heures:
             assert 1 <= h <= 24, f"{code} : {h} hors de la journée"
 
 
 def test_les_prises_sont_regulierement_espacees():
-    """Un antibiotique x3/j se donne toutes les 8 h, pas quand ça tombe.
-
-    Les deux exceptions sont voulues et calées sur la vie du service :
-    ×1/j propose 8 h (l'heure de la visite) et ×2/j 8 h − 20 h.
-    """
+    """Un antibiotique x3/j se donne toutes les 8 h, pas quand ça tombe —
+    à partir de 8 h, l'heure de la visite (règle du 27 septembre)."""
     for code, prises in REGULIERS.items():
-        if code in ("x1/j", "x2/j"):
-            continue
         heures = p.horaires_pour_rythme(code)
         intervalle = 24 // prises
-        assert heures == tuple(range(intervalle, 25, intervalle)), code
+        attendu = tuple(((8 + i * intervalle - 1) % 24) + 1 for i in range(prises))
+        assert heures == attendu, code
 
 
 def test_les_horaires_viennent_du_referentiel_pas_du_code():
@@ -114,12 +116,12 @@ def test_un_rythme_inconnu_ne_fait_pas_tomber_l_ecran():
 
 def test_jusqu_a_six_prises_les_horaires_sont_ecrits_en_entier():
     assert p.horaires_affiches("x2/j") == "8h-20h"
-    assert p.horaires_affiches("x6/j") == "4h-8h-12h-16h-20h-24h"
+    assert p.horaires_affiches("x6/j") == "8h-12h-16h-20h-24h-4h"
 
 
 def test_au_dela_de_six_prises_la_liste_se_replie():
-    assert p.horaires_affiches("x8/j") == "toutes les 3h dès 3h"
-    assert p.horaires_affiches("x12/j") == "toutes les 2h dès 2h"
+    assert p.horaires_affiches("x8/j") == "toutes les 3h dès 8h"
+    assert p.horaires_affiches("x12/j") == "toutes les 2h dès 8h"
 
 
 def test_une_prise_horaire_se_dit_en_trois_mots():
@@ -138,3 +140,15 @@ def test_la_ligne_de_pancarte_reste_courte_a_toutes_les_heures():
     }
     _, produit, _ = p.parties_ligne(ligne, "2026-09-10")
     assert produit == "Insuline rapide (toutes les heures)"
+
+
+def test_la_premiere_prise_est_toujours_a_8h_et_les_suivantes_regulieres():
+    """Règle du service (27 septembre) : première prise à 8 h, puis
+    intervalle régulier — ×3/j 8-16-24, ×4/j 8-14-20-2."""
+    for code, prises in REGULIERS.items():
+        heures = p.horaires_pour_rythme(code)
+        assert heures[0] == 8, code
+        ecarts = {(b - a) % 24 for a, b in zip(heures, heures[1:] + heures[:1])}
+        assert ecarts == {24 // prises} or prises == 1, code
+    assert p.horaires_pour_rythme("x3/j") == (8, 16, 24)
+    assert p.horaires_pour_rythme("x4/j") == (8, 14, 20, 2)

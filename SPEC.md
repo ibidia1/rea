@@ -925,7 +925,7 @@ de soin.
 | 3 | Ventilation : suivi des dates d'intubation/extubation ? | Modèle de données | **résolue v1.6** — saisi dans l'écran Explorations et actes, durée calculée |
 | 4 | Infections nosocomiales : à tracer ? | Modèle de données | ouverte — table prête |
 | 5 | Mortalité : réanimation seule, ou aussi J28 ? | Modèle de données | ouverte — les deux champs existent |
-| 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** — 6-12-18-24, modifiable |
+| 6 | Heure de départ pour un rythme ×4/j | Prescription | **tranchée v1.3** (6-12-18-24), **revue le 27 septembre** : première prise toujours à 8 h, puis intervalle régulier — ×4/j 8-14-20-2 ; modifiable à la ligne |
 | 7 | Format exact de copier-coller du DMI pour les bilans | Import bilans | **résolue v1.5** — fichier HTML reçu et intégré |
 | 8 | Bornes de normalité pour signaler les valeurs anormales | Import bilans | ouverte — bornes usuelles posées (affichage) et bornes physiologiques posées (contrôles de saisie, v1.7), **les deux à valider par un senior** |
 | 13 | Source officielle des référentiels CIM-10, LOINC et ATC | Export recherche | **ouverte** — correspondances LOINC provisoires en v1.7, `LOINC_VALIDE = False` |

@@ -438,7 +438,7 @@ le coder ?**
 |---|---|---|---|
 | A | Le socle de variables de recherche est-il validé par le chef ? | Bloc 9 | ouverte |
 | B | Source des fichiers CIM-10, LOINC et ATC ? | §5, blocs 6 et 12 | ouverte — mapping LOINC provisoire ; code ATC jamais renseigné ; la saisie CIM-10 a été retirée de l'écran Identité à la demande du service (la colonne reste) |
-| C | Heure de départ pour un rythme ×4/j | Bloc 3 | tranchée — 6-12-18-24 |
+| C | Heure de départ pour un rythme ×4/j | Bloc 3 | tranchée — revue le 27 septembre : **première prise toujours à 8 h**, les suivantes à intervalle régulier (×3/j 8-16-24, ×4/j 8-14-20-2) |
 | D | Bornes de normalité pour signaler les valeurs anormales | Blocs 4 et 10 | ouverte — bornes usuelles provisoires |
 | E | Poste du chef de service : copie lecture seule ou rien ? | Bloc 0 | ouverte |
 | F | Qui maintient le programme en l'absence de l'auteur ? | Tout | ouverte |
