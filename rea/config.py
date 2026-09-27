@@ -133,9 +133,23 @@ CODE_INITIAL = "rea123"
 # Sauvegardes (SPEC §2.2)
 # --------------------------------------------------------------------------
 INTERVALLE_SAUVEGARDE_MINUTES = 15
-# Nombre de sauvegardes conservées avant rotation. Une base de service pèse
-# quelques mégaoctets : garder large ne coûte rien.
-SAUVEGARDES_CONSERVEES = 200
+
+# Combien de sauvegardes on garde, et lesquelles (27 septembre). Garder les 200
+# dernières, c'était 200 copies complètes pour deux jours d'historique à peine :
+# le disque se remplissait, et une erreur remarquée au bout d'une semaine
+# n'avait plus de sauvegarde d'avant. On garde désormais **de moins en moins
+# serré à mesure qu'on s'éloigne** — ce qui couvre une année entière avec une
+# centaine de fichiers, compressés :
+#   * toutes celles des dernières RETENTION_TOUTES_HEURES heures ;
+#   * puis une par heure jusqu'à RETENTION_HORAIRE_HEURES heures ;
+#   * puis une par jour jusqu'à RETENTION_QUOTIDIENNE_JOURS jours ;
+#   * puis une par mois jusqu'à RETENTION_MENSUELLE_MOIS mois.
+# Les gels de base (écran Recherche) ne sont jamais effacés : une étude doit
+# pouvoir retrouver l'état exact qu'elle a analysé.
+RETENTION_TOUTES_HEURES = 6
+RETENTION_HORAIRE_HEURES = 48
+RETENTION_QUOTIDIENNE_JOURS = 30
+RETENTION_MENSUELLE_MOIS = 12
 
 # --------------------------------------------------------------------------
 # Service (SPEC §1.1)
