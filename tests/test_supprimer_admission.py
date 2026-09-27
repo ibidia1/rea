@@ -66,3 +66,31 @@ def test_seul_l_administrateur_voit_le_bouton():
     bloc = src[debut:fin]
     assert 'peut("comptes")' in bloc
     assert "Oui, supprimer" in bloc  # confirmation en deux temps
+
+
+def test_l_admission_supprimee_sort_de_toutes_les_statistiques(base):
+    """Cohorte, décompte des entrées et variables proposées aux croisements :
+    une admission supprimée ne compte nulle part (question du service,
+    27 septembre)."""
+    s, stats, crois = _svc("sejours"), _svc("statistiques"), _svc("croisements")
+    presc = _svc("prescriptions")
+    vraies = []
+    for i in range(2):
+        pid = s.creer_patient(base, matricule=f"V-{i}", nom_affichage="Vrai",
+                              date_naissance="1970-01-01", sexe="F")
+        vraies.append(s.creer_sejour(base, patient_id=pid, lit_admission=5 + i,
+                                     date_admission="2026-09-12"))
+    fausses = [_sejour(base)]
+    pid = s.creer_patient(base, matricule="F-2", nom_affichage="Faux 2",
+                          date_naissance="1970-01-01", sexe="M")
+    fausses.append(s.creer_sejour(base, patient_id=pid, lit_admission=9,
+                                  date_admission="2026-09-12"))
+    for sid in fausses:
+        presc.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Produit fantôme",
+                            date_debut="2026-09-12", rythme="x1/j")
+    assert "produit:Produit fantôme" in {v.code for v in crois.facteurs_disponibles(base)}
+    for sid in fausses:
+        s.supprimer_admission(base, sid, motif="patient inexistant")
+
+    assert {x["id"] for x in stats.cohorte(base)} == set(vraies)
+    assert "produit:Produit fantôme" not in {v.code for v in crois.facteurs_disponibles(base)}

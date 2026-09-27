@@ -228,12 +228,19 @@ def facteurs_disponibles(base: Base) -> list[Variable]:
     return variables
 
 
+#: Les variables proposées ne comptent que les séjours réels : une admission
+#: supprimée (erreur de saisie, patient inexistant) ne doit ni faire apparaître
+#: un produit ni gonfler le « n séjours » affiché à côté (27 septembre).
+_SEJOUR_VALIDE = "JOIN sejour s ON s.id = {t}.sejour_id AND s.supprime = 0"
+
+
 def _facteurs_evolution(base: Base) -> list[Variable]:
     """Les mesures des quatre plans effectivement saisies (FC, PA, RASS…)."""
     variables = []
     for ligne in base.requete(
-        "SELECT DISTINCT cle FROM evolution_element WHERE supprime = 0 "
-        "AND valeur_num IS NOT NULL ORDER BY cle"
+        "SELECT DISTINCT e.cle FROM evolution_element e "
+        f"{_SEJOUR_VALIDE.format(t='e')} "
+        "WHERE e.supprime = 0 AND e.valeur_num IS NOT NULL ORDER BY e.cle"
     ):
         cle = ligne["cle"]
         for mode, libelle_mode in MODES_ANALYTE.items():
@@ -257,8 +264,9 @@ def _facteurs_produits(base: Base) -> list[Variable]:
     et un facteur « combien de jours » pour la durée du traitement."""
     variables = []
     for p in base.requete(
-        "SELECT produit, COUNT(DISTINCT sejour_id) AS n FROM prescription_ligne "
-        "WHERE supprime = 0 GROUP BY produit HAVING n >= 2 ORDER BY n DESC"
+        "SELECT l.produit, COUNT(DISTINCT l.sejour_id) AS n FROM prescription_ligne l "
+        f"{_SEJOUR_VALIDE.format(t='l')} "
+        "WHERE l.supprime = 0 GROUP BY l.produit HAVING n >= 2 ORDER BY n DESC"
     ):
         variables.append(Variable(
             f"produit:{p['produit']}", f"A reçu {p['produit']}", "categoriel",
@@ -274,8 +282,9 @@ def _facteurs_produits(base: Base) -> list[Variable]:
 def _facteurs_dispositifs(base: Base) -> list[Variable]:
     variables = []
     for d in base.requete(
-        "SELECT type, COUNT(DISTINCT sejour_id) AS n FROM dispositif "
-        "WHERE supprime = 0 GROUP BY type HAVING n >= 2 ORDER BY n DESC"
+        "SELECT d.type, COUNT(DISTINCT d.sejour_id) AS n FROM dispositif d "
+        f"{_SEJOUR_VALIDE.format(t='d')} "
+        "WHERE d.supprime = 0 GROUP BY d.type HAVING n >= 2 ORDER BY n DESC"
     ):
         libelle = listes.libelle_dispositif(d["type"])
         variables.append(Variable(
@@ -294,9 +303,10 @@ def _facteurs_germes(base: Base) -> list[Variable]:
         Variable(f"germe:{g['germe']}", f"A isolé {g['germe']}", "categoriel",
                  famille="Microbiologie", note=f"{g['n']} séjours")
         for g in base.requete(
-            "SELECT germe, COUNT(DISTINCT sejour_id) AS n FROM microbiologie "
-            "WHERE supprime = 0 AND germe IS NOT NULL AND germe != '' "
-            "GROUP BY germe HAVING n >= 2 ORDER BY n DESC"
+            "SELECT m.germe, COUNT(DISTINCT m.sejour_id) AS n FROM microbiologie m "
+            f"{_SEJOUR_VALIDE.format(t='m')} "
+            "WHERE m.supprime = 0 AND m.germe IS NOT NULL AND m.germe != '' "
+            "GROUP BY m.germe HAVING n >= 2 ORDER BY n DESC"
         )
     ]
 
@@ -308,6 +318,9 @@ def _facteurs_antecedents(base: Base) -> list[Variable]:
         for a in base.requete(
             "SELECT libelle, COUNT(DISTINCT patient_id) AS n FROM antecedent "
             "WHERE supprime = 0 AND statut = 'present' "
+            # Le patient d'une admission supprimée (patient inexistant,
+            # double saisie) ne compte plus.
+            "AND patient_id IN (SELECT patient_id FROM sejour WHERE supprime = 0) "
             "GROUP BY libelle HAVING n >= 2 ORDER BY n DESC"
         )
     ]

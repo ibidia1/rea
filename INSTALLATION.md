@@ -173,6 +173,15 @@ Le logiciel sauvegarde tout seul toutes les 15 minutes, à l'ouverture et à la
 fermeture, dans `C:\ReaService\sauvegardes`. **Ces sauvegardes sont sur le
 même disque que la base : elles ne protègent pas d'un disque en panne.**
 
+Pour que le disque ne se remplisse pas, ces sauvegardes automatiques sont
+**compressées** (`.db.gz`, environ dix fois plus petites), ne sont pas écrites
+quand rien n'a changé depuis la précédente, et sont éclaircies à mesure
+qu'elles vieillissent : toutes celles des 6 dernières heures, puis une par
+heure jusqu'à 48 h, une par jour sur 30 jours, une par mois sur 12 mois. Les
+gels de base (écran Recherche) ne sont jamais effacés. Ces seuils se règlent
+dans `rea/config.py` (`RETENTION_…`). Rien à faire à la main : les anciennes
+sauvegardes en trop disparaissent d'elles-mêmes à la sauvegarde suivante.
+
 Une fois par semaine, faire un vrai export : Administration → Sauvegardes →
 **Préparer le fichier à exporter** → **Télécharger**, et copier le fichier
 obtenu sur une clé USB rangée ailleurs.

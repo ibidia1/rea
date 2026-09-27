@@ -9,6 +9,7 @@ qui journalisent l'action (SPEC §3, §10 — bloc 7).
 
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import shutil
@@ -16,7 +17,7 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .. import config
@@ -95,6 +96,9 @@ class Base:
         self.connexion.execute("PRAGMA journal_mode = WAL")
         self._initialiser_schema()
         self._minuteur_sauvegarde: threading.Timer | None = None
+        # Le dernier mouvement du journal au moment de la dernière sauvegarde :
+        # si rien n'a bougé depuis, la sauvegarde périodique n'a rien à copier.
+        self._journal_sauvegarde: int | None = None
 
     # -- schéma -----------------------------------------------------------
     def _initialiser_schema(self) -> None:
@@ -430,13 +434,37 @@ class Base:
             )
 
     # -- sauvegardes (SPEC §2.2) --------------------------------------------
-    def sauvegarder(self, motif: str = "manuelle") -> Path:
-        """Copie le fichier de base vers le dossier de sauvegardes, avec
-        horodatage dans le nom. Utilise la sauvegarde en ligne de SQLite
-        (fonctionne même pendant l'écriture, contrairement à un `cp` brut)."""
+    def _dernier_mouvement(self) -> int:
+        """Le rang de la dernière trace au journal : toute écriture en laisse
+        une (règle de conception 8), c'est donc le compteur de modifications."""
+        ligne = self.connexion.execute("SELECT MAX(rowid) AS n FROM journal").fetchone()
+        return (ligne or {}).get("n") or 0
+
+    def sauvegarder(
+        self, motif: str = "manuelle", *, seulement_si_modifiee: bool = False
+    ) -> Path | None:
+        """Copie la base vers le dossier de sauvegardes, horodatée dans le nom.
+        Utilise la sauvegarde en ligne de SQLite (fonctionne même pendant
+        l'écriture, contrairement à un `cp` brut).
+
+        Les sauvegardes que le logiciel écrit tout seul — périodiques, à
+        l'ouverture, à la fermeture — sont **compressées** (`.db.gz`, trois à
+        cinq fois plus petites) : ce sont elles qui remplissaient le disque.
+        Celles qu'on demande à la main, l'export et les gels restent des `.db`
+        ordinaires, qu'on ouvre ou qu'on emporte tels quels.
+
+        `seulement_si_modifiee` : rien n'est écrit si la base n'a pas bougé
+        depuis la dernière sauvegarde — la nuit, un dimanche calme, une
+        centaine de copies identiques en moins. Rend alors None.
+        """
+        mouvement = self._dernier_mouvement()
+        if seulement_si_modifiee and mouvement == self._journal_sauvegarde:
+            return None
         config.DOSSIER_SAUVEGARDES.mkdir(parents=True, exist_ok=True)
         horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
-        destination = config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}.db"
+        compresser = motif in MOTIFS_COMPRESSES
+        extension = ".db.gz" if compresser else ".db"
+        destination = config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}{extension}"
         # Deux sauvegardes dans la même seconde portaient le même nom : la
         # seconde écrasait la première. Ça n'arrive jamais avec les sauvegardes
         # périodiques, mais toujours avec le filet de sécurité posé juste avant
@@ -445,13 +473,18 @@ class Base:
         while destination.exists():
             rang += 1
             destination = (
-                config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}-{rang}.db"
+                config.DOSSIER_SAUVEGARDES / f"rea-{horodatage}-{motif}-{rang}{extension}"
             )
+        copie = destination.with_name(destination.name[:-3]) if compresser else destination
         with self._verrou:
-            sauvegarde_connexion = sqlite3.connect(str(destination))
+            sauvegarde_connexion = sqlite3.connect(str(copie))
             with sauvegarde_connexion:
                 self.connexion.backup(sauvegarde_connexion)
             sauvegarde_connexion.close()
+            if compresser:
+                with open(copie, "rb") as brut, gzip.open(destination, "wb", compresslevel=6) as gz:
+                    shutil.copyfileobj(brut, gz)
+                copie.unlink()
             self.connexion.execute(
                 "INSERT INTO sauvegarde(id, date_heure, fichier, taille, motif) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -463,15 +496,15 @@ class Base:
                     motif,
                 ),
             )
+            self._journal_sauvegarde = mouvement
         self._purger_anciennes_sauvegardes()
         return destination
 
     def _purger_anciennes_sauvegardes(self) -> None:
-        fichiers = sorted(
-            config.DOSSIER_SAUVEGARDES.glob("rea-*.db"), key=lambda p: p.stat().st_mtime
-        )
-        excedent = len(fichiers) - config.SAUVEGARDES_CONSERVEES
-        for fichier in fichiers[:max(excedent, 0)]:
+        fichiers = [
+            (f, date_sauvegarde(f)) for f in fichiers_de_sauvegarde()
+        ]
+        for fichier in sauvegardes_a_supprimer(fichiers, datetime.now()):
             fichier.unlink(missing_ok=True)
 
     def demarrer_sauvegardes_periodiques(self) -> None:
@@ -481,7 +514,7 @@ class Base:
             return
 
         def _boucle() -> None:
-            self.sauvegarder(motif="periodique")
+            self.sauvegarder(motif="periodique", seulement_si_modifiee=True)
             self._minuteur_sauvegarde = threading.Timer(
                 config.INTERVALLE_SAUVEGARDE_MINUTES * 60, _boucle
             )
@@ -502,21 +535,18 @@ class Base:
     # -- restauration (feuille de route, critère de fin du bloc 0) ----------
     def sauvegardes_disponibles(self) -> list[dict]:
         """Les fichiers de sauvegarde présents, du plus récent au plus ancien."""
-        if not config.DOSSIER_SAUVEGARDES.exists():
-            return []
         fichiers = sorted(
-            config.DOSSIER_SAUVEGARDES.glob("rea-*.db"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
+            ((f, date_sauvegarde(f)) for f in fichiers_de_sauvegarde()),
+            key=lambda paire: paire[1], reverse=True,
         )
         return [
             {
                 "chemin": f,
                 "nom": f.name,
                 "taille": f.stat().st_size,
-                "date": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
+                "date": quand.isoformat(timespec="seconds"),
             }
-            for f in fichiers
+            for f, quand in fichiers
         ]
 
     def restaurer(self, chemin_sauvegarde: Path | str) -> Path:
@@ -536,7 +566,11 @@ class Base:
         self.arreter_sauvegardes_periodiques()
         with self._verrou:
             self.connexion.close()
-            shutil.copy2(source, self.chemin)
+            if source.name.endswith(".gz"):
+                with gzip.open(source, "rb") as gz, open(self.chemin, "wb") as cible:
+                    shutil.copyfileobj(gz, cible)
+            else:
+                shutil.copy2(source, self.chemin)
             # Les fichiers annexes du mode WAL décrivent l'ancienne base : les
             # laisser rendrait la restauration incohérente.
             for suffixe in ("-wal", "-shm"):
@@ -641,6 +675,78 @@ def inspecter_fichier_base(chemin: Path | str) -> dict:
         "sejours": sejours,
         "date": datetime.fromtimestamp(chemin.stat().st_mtime).isoformat(timespec="minutes"),
     }
+
+
+# --------------------------------------------------------------------------
+# Rétention des sauvegardes (27 septembre)
+# --------------------------------------------------------------------------
+
+#: Les sauvegardes que le logiciel écrit tout seul, en série : compressées.
+MOTIFS_COMPRESSES = ("periodique", "ouverture", "fermeture")
+
+_NOM_SAUVEGARDE = re.compile(r"^rea-(\d{8}-\d{6})-(.+?)\.db(\.gz)?$")
+
+
+def fichiers_de_sauvegarde() -> list[Path]:
+    """Toutes les sauvegardes du poste, compressées ou non."""
+    if not config.DOSSIER_SAUVEGARDES.exists():
+        return []
+    return [
+        f for f in config.DOSSIER_SAUVEGARDES.iterdir()
+        if f.is_file() and _NOM_SAUVEGARDE.match(f.name)
+    ]
+
+
+def date_sauvegarde(fichier: Path) -> datetime:
+    """L'instant de la sauvegarde, lu dans son nom — la date du fichier change
+    quand on le recopie sur un autre disque, pas son nom."""
+    trouve = _NOM_SAUVEGARDE.match(fichier.name)
+    if trouve:
+        try:
+            return datetime.strptime(trouve.group(1), "%Y%m%d-%H%M%S")
+        except ValueError:
+            pass
+    return datetime.fromtimestamp(fichier.stat().st_mtime)
+
+
+def _est_un_gel(fichier: Path) -> bool:
+    trouve = _NOM_SAUVEGARDE.match(fichier.name)
+    return bool(trouve) and trouve.group(2).startswith("gel")
+
+
+def sauvegardes_a_supprimer(
+    fichiers: list[tuple[Path, datetime]], maintenant: datetime
+) -> list[Path]:
+    """Les sauvegardes en trop, selon une rétention **étagée**.
+
+    Toutes les récentes, puis une par heure, une par jour, une par mois (la
+    plus récente de chaque tranche), et plus rien au-delà d'un an. Jamais un
+    gel de base, jamais la toute dernière sauvegarde. Les seuils sont dans
+    `config.RETENTION_*`.
+    """
+    a_supprimer: list[Path] = []
+    tranches_vues: set[tuple] = set()
+    ordonnes = sorted(fichiers, key=lambda paire: paire[1], reverse=True)
+    for rang, (fichier, quand) in enumerate(ordonnes):
+        if rang == 0 or _est_un_gel(fichier):
+            continue
+        age = maintenant - quand
+        if age < timedelta(hours=config.RETENTION_TOUTES_HEURES):
+            continue
+        if age < timedelta(hours=config.RETENTION_HORAIRE_HEURES):
+            tranche = ("heure", quand.strftime("%Y%m%d%H"))
+        elif age < timedelta(days=config.RETENTION_QUOTIDIENNE_JOURS):
+            tranche = ("jour", quand.strftime("%Y%m%d"))
+        elif age < timedelta(days=31 * config.RETENTION_MENSUELLE_MOIS):
+            tranche = ("mois", quand.strftime("%Y%m"))
+        else:
+            a_supprimer.append(fichier)
+            continue
+        if tranche in tranches_vues:
+            a_supprimer.append(fichier)
+        else:
+            tranches_vues.add(tranche)
+    return a_supprimer
 
 
 _BASE: Base | None = None
