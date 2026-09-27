@@ -60,6 +60,9 @@ class DossierFeuille:
     # Vitesse heure par heure de tout ce qui coule ce jour-là, par identifiant
     # de ligne de prescription ou de dispositif : {id: {heure: vitesse}}.
     vitesses: dict = field(default_factory=dict)
+    # (heure, minute) de l'admission si elle tombe dans cette journée : la
+    # feuille marque l'arrivée et ne prescrit rien avant. None les autres jours.
+    admission: tuple | None = None
 
 
 def _vitesses(base: Base, sejour_id: str, date_jour: str, lignes: list, etats) -> dict:
@@ -94,6 +97,9 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
         raise ValueError(f"Séjour inconnu : {sejour_id}")
 
     pancarte = prescriptions_service.pancarte_du_jour(base, sejour_id, date_jour)
+    admission = dom.admission_sur_la_journee(
+        date_jour, sejour.get("date_admission"), sejour.get("heure_admission")
+    )
     demain = (parse_date(date_jour) + timedelta(days=1)).isoformat()
     etats = tuple(dispositifs_service.etats(base, sejour_id, date_jour))
 
@@ -130,5 +136,11 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
             if a["categorie"] != "allergie"
         ],
         etat_antecedents=sejours_service.etat_antecedents(base, sejour["patient_id"]),
-        vitesses=_vitesses(base, sejour_id, date_jour, pancarte["lignes"], etats),
+        vitesses={
+            cible: dom.vitesses_depuis_admission(par_heure, admission)
+            for cible, par_heure in _vitesses(
+                base, sejour_id, date_jour, pancarte["lignes"], etats
+            ).items()
+        },
+        admission=admission,
     )

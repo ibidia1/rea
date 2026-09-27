@@ -423,6 +423,15 @@ def _transferer_lit(sejour: dict) -> None:
             st.rerun()
 
 
+def _heure(texte: str | None):
+    """« 18:20 » → un objet heure pour le champ ; rien si elle n'a jamais
+    été saisie (dossier d'avant le 27 septembre) — le champ reste vide."""
+    try:
+        return datetime.strptime(str(texte), "%H:%M").time() if texte else None
+    except ValueError:
+        return None
+
+
 def _modifier_admission(sejour: dict) -> None:
     """Modifie une admission — erreur de saisie ou complément découvert après
     coup (matricule, nom, date, poids, motif, un antécédent appris plus tard).
@@ -494,10 +503,17 @@ def _modifier_admission(sejour: dict) -> None:
             value=_valeur_texte(sejour.get("glasgow_initial")), key=f"{prefixe}_glasgow",
         ))
     with col2:
-        date_admission = st.date_input(
+        c_date, c_heure = st.columns(2)
+        date_admission = c_date.date_input(
             "Date d'admission",
             value=parse_date(sejour["date_admission"]) or date.today(),
             key=f"{prefixe}_date_admission",
+        )
+        heure_admission = c_heure.time_input(
+            "Heure d'admission", value=_heure(sejour.get("heure_admission")),
+            key=f"{prefixe}_heure_admission", step=300,
+            help="Sur la feuille du premier jour, rien n'est prescrit avant "
+                 "cette heure.",
         )
         provenance_type = st.selectbox(
             "Provenance", listes.codes(listes.PROVENANCES),
@@ -603,6 +619,7 @@ def _modifier_admission(sejour: dict) -> None:
         sejours_service.modifier_admission(
             contexte.base(), sejour["id"],
             date_admission=datetime.combine(date_admission, datetime.min.time()).isoformat(),
+            heure_admission=heure_admission.strftime("%H:%M") if heure_admission else None,
             provenance_type=provenance_type, provenance_detail=provenance_detail or None,
             poids_kg=poids_kg, taille_cm=taille_cm, creatinine_base=creatinine_base,
             type_admission=type_admission, maladie_chronique_igs2=maladie_chronique_igs2,

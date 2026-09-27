@@ -81,6 +81,7 @@ def onglet_bilans(sejour: dict) -> None:
     )
     if mode == "Saisir un bilan":
         saisie_bilan(sejour)
+        supprimer_bilan(sejour)
         # La microbiologie est une saisie, pas une relecture : un prélèvement
         # se note quand on le fait, et son résultat quand il revient (demande
         # du service, 8 septembre). En mode « Visualiser », elle obligeait à
@@ -89,6 +90,7 @@ def onglet_bilans(sejour: dict) -> None:
         panneau_microbiologie(sejour)
     else:
         vue_cinetique(sejour)
+        supprimer_bilan(sejour)
 
         st.subheader("Texte généré")
         date_affichee = st.date_input("Jour", value=date.today(), key="date_bilan_texte")
@@ -98,6 +100,93 @@ def onglet_bilans(sejour: dict) -> None:
             value=texte or "(aucun bilan ce jour-là)",
             height=200,
         )
+
+
+#: Ce qu'on lit d'un gaz du sang pour le reconnaître dans la liste.
+_RESUME_GAZ = (("ph", "pH"), ("pao2", "PaO₂"), ("paco2", "PaCO₂"),
+               ("hco3", "HCO₃⁻"), ("lactate", "Lact."))
+
+
+def _resume_gaz(gaz: dict) -> str:
+    morceaux = [f"{libelle} {champs.format_valeur(gaz[cle])}"
+                for cle, libelle in _RESUME_GAZ if gaz.get(cle) is not None]
+    return "Gaz du sang" + (f" — {' · '.join(morceaux)}" if morceaux else "")
+
+
+def supprimer_bilan(sejour: dict) -> None:
+    """Retirer un bilan saisi à tort — une concentration fausse, validée trop
+    vite (demande du service, 27 septembre).
+
+    On choisit le prélèvement, on coche la ou les valeurs fausses (ou tout le
+    prélèvement), on dit pourquoi, on confirme. Rien n'est effacé de la base :
+    la valeur quitte la cinétique, la visite et la feuille, et le journal garde
+    qui l'a retirée et pourquoi. Pour corriger, on retire la valeur fausse puis
+    on ressaisit la bonne à la même heure.
+    """
+    from . import utilisateur as utilisateur_ui
+
+    if not utilisateur_ui.peut("dossier_ecrire"):
+        return
+    prelevements = bilans_service.prelevements_du_sejour(contexte.base(), sejour["id"])
+    if not prelevements:
+        return
+    with st.expander("Supprimer un bilan erroné"):
+        st.caption(
+            "Pour une valeur fausse déjà enregistrée. Elle disparaît de la "
+            "cinétique, de la visite et de la feuille ; le journal garde la "
+            "trace. Pour corriger : supprimer la valeur fausse, puis ressaisir "
+            "la bonne à la même heure."
+        )
+        par_heure = {p["date_heure"]: p for p in prelevements}
+        choisi = st.selectbox(
+            "Prélèvement", list(par_heure),
+            format_func=lambda dh: (
+                f"{format_date_fr(dh)[:5]} à {dh[11:16]} — "
+                f"{len(par_heure[dh]['resultats'])} valeur(s)"
+                + (" + gaz du sang" if par_heure[dh]["gaz"] else "")
+            ),
+            key=f"suppr_bilan_prelevement_{sejour['id']}",
+        )
+        prelevement = par_heure[choisi]
+        cle = f"suppr_bilan_{sejour['id']}_{choisi}"
+        tout = st.checkbox("Tout le prélèvement", key=f"{cle}_tout")
+        resultats, gaz = [], []
+        colonnes = st.columns(3)
+        for i, ligne in enumerate(prelevement["resultats"]):
+            a = cat.analyte(ligne["analyte"])
+            etiquette = (f"{a.libelle} {champs.format_valeur(ligne['valeur_num'])}"
+                         f" {a.unite or ''}").strip()
+            with colonnes[i % 3]:
+                if st.checkbox(etiquette, value=tout, disabled=tout,
+                               key=f"{cle}_r_{ligne['id']}"):
+                    resultats.append(ligne["id"])
+        for ligne in prelevement["gaz"]:
+            if st.checkbox(_resume_gaz(ligne), value=tout, disabled=tout,
+                           key=f"{cle}_g_{ligne['id']}"):
+                gaz.append(ligne["id"])
+        if tout:
+            resultats = [l["id"] for l in prelevement["resultats"]]
+            gaz = [l["id"] for l in prelevement["gaz"]]
+        motif = st.text_input(
+            "Motif", key=f"{cle}_motif",
+            placeholder="ex. erreur de concentration, mauvais patient",
+        )
+        confirme = st.checkbox(
+            f"Je confirme la suppression de {len(resultats) + len(gaz)} valeur(s)",
+            key=f"{cle}_confirme", disabled=not (resultats or gaz),
+        )
+        if st.button("Supprimer", key=f"{cle}_ok", type="primary",
+                     disabled=not (confirme and (resultats or gaz))):
+            try:
+                n = bilans_service.supprimer_valeurs(
+                    contexte.base(), sejour["id"], resultats=resultats, gaz=gaz,
+                    motif=motif, utilisateur_id=contexte.utilisateur_id(),
+                )
+            except ValueError as erreur:
+                st.error(str(erreur))
+                return
+            st.success(f"{n} valeur(s) supprimée(s).")
+            st.rerun()
 
 
 def _antibiogramme_saisi(ligne_id: str) -> dict[str, list[str]]:
@@ -239,7 +328,6 @@ def _saisie_gaz_du_sang() -> tuple[str, float | None, dict[str, float | None]]:
     chercher sous trente champs de biologie, à chaque fois, coûtait plus que
     tout le reste de l'écran.
     """
-    st.markdown("**Gaz du sang & ventilation**")
     codes_modes = listes.codes(listes.MODES_VENTILATOIRES)
     mode_vent = st.selectbox(
         "Mode ventilatoire", codes_modes,
@@ -341,7 +429,6 @@ def _panneau_ajouter_analyte() -> None:
 def _saisie_groupe(groupe, valeurs: dict, unite_lipides: str) -> None:
     """Un groupe d'analytes, en deux colonnes — ce qui tient dans une fenêtre
     en demi-écran, à côté du DMI."""
-    st.markdown(f"**{groupe.titre}**")
     colonnes = st.columns(2)
     saisissables = [a for a in groupe.analytes if not a.calcule]
     for i, a in enumerate(saisissables):
@@ -370,7 +457,14 @@ def saisie_bilan(sejour: dict) -> None:
 
     # Gaz du sang, puis chimie, puis hémato, puis ce qui ne se demande pas
     # tous les jours : l'ordre de la visite, pas celui du catalogue.
-    mode_vent, debit_o2, gaz = _saisie_gaz_du_sang()
+    #
+    # Chaque titre est replié : l'interne ouvre ce qu'il a à saisir — le gaz
+    # du sang seul la nuit, la NFS et le iono le matin — au lieu de descendre
+    # trente champs vides (demande du service, 27 septembre). Les valeurs
+    # tapées restent en mémoire quand on replie un titre.
+    st.caption("Cliquer sur un titre pour l'ouvrir et saisir.")
+    with st.expander("Gaz du sang & ventilation"):
+        mode_vent, debit_o2, gaz = _saisie_gaz_du_sang()
 
     valeurs: dict[str, float | None] = {}
     # Les analytes ajoutés par le service entrent au catalogue avant l'écran :
@@ -378,14 +472,18 @@ def saisie_bilan(sejour: dict) -> None:
     analytes_locaux.charger_dans_le_catalogue(contexte.base())
     courants, occasionnels = cat.groupes_de_saisie()
     for groupe in courants:
-        _saisie_groupe(groupe, valeurs, "mmol/L")
+        with st.expander(groupe.titre):
+            _saisie_groupe(groupe, valeurs, "mmol/L")
 
-    with st.expander("Bilans non systématiques"):
-        unite_lipides = st.radio(
-            "Lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
-        )
-        for groupe in occasionnels:
+    for groupe in occasionnels:
+        with st.expander(groupe.titre):
+            unite_lipides = "mmol/L"
+            if groupe.code == "lipidique":
+                unite_lipides = st.radio(
+                    "Lipides en", ["mmol/L", "g/L"], horizontal=True, key="unite_lipides"
+                )
             _saisie_groupe(groupe, valeurs, unite_lipides)
+    with st.expander("Ajouter un bilan au catalogue du service"):
         _panneau_ajouter_analyte()
 
     # Valeurs dérivées, affichées dès que leurs ingrédients sont là.

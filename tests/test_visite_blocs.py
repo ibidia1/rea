@@ -115,3 +115,21 @@ def test_les_drains_du_tableau_portent_un_nom_lisible():
     """« drain:8f3a-… » ne se lit pas au lit du malade."""
     assert "_noms_des_recueils" in SURVEILLANCE
     assert 'noms.get(cle, cle)' in SURVEILLANCE
+
+
+# --------------------------------------------------------------------------
+# Demande du 27 septembre
+# --------------------------------------------------------------------------
+
+def test_le_bilan_entrees_sorties_est_resume():
+    """Entrées, sorties, net : plus de ligne par soluté à la visite."""
+    debut = VISITE.index("def _bilan_entrees_sorties(")
+    fin = VISITE.index("def ", debut + 10)
+    assert "detail_entrees" not in VISITE[debut:fin]
+    assert '"Sorties"' in VISITE[debut:fin]
+
+
+def test_les_explorations_montrent_les_dernieres_de_chaque_type():
+    """Un DTC se compare au précédent : les trois derniers de chaque type."""
+    assert "DERNIERS_PAR_TYPE = 3" in VISITE
+    assert "par_type" in VISITE

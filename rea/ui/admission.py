@@ -201,8 +201,16 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             )
         )
     with col2:
-        date_admission = st.date_input(
+        c_date, c_heure = st.columns(2)
+        date_admission = c_date.date_input(
             "Date d'admission", value=date.today(), key="admission_date_admission"
+        )
+        # L'heure d'arrivée : sur la feuille du premier jour, rien n'est
+        # prescrit avant elle, et une bande « ADMISSION » la marque (demande
+        # du service, 27 septembre).
+        heure_admission = c_heure.time_input(
+            "Heure d'admission", value=datetime.now().time().replace(second=0, microsecond=0),
+            key="admission_heure_admission", step=300,
         )
         provenance_type = st.selectbox(
             "Provenance", listes.codes(listes.PROVENANCES),
@@ -312,6 +320,7 @@ def ecran_nouvelle_admission(lit: int | None) -> None:
             contexte.base(),
             patient_id=pid,
             date_admission=datetime.combine(date_admission, datetime.min.time()).isoformat(),
+            heure_admission=heure_admission.strftime("%H:%M") if heure_admission else None,
             lit_admission=lit,
             provenance_type=provenance_type,
             provenance_detail=provenance_detail or None,

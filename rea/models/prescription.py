@@ -306,6 +306,74 @@ def vitesses_par_heure(
 
 
 # --------------------------------------------------------------------------
+# Jour de l'admission — la feuille ne commence pas à 8 h
+# --------------------------------------------------------------------------
+
+def admission_sur_la_journee(
+    date_jour: str | date, date_admission: str | date | None,
+    heure_admission: str | None,
+) -> tuple[int, int] | None:
+    """(heure, minute) de l'admission si elle tombe dans CETTE journée de
+    service (8 h → 8 h), sinon None.
+
+    Un patient admis à 18 h n'a rien reçu à 8 h : la feuille de son premier
+    jour ne peut pas lui prescrire de prise à 8 h (demande du service,
+    27 septembre). Une admission à 3 h du matin appartient à la journée ouverte
+    la veille à 8 h — c'est sur la feuille de la veille qu'elle se marque.
+    Sans heure saisie (dossiers anciens), rien : on ne devine pas une heure.
+    """
+    if not heure_admission or date_admission is None:
+        return None
+    try:
+        heure, minute = (int(x) for x in str(heure_admission).split(":")[:2])
+    except ValueError:
+        return None
+    if not (0 <= heure < 24 and 0 <= minute < 60):
+        return None
+    jour_adm = parse_date(date_admission)
+    if jour_adm is None:
+        return None
+    if heure < config.HEURE_DEBUT_JOURNEE:
+        jour_adm -= timedelta(days=1)
+    return (heure, minute) if jour_adm == parse_date(date_jour) else None
+
+
+def heures_avant_admission(admission: tuple[int, int] | None) -> frozenset[int]:
+    """Les heures de la grille qui précèdent l'arrivée du patient.
+
+    L'heure même de l'admission reste ouverte : un patient arrivé à 18 h 20
+    peut recevoir sa prise de 18 h dès son installation.
+    """
+    if admission is None:
+        return frozenset()
+    ordre = heures_de_la_journee()
+    return frozenset(ordre[:ordre.index(admission[0])])
+
+
+def vitesses_depuis_admission(
+    par_heure: dict[int, float], admission: tuple[int, int] | None
+) -> dict[int, float]:
+    """Les vitesses d'une journée d'admission : rien avant l'arrivée, et la
+    vitesse en vigueur écrite à l'heure d'arrivée plutôt qu'à 8 h."""
+    if admission is None or not par_heure:
+        return par_heure
+    ordre = heures_de_la_journee()
+    rang_adm = ordre.index(admission[0])
+    en_vigueur = None
+    resultat: dict[int, float] = {}
+    for rang, heure in enumerate(ordre):
+        if heure not in par_heure:
+            continue
+        if rang <= rang_adm:
+            en_vigueur = par_heure[heure]
+        else:
+            resultat[heure] = par_heure[heure]
+    if en_vigueur is not None:
+        resultat[admission[0]] = en_vigueur
+    return resultat
+
+
+# --------------------------------------------------------------------------
 # Nombre de prises par jour — utile au bilan hydrique (SPEC §5.6)
 # --------------------------------------------------------------------------
 

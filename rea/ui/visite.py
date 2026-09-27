@@ -444,36 +444,53 @@ def _avis(sejour: dict, date_jour_str: str) -> None:
         _bloc("Avis spécialisés", "".join(lignes), theme.VIOLET)
 
 
-def _explorations(sejour: dict, date_jour_str: str) -> None:
-    """Ce qui a été fait — imageries, échographies, dopplers — et ce qu'on y a vu.
+#: Combien d'examens de chaque type la visite montre : les derniers, pour
+#: comparer — un DTC d'aujourd'hui se lit contre celui d'avant-hier.
+DERNIERS_PAR_TYPE = 3
 
-    À la visite, la question « la TDM a-t-elle été faite ? » se pose avant
-    « qu'a-t-elle montré ? ». Les deux se répondaient jusqu'ici en changeant
-    d'onglet (demande du service, 10 septembre).
+
+def _explorations(sejour: dict, date_jour_str: str) -> None:
+    """Les examens complémentaires, **par type**, les trois derniers de chacun.
+
+    Un DTC seul ne dit pas si les vélocités montent ; les deux ou trois
+    derniers, côte à côte, le disent (demande du service, 27 septembre).
+    Avant, on montrait les huit derniers tous types confondus : trois
+    radiographies suffisaient à faire disparaître le DTC de la veille.
+    Les transfusions ont leur propre place (feuille, évolution) et ne sont
+    pas reprises ici.
     """
-    faites = explorations_service.du_sejour(contexte.base(), sejour["id"])
+    faites = [
+        e for e in explorations_service.du_sejour(contexte.base(), sejour["id"])
+        if e["type"] != "transfusion" and (e["date_heure"] or "")[:10] <= date_jour_str
+    ]
     if not faites:
         return
-    lignes = []
-    for exploration in faites[:8]:
-        titre = listes.TYPES_EXPLORATION.get(
-            exploration["type"], {}
-        ).get("libelle", exploration["type"])
-        jour = format_date_fr(exploration["date_heure"][:10])[:5]
-        # La conclusion en entier : l'écran n'est pas la feuille imprimée, il
-        # n'a pas à couper à 60 caractères. C'est justement pour lire la visite
-        # à l'écran plutôt que sur le papier qu'on ne tronque pas (demande du
-        # service, 12 septembre).
-        conclusion = (exploration["conclusion"] or "").strip()
-        lignes.append(
-            '<div class="rea-v-ligne">'
-            f'<span class="rea-v-produit">{html.escape(titre)} '
-            f'<span class="rea-v-detail">{html.escape(jour)}</span></span>'
-            f'<span class="rea-v-dose" style="white-space:normal;'
-            f'text-align:right">{html.escape(conclusion)}</span>'
-            "</div>"
+    par_type: dict[str, list[dict]] = {}
+    for exploration in faites:                    # du plus récent au plus ancien
+        par_type.setdefault(exploration["type"], []).append(exploration)
+    blocs = []
+    for type_, liste in par_type.items():
+        titre = listes.TYPES_EXPLORATION.get(type_, {}).get("libelle", type_)
+        compte = f" ({len(liste)})" if len(liste) > DERNIERS_PAR_TYPE else ""
+        lignes = []
+        for exploration in liste[:DERNIERS_PAR_TYPE]:
+            jour = format_date_fr(exploration["date_heure"][:10])[:5]
+            # La conclusion en entier : l'écran n'est pas la feuille imprimée,
+            # il n'a pas à couper (demande du service, 12 septembre).
+            conclusion = (exploration["conclusion"] or "").strip() or "—"
+            lignes.append(
+                '<div class="rea-v-ligne">'
+                f'<span class="rea-v-j">{html.escape(jour)}</span>'
+                f'<span class="rea-v-produit" style="white-space:normal">'
+                f"{html.escape(conclusion)}</span>"
+                "</div>"
+            )
+        blocs.append(
+            f'<div class="rea-v-texte"><b>{html.escape(titre)}</b>'
+            f'<span class="rea-v-detail">{html.escape(compte)}</span></div>'
+            + "".join(lignes)
         )
-    _bloc(f"Explorations faites ({len(faites)})", "".join(lignes), theme.BLEU)
+    _bloc("Explorations faites", "".join(blocs), theme.BLEU)
 
 
 def _derniers_etats_de_drain(sejour: dict, date_jour_str: str) -> dict[str, str]:
@@ -506,13 +523,15 @@ def _derniers_etats_de_drain(sejour: dict, date_jour_str: str) -> dict[str, str]
 
 
 def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
-    """Ce qui est entré, ce qui est sorti, ce qui reste — sous les traitements.
+    """Ce qui est entré, ce qui est sorti, ce qui reste — en trois lignes.
 
-    Sous les traitements et non ailleurs : les entrées viennent d'eux, et le
-    médecin qui vient de lire « Ringer 60 cc/h » veut savoir ce que ça donne
-    sur la journée. Chaque drain a sa ligne : deux redons qui donnent 90 et
-    410 ne se lisent pas comme deux qui donnent 250 chacun, et c'est le genre
-    de chiffre qui fait rappeler le chirurgien.
+    Sous les traitements : les entrées viennent d'eux. Résumé plutôt que
+    détaillé (demande du service, 27 septembre) : à la visite on lit le total
+    entré, le total sorti et le net ; le soluté par soluté se relit dans
+    Évolution si besoin. Les drains restent nommés sur une ligne discrète —
+    deux redons à 90 et 410 ne se lisent pas comme deux à 250 — avec leur état
+    (clampé, siphonnage) : un drain qui ne donne rien ne se lit pas pareil
+    selon qu'il est clampé ou bouché.
 
     Ce qui manque manque : sans diurèse ni poids, le bilan le dit au lieu
     d'afficher un chiffre faux.
@@ -521,28 +540,22 @@ def _bilan_entrees_sorties(sejour: dict, date_jour_str: str) -> None:
         contexte.base(), sejour["id"], date_jour_str
     )
     lignes = [_mesure("Entrées", f"{bilan.entrees_ml:.0f} mL", None)]
-    for libelle_entree, volume in bilan.detail_entrees:
-        lignes.append(
-            f'<div class="rea-v-texte" style="color:{theme.GRIS}">'
-            f"{html.escape(libelle_entree)} — {volume:.0f} mL</div>"
-        )
-    lignes.append(_mesure(
-        "Diurèse",
-        f"{bilan.diurese_ml:.0f} mL" if bilan.diurese_ml is not None else "—",
-        None,
-    ))
-    # L'etat du drain thoracique se lit AVEC son volume, jamais sans : un drain
-    # qui n'a rien donne de la journee ne se lit pas pareil selon qu'il etait
-    # clampe — c'est attendu — ou en siphonnage, ou c'est peut-etre un drain
-    # bouche (demande du service, 11 septembre).
+    sorties = bilan.sorties_ml
+    composantes = []
+    if bilan.diurese_ml is not None:
+        composantes.append(f"diurèse {bilan.diurese_ml:.0f}")
     etats = _derniers_etats_de_drain(sejour, date_jour_str)
     for libelle_drain, volume in bilan.detail_drains:
-        lignes.append(_mesure(libelle_drain, f"{volume:.0f} mL", None,
-                              detail=etats.get(libelle_drain)))
+        etat = etats.get(libelle_drain)
+        composantes.append(f"{libelle_drain} {volume:.0f}" + (f" ({etat})" if etat else ""))
     if bilan.pertes_insensibles_ml is not None:
-        lignes.append(_mesure(
-            "Pertes insensibles", f"{bilan.pertes_insensibles_ml:.0f} mL", None
-        ))
+        composantes.append(f"PI {bilan.pertes_insensibles_ml:.0f}")
+    lignes.append(_mesure(
+        "Sorties",
+        f"{sorties:.0f} mL" if sorties is not None else "—",
+        None,
+        detail=" · ".join(composantes) or None,
+    ))
     if bilan.net_ml is not None:
         signe = "+" if bilan.net_ml >= 0 else ""
         lignes.append(_mesure(

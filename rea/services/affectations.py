@@ -61,7 +61,8 @@ def du_soignant(
 ) -> list[dict]:
     """Les patients d'un soignant sur sa vacation, avec de quoi les nommer."""
     return base.requete(
-        "SELECT a.*, s.lit_admission, p.nom_affichage, p.matricule "
+        "SELECT a.*, s.lit_admission, s.date_admission, s.heure_admission, "
+        "       p.nom_affichage, p.matricule "
         "FROM affectation a "
         "JOIN sejour s ON s.id = a.sejour_id "
         "JOIN patient p ON p.id = s.patient_id "
