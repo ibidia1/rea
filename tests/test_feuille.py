@@ -126,7 +126,8 @@ def test_un_rond_par_prise_a_la_bonne_heure(base, dossier):
     heures_avec_rond = {i for i, c in enumerate(cases) if "○" in c}
     # La grille imprimée commence à 8 h : 0, 6, 12, 18 h occupent d'autres
     # colonnes que leur propre numéro (voir feuille.ORDRE_HEURES).
-    assert heures_avec_rond == {_colonne(0), _colonne(6), _colonne(12), _colonne(18)}
+    # ×4/j : première prise à 8 h, puis 14 h, 20 h et 2 h.
+    assert heures_avec_rond == {_colonne(8), _colonne(14), _colonne(20), _colonne(2)}
 
 
 def test_la_prise_de_minuit_n_est_pas_perdue(base, dossier):

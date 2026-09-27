@@ -6,13 +6,14 @@ def test_horaires_x1j():
     assert p.horaires_pour_rythme("x1/j") == (8,)
 
 
-def test_horaires_x4j_tranche_v1_3():
-    # SPEC §5.3, question ouverte 6 tranchée en v1.3 : 6-12-18-24.
-    assert p.horaires_pour_rythme("x4/j") == (6, 12, 18, 24)
+def test_horaires_x4j_premiere_prise_a_8h():
+    # Tranché en v1.3 à 6-12-18-24, revu le 27 septembre : la première prise
+    # est toujours à 8 h, les suivantes toutes les 6 h.
+    assert p.horaires_pour_rythme("x4/j") == (8, 14, 20, 2)
 
 
 def test_horaires_x6j():
-    assert p.horaires_pour_rythme("x6/j") == (4, 8, 12, 16, 20, 24)
+    assert p.horaires_pour_rythme("x6/j") == (8, 12, 16, 20, 24, 4)
 
 
 def test_horaires_continu_est_vide():

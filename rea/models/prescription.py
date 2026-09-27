@@ -46,7 +46,7 @@ def _horaires_du_referentiel() -> dict[str, tuple[int, ...]]:
 def horaires_affiches(rythme: str | None, override: str | None = None) -> str:
     """Les heures de prise, telles qu'elles se lisent derrière un produit.
 
-    Au-delà de six prises, la liste est repliée : « toutes les 2h dès 2h »
+    Au-delà de six prises, la liste est repliée : « toutes les 2h dès 8h »
     plutôt que douze horaires collés au nom du médicament. Écrite en entier,
     une prise horaire donnait quatre-vingts caractères de chiffres sur la
     ligne, et le nom du produit se perdait dedans (rythmes rapprochés,
@@ -66,8 +66,11 @@ def horaires_affiches(rythme: str | None, override: str | None = None) -> str:
 
 
 def _pas_regulier(heures: tuple[int, ...]) -> int | None:
-    """L'intervalle entre deux prises, s'il est le même partout."""
-    ecarts = {b - a for a, b in zip(heures, heures[1:])}
+    """L'intervalle entre deux prises, s'il est le même partout.
+
+    Compté modulo 24 : les prises partent de 8 h et passent minuit (… 23 h,
+    2 h, 5 h), l'écart de 23 h à 2 h vaut 3 h, pas −21."""
+    ecarts = {(b - a) % 24 for a, b in zip(heures, heures[1:])}
     return ecarts.pop() if len(ecarts) == 1 else None
 
 
