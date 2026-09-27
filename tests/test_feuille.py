@@ -727,13 +727,133 @@ def test_une_seule_valeur_du_couple_ne_perd_pas_le_separateur(base, dossier):
     assert "85/" not in ligne["valeurs"].html
 
 
-def test_calcium_magnesium_phosphore_regroupes(base, dossier):
+def test_calcium_magnesium_phosphore_passent_dans_autres_bilans(base, dossier):
+    """Ils ne se font pas tous les jours : plus de ligne fixe au
+    récapitulatif, mais un report daté dans « Autres bilans / examens » quand
+    ils ont été faits (demande du service, 27 septembre)."""
     _pid, sid = dossier
     bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
-                                 valeurs={"ca": 2.3, "mg": 0.8, "phosphore": 1.0})
+                                 valeurs={"ca": 2.3, "mg": 0.8, "phosphore": 1.0,
+                                          "hb": 9.1, "na": 140})
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
-    libelles = [l["libelle"] for l in contexte["bioAutres"]]
-    assert "Ca / Mg / P" in libelles
+    for bloc in ("bioHemato", "bioIono", "bioRenal", "bioHepat", "bioAutres"):
+        assert "Ca / Mg / P" not in [l["libelle"] for l in contexte[bloc]]
+    autres = contexte["autresBilans"].html
+    assert "04/09" in autres
+    assert "Ca²⁺ 2,3" in autres and "Mg²⁺ 0,8" in autres and "Phosphore 1" in autres
+    # Ce qui a déjà sa ligne fixe n'est pas écrit deux fois.
+    assert "Hb" not in autres and "Na" not in autres
+
+
+def test_sans_bilan_occasionnel_le_cadre_autres_bilans_reste_libre(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"hb": 9.1})
+    assert feuille.contexte(_dossier(base, sid, AUJ))["autresBilans"].html == ""
+
+
+def test_l_hematocrite_s_imprime_ht_sous_l_hb(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"hb": 9.1, "hte": 27})
+    lignes = feuille.contexte(_dossier(base, sid, AUJ))["bioHemato"]
+    libelles = [l["libelle"] for l in lignes]
+    assert libelles[:2] == ["Hb", "Ht"]
+    assert "27" in lignes[1]["valeurs"].html
+
+
+def _transfuser(base, sid, date_heure, produit="CGR (culot globulaire)", poches=2,
+                statut="Transfusé"):
+    from rea.services import explorations
+    explorations.enregistrer(
+        base, sejour_id=sid, date_heure=date_heure, type_="transfusion",
+        valeurs={"produit": produit, "nb_poches": poches, "statut": statut},
+    )
+
+
+def test_la_transfusion_se_place_entre_l_hb_d_avant_et_celle_d_apres(base, dossier):
+    """« 2 CGR ➜ » entre l'Hb de 6 h et celle de 18 h : le médecin compare
+    l'avant et l'après sans chercher la date (demande du service,
+    27 septembre)."""
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"hb": 6.8})
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T18:00",
+                                 valeurs={"hb": 8.9})
+    _transfuser(base, sid, f"{J1}T10:00")
+    lignes = feuille.contexte(_dossier(base, sid, AUJ))["bioHemato"]
+    libelles = [l["libelle"] for l in lignes]
+    assert libelles.index("Transfusion") == libelles.index("Ht") + 1
+    html = lignes[libelles.index("Transfusion")]["valeurs"].html
+    assert "2 CGR ➜" in html
+    # J2 n'a pas de bilan : J1 occupe les deux premières colonnes, et la
+    # flèche finit sur la frontière entre elles, à 1/12 du bord gauche.
+    assert f"right:{(12 - 1) / 12 * 100:.4f}%" in html
+
+
+def test_une_reserve_non_transfusee_ne_fait_pas_de_fleche(base, dossier):
+    _pid, sid = dossier
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{J1}T06:00",
+                                 valeurs={"hb": 6.8})
+    _transfuser(base, sid, f"{J1}T10:00", statut="Réserve prête")
+    libelles = [l["libelle"] for l in feuille.contexte(_dossier(base, sid, AUJ))["bioHemato"]]
+    assert "Transfusion" not in libelles
+
+
+# -- jour de l'admission -----------------------------------------------------
+
+def _admis_a(base, heure, jour=AUJ):
+    pid = sejours.creer_patient(base, matricule=f"ADM-{heure}", nom_affichage="Arrivé tard",
+                                  date_naissance="1970-01-01", sexe="F")
+    return sejours.creer_sejour(base, patient_id=pid, date_admission=jour,
+                                lit_admission=5, heure_admission=heure)
+
+
+def test_admission_a_18h_bande_et_pas_de_prise_a_8h(base):
+    """Un patient arrivé à 18 h n'a rien reçu à 8 h : pas de rond avant son
+    arrivée, et une bande « ADMISSION » à l'heure dite (demande du service,
+    27 septembre)."""
+    sid = _admis_a(base, "18:20")
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Céfazoline",
+        date_debut=AUJ, rythme="x3/j", horaires_override="8,16,24",
+    )
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    grille = contexte["ivRows"][0]["grille"].html
+    assert grille.count("○") == 1              # seule la prise de minuit reste
+    bande = contexte["bandeAdmission"].html
+    assert "ADMISSION 18h20" in bande
+    assert "ADMISSION 18h20" in contexte["bandeAdmissionVerso"].html
+
+
+def test_le_lendemain_de_l_admission_la_feuille_est_normale(base):
+    sid = _admis_a(base, "18:20", jour=J1)
+    prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Céfazoline",
+        date_debut=J1, rythme="x3/j", horaires_override="8,16,24",
+    )
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert contexte["ivRows"][0]["grille"].html.count("○") == 3
+    assert contexte["bandeAdmission"].html == ""
+
+
+def test_admission_de_nuit_se_marque_sur_la_feuille_de_la_veille():
+    """3 h du matin appartient à la journée ouverte la veille à 8 h."""
+    assert dom_p.admission_sur_la_journee(J1, AUJ, "03:10") == (3, 10)
+    assert dom_p.admission_sur_la_journee(AUJ, AUJ, "03:10") is None
+    avant = dom_p.heures_avant_admission((3, 10))
+    assert 8 in avant and 23 in avant and 2 in avant and 3 not in avant
+
+
+def test_sans_heure_d_admission_rien_ne_change():
+    assert dom_p.admission_sur_la_journee(AUJ, AUJ, None) is None
+    assert dom_p.heures_avant_admission(None) == frozenset()
+
+
+def test_la_seringue_demarre_a_l_heure_d_admission():
+    vitesses = {8: 5.0, 20: 3.0}
+    assert dom_p.vitesses_depuis_admission(vitesses, (18, 0)) == {18: 5.0, 20: 3.0}
+    assert dom_p.vitesses_depuis_admission(vitesses, None) == vitesses
 
 
 def test_sao2_vt_ai_sont_reportes(base, dossier):

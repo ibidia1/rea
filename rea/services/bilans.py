@@ -146,6 +146,73 @@ def enregistrer_gaz_du_sang(
 
 
 # --------------------------------------------------------------------------
+# Suppression d'un bilan erroné
+# --------------------------------------------------------------------------
+
+def _motif_obligatoire(motif: str | None) -> str:
+    motif = (motif or "").strip()
+    if not motif:
+        raise ValueError("Un motif est obligatoire pour supprimer un bilan.")
+    return motif
+
+
+def supprimer_valeurs(
+    base: Base,
+    sejour_id: str,
+    *,
+    resultats: list[str] = (),
+    gaz: list[str] = (),
+    motif: str,
+    utilisateur_id: str | None = None,
+) -> int:
+    """Retire des valeurs saisies à tort — une concentration fausse, validée
+    trop vite (demande du service, 27 septembre).
+
+    Suppression **logique** (règle de conception 2) : la ligne reste en base,
+    `supprime = 1`, et le journal garde qui l'a retirée, quand et pourquoi. Elle
+    disparaît de la cinétique, de la visite, du texte généré et de la feuille,
+    qui filtrent tous `supprime = 0`. Seules les lignes de CE séjour sont
+    touchées : un identifiant d'un autre patient est ignoré. Rend le nombre de
+    lignes retirées.
+    """
+    motif = _motif_obligatoire(motif)
+    retirees = 0
+    with base.transaction():
+        for table, ids in (("bilan_resultat", resultats), ("gaz_du_sang", gaz)):
+            for id_ligne in ids:
+                ligne = base.une_ligne(
+                    f"SELECT id FROM {table} WHERE id = ? AND sejour_id = ? "
+                    "AND supprime = 0", (id_ligne, sejour_id),
+                )
+                if not ligne:
+                    continue
+                base.supprimer_logiquement(table, id_ligne, utilisateur_id=utilisateur_id)
+                base.journaliser_evenement(
+                    action="motif_suppression", cible=table, ligne_id=id_ligne,
+                    details={"motif": motif}, utilisateur_id=utilisateur_id,
+                )
+                retirees += 1
+    return retirees
+
+
+def prelevements_du_sejour(base: Base, sejour_id: str) -> list[dict]:
+    """Chaque prélèvement saisi — ses valeurs de bilan et ses gaz du sang —
+    du plus récent au plus ancien. C'est la liste où l'on choisit ce qu'on
+    retire."""
+    par_heure: dict[str, dict] = {}
+    for ligne in resultats_du_sejour(base, sejour_id):
+        par_heure.setdefault(ligne["date_heure"], {"resultats": [], "gaz": []})[
+            "resultats"].append(ligne)
+    for ligne in gaz_du_sang_du_sejour(base, sejour_id):
+        par_heure.setdefault(ligne["date_heure"], {"resultats": [], "gaz": []})[
+            "gaz"].append(ligne)
+    return [
+        {"date_heure": date_heure, **par_heure[date_heure]}
+        for date_heure in sorted(par_heure, reverse=True)
+    ]
+
+
+# --------------------------------------------------------------------------
 # Lecture
 # --------------------------------------------------------------------------
 

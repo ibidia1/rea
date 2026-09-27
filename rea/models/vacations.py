@@ -154,7 +154,7 @@ def jour_de_vacation(instant: datetime | None = None) -> tuple[str, date]:
 
 
 def prises_de_la_vacation(
-    lignes_actives: list[dict], code: str
+    lignes_actives: list[dict], code: str, avant_admission: frozenset[int] = frozenset(),
 ) -> list[tuple[int, dict]]:
     """Les prises à donner pendant cette vacation, dans l'ordre des heures.
 
@@ -177,10 +177,16 @@ def prises_de_la_vacation(
 
     L'ordre est celui du poste : une vacation de nuit commence à 19 h et
     finit à 6 h, donc 23 h vient avant 2 h.
+
+    `avant_admission` : les heures d'un jour d'admission qui précèdent
+    l'arrivée du patient. Une prise de 8 h n'est pas à donner à un malade
+    arrivé à 18 h (demande du service, 27 septembre).
     """
     from . import prescription as presc
 
-    heures_du_poste = heures(code)
+    heures_du_poste = tuple(h for h in heures(code) if h not in avant_admission)
+    if not heures_du_poste:
+        return []
     rang = {heure: i for i, heure in enumerate(heures_du_poste)}
     prises: list[tuple[int, dict]] = []
     for ligne in lignes_actives:

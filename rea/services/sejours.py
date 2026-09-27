@@ -104,6 +104,7 @@ def modifier_admission(
     mecanisme_detail: str | None = None,
     motif_principal: str | None = None,
     motifs_associes: list[str] | None = None,
+    heure_admission: str | None = None,
     utilisateur_id: str | None = None,
 ) -> None:
     """Corrige les circonstances de l'admission.
@@ -123,12 +124,17 @@ def modifier_admission(
     # Trois écritures pour une seule correction : le séjour, ses régions, ses
     # motifs. À moitié appliquée, elle laisserait un séjour dont la catégorie
     # ne correspond plus aux motifs qui y sont accrochés.
+    champs_sejour = {"date_admission": date_admission}
+    # Absente = inchangée : les appels qui ne connaissent pas l'heure ne
+    # doivent pas effacer celle qui a été saisie à l'arrivée.
+    if heure_admission:
+        champs_sejour["heure_admission"] = heure_admission
     with base.transaction():
         base.mettre_a_jour(
             "sejour",
             sejour_id,
             {
-                "date_admission": date_admission,
+                **champs_sejour,
                 "provenance_type": provenance_type,
                 "provenance_detail": provenance_detail,
                 "poids_kg": poids_kg,
@@ -235,6 +241,7 @@ def creer_sejour(
     type_admission: str | None = None,
     maladie_chronique_igs2: str | None = None,
     glasgow_initial: int | None = None,
+    heure_admission: str | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
     with base.transaction():
@@ -251,6 +258,7 @@ def creer_sejour(
                 "patient_id": patient_id,
                 "numero_sejour": numero,
                 "date_admission": date_admission,
+                "heure_admission": heure_admission,
                 "lit_admission": lit_admission,
                 "provenance_type": provenance_type,
                 "provenance_detail": provenance_detail,

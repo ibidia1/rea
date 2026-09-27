@@ -40,6 +40,7 @@ import streamlit as st
 
 from .. import listes
 from ..models import dispositifs as dom_dispositifs
+from ..models import prescription as dom_prescription
 from ..models import vacations as dom_vacations
 from ..models.dates import format_date_fr
 from ..services import administrations as adm_service
@@ -133,7 +134,11 @@ def _choix_des_malades(base, utilisateur_id, jour, vacation, mes_patients) -> No
 
 def _traitements(base, patient, jour, vacation, utilisateur_id) -> None:
     lignes = prescriptions_service.lignes_actives_le(base, patient["sejour_id"], jour)
-    prises = dom_vacations.prises_de_la_vacation(lignes, vacation)
+    avant = dom_prescription.heures_avant_admission(
+        dom_prescription.admission_sur_la_journee(
+            jour, patient.get("date_admission"), patient.get("heure_admission"))
+    )
+    prises = dom_vacations.prises_de_la_vacation(lignes, vacation, avant)
     notees = adm_service.du_jour(base, patient["sejour_id"], jour)
 
     restantes = sum(

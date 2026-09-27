@@ -139,6 +139,10 @@ CREATE TABLE IF NOT EXISTS sejour (
     patient_id             TEXT NOT NULL REFERENCES patient(id),
     numero_sejour          INTEGER NOT NULL DEFAULT 1,
     date_admission         TEXT NOT NULL,
+    -- Heure d'arrivée « HH:MM ». Sur la feuille du premier jour, rien n'est
+    -- prescrit avant elle (demande du service, 27 septembre). NULL = dossier
+    -- antérieur, sans heure connue.
+    heure_admission        TEXT,
     lit_admission          INTEGER NOT NULL,          -- 1-12, figé
     provenance_type        TEXT,
     provenance_detail      TEXT,

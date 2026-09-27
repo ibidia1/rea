@@ -27,7 +27,7 @@ import html
 from datetime import timedelta
 from pathlib import Path
 
-from .. import config, listes, referentiels
+from .. import analytes, config, listes, referentiels
 from ..models import avis as dom_avis
 from ..models import calculs, prescription as dom
 from ..models.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
@@ -241,6 +241,11 @@ def _lignes_prescription(dossier) -> dict:
     # les lignes prescrites — elle vient du dossier, pas d'une prescription.
     lignes_synthetiques = {"PSE": _lignes_dispositifs_pse(dossier)}
 
+    # Le jour de l'admission, rien avant l'arrivée : une prise de 8 h sur la
+    # feuille d'un patient arrivé à 18 h serait cochée « non donnée » ou,
+    # pire, donnée deux fois (demande du service, 27 septembre).
+    avant = dom.heures_avant_admission(dossier.admission)
+
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
         synthetiques = lignes_synthetiques.get(voie, [])
         rendues = list(synthetiques)
@@ -283,7 +288,7 @@ def _lignes_prescription(dossier) -> dict:
                 "produit": produit,
                 "dose": _dose(ligne),
                 "grille": _grille_vitesses(par_heure) if par_heure
-                          else _grille_heures(set(heures)),
+                          else _grille_heures({h for h in heures if h % 24 not in avant}),
             })
         total_demande = len(synthetiques) + len(lignes)
         if total_demande > nb_lignes:
@@ -372,6 +377,7 @@ def _bande_bilans(dossier) -> Brut:
     prélèvements des autres heures (lactate de contrôle, CRP du soir, Rx…).
     """
     demandes = dossier.pancarte["bilans_demandes"]
+    avant = dom.heures_avant_admission(dossier.admission)
     heure_defaut = int(config.HEURE_PRELEVEMENT_DEFAUT.split(":")[0])
     par_heure: dict[int, list[str]] = {}
     for demande in demandes:
@@ -382,6 +388,8 @@ def _bande_bilans(dossier) -> Brut:
             h = heure_defaut
         if h == heure_defaut:
             continue  # le prélèvement de 8 h est déjà dans « Bilan du jour »
+        if h in avant:
+            continue  # avant l'arrivée du patient
         libelle = _abrege_bilan(demande["examen_code"])
         par_heure.setdefault(h, []).append(libelle)
     if not par_heure:
@@ -410,6 +418,49 @@ def _bande_bilans(dossier) -> Brut:
             f'align-items:{aligne}">{etiquettes}</span></div>'
         )
     return Brut('<div style="position:absolute;inset:0">' + "".join(blocs) + "</div>")
+
+
+#: Largeur des colonnes à gauche de la grille horaire, en pixels, telle que la
+#: maquette la dessine : n° + médicament + dose au recto, libellé au verso.
+LARGEUR_LIBELLES_RECTO = 22 + 252 + 90
+LARGEUR_LIBELLES_VERSO = 186
+
+
+def _bande_admission(dossier, largeur_libelles: int) -> Brut:
+    """La bande « ADMISSION » posée sur la grille horaire du premier jour.
+
+    Un trait rouge vertical à l'heure exacte d'arrivée, le mot ADMISSION et
+    l'heure écrits le long du trait en haut de la grille, et les heures
+    d'avant hachurées : on voit d'un coup d'œil que la journée de ce patient
+    commence à 18 h, pas à 8 h (demande du service, 27 septembre).
+    """
+    if not dossier.admission:
+        return Brut("")
+    heure, minute = dossier.admission
+    rang = ORDRE_HEURES.index(heure) + minute / 60
+    fraction = rang / len(ORDRE_HEURES)
+    position = f"calc({largeur_libelles}px + (100% - {largeur_libelles}px) * {fraction:.5f})"
+    hachures = (
+        f'<div style="position:absolute;top:0;bottom:0;left:{largeur_libelles}px;'
+        f'width:calc((100% - {largeur_libelles}px) * {fraction:.5f});'
+        'background:repeating-linear-gradient(135deg,rgba(110,124,123,.16) 0 2px,'
+        'transparent 2px 7px)"></div>'
+        if rang > 0 else ""
+    )
+    return Brut(
+        '<div style="position:absolute;inset:0;pointer-events:none;z-index:2">'
+        f"{hachures}"
+        f'<div style="position:absolute;top:0;bottom:0;left:{position};'
+        'width:0;border-left:2.5px solid #a33b2a"></div>'
+        # L'étiquette part sous la ligne des heures : l'heure de la colonne
+        # reste lisible au-dessus d'elle.
+        f'<div style="position:absolute;top:28px;left:{position};margin-left:1px;'
+        'background:#a33b2a;color:#fff;font-size:9px;font-weight:700;'
+        'letter-spacing:.12em;padding:4px 1px;writing-mode:vertical-rl;'
+        'transform:rotate(180deg);white-space:nowrap;line-height:1">'
+        f"ADMISSION {heure:02d}h{minute:02d}</div>"
+        "</div>"
+    )
 
 
 def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
@@ -666,6 +717,129 @@ def _rapport_pf(dossier, repartition: list[dict]) -> Brut:
     return _cellules_valeurs(
         cellules, NB_COLONNES_BIOLOGIE, _bornes_de_jour(repartition)
     )
+
+
+def _heure_transfusion(t: dict) -> str:
+    return (t.get("date_heure") or "")[:16]
+
+
+def _ligne_transfusions(dossier, repartition: list[dict]) -> dict | None:
+    """La ligne « Transfusion » du récapitulatif, juste sous l'Hb et l'Ht.
+
+    Une flèche « 2 CGR ➜ » posée entre la dernière Hb d'avant la transfusion
+    et la première d'après : le médecin compare les deux sans chercher la date
+    dans l'évolution (demande du service, 27 septembre). Seul ce qui est
+    réellement passé au patient s'écrit — une réserve prête n'a rien changé à
+    l'Hb. Rien à placer dans les jours affichés : pas de ligne du tout.
+    """
+    faites = [
+        t for t in dossier.transfusions
+        if (t.get("statut") or "Transfusé").strip() == "Transfusé"
+        and _heure_transfusion(t)
+    ]
+    groupes = [g for g in repartition if g["jour"]]
+    if not faites or not groupes:
+        return None
+    heures_hb = sorted(
+        l["date_heure"][:16] for l in dossier.resultats
+        if l["analyte"] == "hb" and l.get("valeur_num") is not None
+        and l.get("date_heure")
+    )
+    par_borne: dict[int, dict[str, float]] = {}
+    for t in faites:
+        instant = _heure_transfusion(t)
+        jour = instant[:10]
+        if jour < groupes[0]["jour"]:
+            continue                      # trop ancienne pour la feuille
+        borne, position = None, 0
+        for groupe in repartition:
+            if groupe["jour"] and jour < groupe["jour"]:
+                borne = position          # jour sans bilan : avant ce groupe
+                break
+            if groupe["jour"] == jour:
+                avant = sum(1 for h in heures_hb if h.startswith(jour) and h <= instant)
+                borne = position + min(avant, groupe["colonnes"])
+                break
+            position += groupe["colonnes"]
+        if borne is None:
+            continue
+        try:
+            poches = float(t.get("nb_poches") or 0)
+        except (TypeError, ValueError):
+            poches = 0
+        produit = _abrege_produit_sanguin(t.get("produit"))
+        cumul = par_borne.setdefault(borne, {})
+        cumul[produit] = cumul.get(produit, 0) + poches
+    if not par_borne:
+        return None
+    fond = _cellules_valeurs([], NB_COLONNES_BIOLOGIE, _bornes_de_jour(repartition)).html
+    fleches = []
+    for borne, produits in sorted(par_borne.items()):
+        texte = " + ".join(
+            f"{int(n) if float(n).is_integer() else _nombre(n)} {produit}"
+            if n else produit
+            for produit, n in produits.items()
+        )
+        # La flèche finit sur la frontière : ce qui est à sa gauche est l'Hb
+        # d'avant, ce qui est à sa droite l'Hb d'après.
+        if borne == 0:
+            cote = "left:0"
+        else:
+            cote = f"right:{(NB_COLONNES_BIOLOGIE - borne) / NB_COLONNES_BIOLOGIE * 100:.4f}%"
+        fleches.append(
+            f'<div style="position:absolute;top:1px;bottom:1px;{cote};display:flex;'
+            'align-items:center;background:#f6efda;border:1px solid #b9922e;'
+            'border-radius:2px;padding:0 2px;font-size:7.5px;font-weight:700;'
+            f'color:#8c3a2b;white-space:nowrap;line-height:1">{html.escape(texte)} ➜</div>'
+        )
+    return {
+        "libelle": "Transfusion",
+        "valeurs": Brut(fond + "".join(fleches)),
+    }
+
+
+def _codes_des_lignes(*sections) -> set[str]:
+    codes: set[str] = set()
+    for section in sections:
+        for code, _libelle in section:
+            codes.update((code,) if isinstance(code, str) else code)
+    return codes
+
+
+#: Combien de lignes le report automatique prend au plus dans « Autres bilans
+#: / examens » : le reste du cadre reste réglé pour l'écriture à la main.
+LIGNES_AUTRES_BILANS = 5
+
+
+def _autres_bilans(dossier, repartition: list[dict], deja_imprimes: set[str]) -> Brut:
+    """Les bilans faits qui n'ont pas de ligne fixe — calcium, magnésium,
+    phosphore, troponine… — reportés dans « Autres bilans / examens ».
+
+    Ils ne se font pas tous les jours : une ligne fixe restait vide cinq jours
+    sur six (demande du service, 27 septembre). Une ligne par jour de
+    prélèvement affiché, la dernière valeur du jour pour chaque bilan.
+    """
+    jours = [g["jour"] for g in repartition if g["jour"]]
+    par_jour: dict[str, dict[str, float]] = {}
+    for l in dossier.resultats:
+        jour = (l.get("date_heure") or "")[:10]
+        code = l["analyte"]
+        if (jour not in jours or code in deja_imprimes or l.get("valeur_num") is None
+                or analytes.analyte(code).calcule):
+            continue
+        par_jour.setdefault(jour, {})[code] = l["valeur_num"]
+    lignes = []
+    for jour in sorted(par_jour)[-LIGNES_AUTRES_BILANS:]:
+        valeurs = " · ".join(
+            f"{analytes.analyte(code).libelle} {_nombre(v)}"
+            for code, v in par_jour[jour].items()
+        )
+        lignes.append(
+            '<div style="font-size:9px;line-height:20px;height:21px;padding:0 6px;'
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+            f"<b>{html.escape(format_date_fr(jour)[:5])}</b> : {html.escape(valeurs)}</div>"
+        )
+    return Brut("".join(lignes))
 
 
 def _texte_abrege_dispositif(etat) -> str:
@@ -1124,6 +1298,8 @@ def contexte(dossier) -> dict:
         # Prescription
         **prescrit["blocs"],
         "bilanPrescRows": [{"grille": _bande_bilans(dossier)}],
+        "bandeAdmission": _bande_admission(dossier, LARGEUR_LIBELLES_RECTO),
+        "bandeAdmissionVerso": _bande_admission(dossier, LARGEUR_LIBELLES_VERSO),
         # Verso — surveillance laissée manuscrite
         "survRowsA": _lignes_manuscrites(lignes_ref["surveillance_a"]),
         "survRowsB": _lignes_manuscrites(lignes_ref["surveillance_b"]),
@@ -1132,7 +1308,7 @@ def contexte(dossier) -> dict:
         # Verso — biologie reportée
         "days": _entetes_jours(repartition),
         "daysGaz": _entetes_jours(repartition_gaz),
-        "bioHemato": _valeurs_biologie(dossier, repartition, list(lignes_ref["hemato"]), "bilan"),
+        "bioHemato": _hemato_avec_transfusions(dossier, repartition, list(lignes_ref["hemato"])),
         "bioIono": _valeurs_biologie(dossier, repartition, list(lignes_ref["iono"]), "bilan"),
         "bioRenal": _valeurs_biologie(dossier, repartition, list(lignes_ref["renal"]), "bilan"),
         "bioHepat": _valeurs_biologie(dossier, repartition, list(lignes_ref["hepat"]), "bilan"),
@@ -1141,11 +1317,29 @@ def contexte(dossier) -> dict:
         "pfRow": _rapport_pf(dossier, repartition_gaz),
         "gdsVent": _valeurs_biologie(dossier, repartition_gaz, list(lignes_ref["ventilation"]), "gaz"),
         "infRows": _microbiologie(dossier),
+        "autresBilans": _autres_bilans(dossier, repartition, _codes_des_lignes(
+            *(lignes_ref[cle] for cle in ("hemato", "iono", "renal", "hepat", "autres")),
+            [(code, "") for code, _l, source in referentiels.charger("feuille_bilan_infectieux")
+             if source == "analyte"],
+        )),
         "examensDemain": _examens_demain(dossier),
         "pied": _pied(prescrit["debordements"]),
         "styleDynamique": _style_remplissage(prescrit["taux_remplissage"]),
     }
     return ctx
+
+
+def _hemato_avec_transfusions(dossier, repartition, lignes_spec) -> list[dict]:
+    """Les lignes d'hémato, et la ligne des transfusions glissée sous l'Ht
+    (ou sous l'Hb) — là où l'œil compare l'avant et l'après."""
+    lignes = _valeurs_biologie(dossier, repartition, lignes_spec, "bilan")
+    transfusions = _ligne_transfusions(dossier, repartition)
+    if transfusions:
+        libelles = [l["libelle"] for l in lignes]
+        rang = next((i + 1 for i in reversed(range(len(libelles)))
+                     if libelles[i] in ("Hb", "Ht")), 0)
+        lignes.insert(rang, transfusions)
+    return lignes
 
 
 _SLUGS_BLOCS = {
