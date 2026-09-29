@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+from .. import referentiels
 from ..database import Base
 from ..models import prescription as dom
 from ..models.dates import parse_date
@@ -66,6 +67,8 @@ class DossierFeuille:
     # (heure, minute) de l'admission si elle tombe dans cette journée : la
     # feuille marque l'arrivée et ne prescrit rien avant. None les autres jours.
     admission: tuple | None = None
+    # Les cures menées à leur terme avant ce jour — « 10 J Imipénème ».
+    cures_terminees: list = field(default_factory=list)
 
 
 def _vitesses(base: Base, sejour_id: str, date_jour: str, lignes: list, etats) -> dict:
@@ -122,6 +125,10 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
         microbiologie=list(micro_service.du_sejour(base, sejour_id)),
         avis=list(avis_service.du_sejour(base, sejour_id)),
         transfusions=list(explorations_service.transfusions_du_sejour(base, sejour_id)),
+        cures_terminees=dom.cures_terminees(
+            prescriptions_service.episodes(base, sejour_id), date_jour,
+            referentiels.charger("antibiotiques_ddd", "fragments_antibiotiques"),
+        ),
         escarres=list(evolution_service.escarres_au(base, sejour_id, date_jour)),
         allergies=list(sejours_service.allergies_du_patient(base, sejour["patient_id"])),
         # Les scores sont déjà du texte : ce sont eux que la feuille imprime,

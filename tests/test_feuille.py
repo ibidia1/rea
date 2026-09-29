@@ -1504,3 +1504,57 @@ def test_la_barre_des_abords_ecrit_reintube(base, dossier):
                       details={"taille_sonde": 7.5})
     abords = [a["texte"] for a in feuille.contexte(_dossier(base, sid, AUJ))["abords"]]
     assert any(t.startswith("☑ Réintubé") for t in abords), abords
+
+
+# -- compteur de jours et cures terminées (demande du service, 29 septembre) --
+
+def test_le_compteur_de_jours_precede_le_traitement(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Paracétamol",
+                                date_debut=J1, dose=1, unite="g", rythme="x4/j")
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Imipénème",
+                                date_debut=J2, dose=1, unite="g", rythme="x3/j",
+                                duree_prevue_jours=7)
+    lignes = {l["produit"]: l for l in feuille.contexte(_dossier(base, sid, AUJ))["ivRows"]
+              if l["produit"]}
+    assert ">J2<" in lignes["Paracétamol"]["jour"].html
+    assert ">J3/7<" in lignes["Imipénème"]["jour"].html
+    assert feuille.COULEUR_FIN_DE_CURE not in lignes["Imipénème"]["jour"].html
+
+
+def test_le_dernier_jour_prevu_s_ecrit_en_rouge(base, dossier):
+    _pid, sid = dossier
+    prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Amikacine",
+                                date_debut=J2, dose=1, unite="g", rythme="x1/j",
+                                duree_prevue_jours=3)
+    ligne = next(l for l in feuille.contexte(_dossier(base, sid, AUJ))["ivRows"]
+                 if l["produit"] == "Amikacine")
+    assert ">J3/3<" in ligne["jour"].html
+    assert feuille.COULEUR_FIN_DE_CURE in ligne["jour"].html
+
+
+def test_une_cure_terminee_passe_dans_sa_case(base, dossier):
+    """Arrêtée la veille, l'antibiotique quitte la grille et s'écrit « 2 J
+    Clindamycine » au-dessus des transfusions. Un paracétamol arrêté n'est
+    pas une cure."""
+    _pid, sid = dossier
+    for produit in ("Clindamycine", "Paracétamol"):
+        ligne = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit=produit,
+                                            date_debut=J2, dose=1, unite="g", rythme="x3/j")
+        prescriptions.arreter_ligne(base, ligne, date_arret=J1)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert not any(l["produit"] for l in contexte["ivRows"])
+    cures = contexte["cures"].html
+    assert "<b>2 J</b> Clindamycine" in cures
+    assert "Paracétamol" not in cures
+
+
+def test_une_cure_arretee_ce_jour_reste_sur_la_grille(base, dossier):
+    """Son dernier jour, la ligne garde sa place et son compteur ; elle ne
+    passe dans les cures terminées que le lendemain."""
+    _pid, sid = dossier
+    ligne = prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV", produit="Imipénème",
+                                        date_debut=J2, dose=1, unite="g", rythme="x3/j")
+    prescriptions.arreter_ligne(base, ligne, date_arret=AUJ)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert contexte["cures"].html == ""
