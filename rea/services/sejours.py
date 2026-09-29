@@ -443,6 +443,19 @@ def ajouter_antecedent(
     )
 
 
+def preciser_antecedent(
+    base: Base, antecedent_id: str, precision: str | None, *,
+    utilisateur_id: str | None = None,
+) -> None:
+    """Le commentaire qui qualifie un antécédent — « Diabète » puis « sous
+    insuline » (demande du service, 29 septembre). Vide, il s'efface."""
+    base.mettre_a_jour(
+        "antecedent", antecedent_id,
+        {"precision": (precision or "").strip() or None},
+        utilisateur_id=utilisateur_id,
+    )
+
+
 def supprimer_antecedent(
     base: Base, antecedent_id: str, *, utilisateur_id: str | None = None
 ) -> None:

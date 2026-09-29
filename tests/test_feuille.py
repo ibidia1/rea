@@ -640,17 +640,44 @@ def test_sans_antecedent_reste_distingue_de_non_renseigne(base, dossier):
     assert "Aucun connu" in feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
 
 
-def test_chaque_antecedent_est_sur_sa_propre_ligne(base, dossier):
-    """Remarque du service, 6 septembre : une phrase à virgules se relit
-    mal au pied du lit — un antécédent par ligne."""
+def test_les_antecedents_tiennent_sur_une_ligne_separes_par_une_barre(base, dossier):
+    """« Diabète type 2 (sous insuline) / HTA » : une ligne, séparés par
+    « / », chacun avec son commentaire (demande du service, 29 septembre —
+    remplace la liste verticale du 6 septembre, qui prenait toute la case)."""
     _pid, sid = dossier
     sejour = base.une_ligne("SELECT patient_id FROM sejour WHERE id = ?", (sid,))
+    diabete = sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"],
+                                         categorie="personnel", libelle="Diabète type 2")
     sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="HTA")
-    sejours.ajouter_antecedent(base, patient_id=sejour["patient_id"], categorie="personnel", libelle="Diabète type 2")
+    sejours.preciser_antecedent(base, diabete, "sous insuline")
     html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
-    assert "<div>HTA</div>" in html
-    assert "<div>Diabète type 2</div>" in html
+    assert "Diabète type 2 (sous insuline) / HTA" in html
+    sejours.preciser_antecedent(base, diabete, "  ")          # effacé
+    html = feuille.contexte(_dossier(base, sid, AUJ))["motifTransportAtcd"].html
+    assert "Diabète type 2 / HTA" in html
 
+
+def test_les_escarres_en_tete_de_la_case_evolution(base, dossier):
+    """En rouge pastel, sur la première ligne de la case « Évolution », avec
+    leur stade et leur compteur de jours (demande du service, 29 septembre)."""
+    from rea.services import evolution
+    _pid, sid = dossier
+    evolution.ajouter_escarre(base, sejour_id=sid, localisation="Sacrum", grade=3,
+                              date_constat=J2)
+    guerie = evolution.ajouter_escarre(base, sejour_id=sid, localisation="Talon gauche",
+                                       grade=1, date_constat=J2)
+    evolution.modifier_escarre(base, guerie, {"date_guerison": J1})
+    box = feuille.contexte(_dossier(base, sid, AUJ))["escarres"].html
+    assert "Sacrum stade 3 (J3)" in box
+    assert "Talon" not in box                # guérie avant ce jour
+    assert "#f8dcd7" in box                  # rouge pastel
+    # La feuille d'avant la guérison la montre encore.
+    assert "Talon gauche stade 1" in feuille.contexte(_dossier(base, sid, J2))["escarres"].html
+
+
+def test_sans_escarre_rien_ne_s_imprime(base, dossier):
+    _pid, sid = dossier
+    assert feuille.contexte(_dossier(base, sid, AUJ))["escarres"].html == ""
 
 def test_les_circonstances_reprennent_le_mecanisme_et_son_detail(base, dossier):
     """Exemple du service : « Circonstances : AVP deux-roues — heurté par

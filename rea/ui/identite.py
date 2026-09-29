@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import date, datetime
 
 import streamlit as st
@@ -200,8 +201,13 @@ def _liste_antecedents(sejour: dict) -> None:
     )
     if not antecedents:
         return
+    st.caption(
+        "Pour qualifier un antécédent — Diabète « sous insuline », HTA « sous "
+        "trithérapie » — écrire dans la case à sa droite puis Entrée. Sur la "
+        "feuille : Diabète (sous insuline) / HTA / …"
+    )
     for a in antecedents:
-        col_croix, col_texte = st.columns([1, 20])
+        col_croix, col_texte, col_precision = st.columns([1, 9, 11])
         if col_croix.button(
             "X", key=f"suppr_atcd_{a['id']}", help="Retirer cet antécédent"
         ):
@@ -210,13 +216,32 @@ def _liste_antecedents(sejour: dict) -> None:
             )
             st.rerun()
         categorie = listes.libelle(listes.CATEGORIES_ANTECEDENT, a["categorie"], "")
+        libelle = a["libelle"]
+        if a.get("quantification_valeur") is not None:
+            libelle += (f" — {champs.format_valeur(a['quantification_valeur'])} "
+                        f"{a.get('quantification_unite') or ''}")
         col_texte.markdown(
-            f"<span style='font-size:.9rem'>{_texte_antecedent(a)}"
+            f"<span style='font-size:.9rem'>{html.escape(libelle)}"
             + (f" <span style='color:{theme.GRIS};font-size:.78rem'>· {categorie}</span>"
                if categorie else "")
             + "</span>",
             unsafe_allow_html=True,
         )
+        col_precision.text_input(
+            "Précision", value=a.get("precision") or "",
+            placeholder="préciser (ex. sous insuline)", label_visibility="collapsed",
+            key=f"precision_atcd_{a['id']}",
+            on_change=_enregistrer_precision, args=(a["id"],),
+        )
+
+
+def _enregistrer_precision(antecedent_id: str) -> None:
+    """Enregistre le commentaire dès que la case perd la main (Entrée)."""
+    sejours_service.preciser_antecedent(
+        contexte.base(), antecedent_id,
+        st.session_state.get(f"precision_atcd_{antecedent_id}"),
+        utilisateur_id=contexte.utilisateur_id(),
+    )
 
 
 def _formulaire_categorie(sejour: dict, prefixe: str) -> None:

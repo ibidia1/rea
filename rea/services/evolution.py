@@ -388,6 +388,17 @@ def escarres(base: Base, sejour_id: str, actives_seulement: bool = False) -> lis
     return [e for e in lignes if not e["date_guerison"]] if actives_seulement else lignes
 
 
+def escarres_au(base: Base, sejour_id: str, date_jour: str) -> list[dict]:
+    """Les escarres présentes ce jour-là : constatées au plus tard ce jour, et
+    pas encore guéries à cette date. La feuille d'hier imprimée aujourd'hui
+    doit dire ce qu'il y avait hier."""
+    return [
+        e for e in escarres(base, sejour_id)
+        if (e["date_constat"] or "")[:10] <= date_jour
+        and (not e["date_guerison"] or e["date_guerison"][:10] > date_jour)
+    ]
+
+
 def _texte_escarres(base: Base, sejour_id: str) -> str:
     actives = escarres(base, sejour_id, actives_seulement=True)
     if not actives:
