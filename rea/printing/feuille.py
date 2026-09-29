@@ -230,12 +230,81 @@ def _lignes_dispositifs_pse(dossier) -> list[dict]:
     return lignes
 
 
+#: Le nom court de chaque voie, écrit entre parenthèses derrière un traitement
+#: rangé dans les lignes libres d'un autre bloc.
+VOIE_COURTE = {
+    "ENTREES": "Entrée", "PSE": "PSE", "IV": "IV", "SC": "SC", "PO": "PO",
+    "AEROSOL": "Aérosol", "KINE": "Kiné", "SOINS": "Soins locaux",
+}
+#: La couleur vive de cette mention : elle doit sauter aux yeux, parce que
+#: c'est elle — et non le titre du bloc — qui dit par où passe le produit.
+COULEUR_VOIE_EMPRUNTEE = "#e8590c"
+
+#: Où ranger un traitement en trop, dans l'ordre. D'abord les blocs à prises
+#: horaires qui restent souvent vides — un rond reste un rond sous « S/C » —,
+#: les blocs qui coulent (Entrées, P.S.E.) en dernier : leurs cases portent un
+#: débit, et un rond d'antibiotique au milieu des vitesses se lirait mal.
+#: Pour ce qui coule, l'ordre inverse : une seringue en trop va d'abord là où
+#: les cases portent déjà des débits.
+HOTES_PRISES = ("SC", "AEROSOL", "KINE", "SOINS", "PO", "IV", "ENTREES", "PSE")
+HOTES_DEBITS = ("ENTREES", "PSE", "SC", "AEROSOL", "KINE", "SOINS", "PO", "IV")
+
+
+def _ligne_rendue(dossier, voie: str, ligne: dict, avant, *, emprunt: bool) -> dict:
+    """Une ligne de traitement telle qu'elle s'imprime : produit, dose, grille."""
+    arretee = ligne["statut"] != "active"
+    heures = () if arretee else dom.horaires_pour_rythme(
+        ligne.get("rythme"), ligne.get("horaires_override")
+    )
+    produit = ligne.get("produit") or ""
+    if voie == "ENTREES":
+        # Le sous-type — « perfusion », « nutrition parentérale » — ne
+        # s'accole plus au produit : il alourdissait la ligne sans rien dire
+        # que le nom du produit ne dise déjà (demande du service, 15
+        # septembre). Les additifs, eux, restent : ils disent ce qu'on a mis
+        # dans le flacon (demande du service, 8 septembre).
+        if ligne.get("additifs"):
+            produit = f"{produit} {ligne['additifs']}"
+    texte = html.escape(produit)
+    if arretee:
+        texte = (
+            '<span class="arretee" style="text-decoration:line-through;'
+            f'color:#6d7c7b">{texte}</span>'
+            '<span style="font-size:8px;color:#a33b2a;margin-left:5px">ARRÊTÉ</span>'
+        )
+    if emprunt:
+        # Rangé sous le titre d'un autre bloc : la voie s'écrit en couleur
+        # vive, sans quoi un IV sous « S/C » serait lu comme sous-cutané
+        # (demande du service, 29 septembre).
+        texte += (f' <b style="color:{COULEUR_VOIE_EMPRUNTEE};white-space:nowrap">'
+                  f"({html.escape(VOIE_COURTE.get(voie, voie))})</b>")
+    # Ce qui coule porte sa vitesse dans les cases, ce qui se donne à heure
+    # fixe porte un rond : deux consignes différentes, deux écritures.
+    par_heure = {} if arretee else (dossier.vitesses.get(ligne["id"]) or {})
+    return {
+        # Du texte simple quand il n'y a rien à mettre en forme : le gabarit
+        # l'échappe lui-même. Sinon un seul <span> : la case est une boîte
+        # flexible, qui mangerait l'espace entre le nom et la voie.
+        "produit": Brut(f"<span>{texte}</span>") if (arretee or emprunt) else produit,
+        "dose": _dose(ligne),
+        "grille": _grille_vitesses(par_heure) if par_heure
+                  else _grille_heures({h for h in heures if h % 24 not in avant}),
+    }
+
+
 def _lignes_prescription(dossier) -> dict:
-    """Une ligne par prescription active, un rond par prise."""
+    """Une ligne par prescription active, un rond par prise.
+
+    Les trente lignes de la feuille sont **partagées entre les blocs**
+    (demande du service, 29 septembre). Chaque bloc se remplit d'abord avec
+    ses propres traitements ; ce qui dépasse — le onzième IV d'un choc
+    septique — va dans les lignes restées libres d'un autre bloc, avec sa
+    voie écrite entre parenthèses en couleur vive. Avant, ce traitement
+    n'était **pas imprimé du tout**, et seul un avertissement en bas de page
+    le disait. Ne reste en débordement que ce qui dépasse les trente lignes.
+    """
     par_voie = dossier.lignes_par_voie
-    blocs: dict[str, list] = {}
     debordements: list[str] = []
-    taux_remplissage: dict[str, float] = {}
 
     # La sédation posée comme dispositif occupe une ligne du bloc P.S.E. avant
     # les lignes prescrites — elle vient du dossier, pas d'une prescription.
@@ -246,63 +315,53 @@ def _lignes_prescription(dossier) -> dict:
     # pire, donnée deux fois (demande du service, 27 septembre).
     avant = dom.heures_avant_admission(dossier.admission)
 
+    # 1. Chaque bloc avec ses propres lignes. Les lignes arrêtées ce jour-là
+    #    restent imprimées, barrées : une ligne qui disparaît sans trace,
+    #    c'est une administration poursuivie par habitude.
+    rendues: dict[str, list] = {}
+    en_trop: list[tuple[str, dict]] = []
     for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
-        synthetiques = lignes_synthetiques.get(voie, [])
-        rendues = list(synthetiques)
-        # Les lignes arrêtées ce jour-là restent imprimées, barrées : une ligne
-        # qui disparaît sans laisser de trace, c'est une administration
-        # poursuivie par habitude, ou un arrêt que personne ne remarque.
-        lignes = list(par_voie.get(voie, []))
-        place_restante = max(nb_lignes - len(synthetiques), 0)
-        for ligne in lignes[:place_restante]:
-            arretee = ligne["statut"] != "active"
-            heures = () if arretee else dom.horaires_pour_rythme(
-                ligne.get("rythme"), ligne.get("horaires_override")
-            )
-            produit = ligne.get("produit") or ""
-            if voie == "ENTREES":
-                # Le sous-type — « perfusion », « nutrition parentérale » — ne
-                # s'accole plus au produit : il alourdissait la ligne sans rien
-                # dire que le nom du produit ne dise déjà (demande du service,
-                # 15 septembre). Les additifs, eux, restent : ils disent ce
-                # qu'on a mis dans le flacon.
-                # Ce qu'on a mis dans le flacon se lit sur la même ligne que le
-                # flacon. Écrit nulle part sur la feuille imprimée jusqu'ici :
-                # l'infirmière préparait d'après la pancarte, et la pancarte ne
-                # disait pas les additifs (demande du service, 8 septembre).
-                if ligne.get("additifs"):
-                    produit = f"{produit} {ligne['additifs']}"
-            if arretee:
-                produit = Brut(
-                    '<span class="arretee" style="text-decoration:line-through;'
-                    f'color:#6d7c7b">{html.escape(produit)}</span>'
-                    '<span style="font-size:8px;color:#a33b2a;margin-left:5px">'
-                    "ARRÊTÉ</span>"
-                )
-            # Ce qui coule porte sa vitesse dans les cases, ce qui se donne à
-            # heure fixe porte un rond : deux consignes différentes, deux
-            # écritures différentes.
-            par_heure = {} if arretee else (dossier.vitesses.get(ligne["id"]) or {})
-            rendues.append({
-                "numero": str(len(rendues) + 1),
-                "produit": produit,
-                "dose": _dose(ligne),
-                "grille": _grille_vitesses(par_heure) if par_heure
-                          else _grille_heures({h for h in heures if h % 24 not in avant}),
-            })
-        total_demande = len(synthetiques) + len(lignes)
-        if total_demande > nb_lignes:
-            debordements.append(
-                f"{listes.VOIES[voie]['titre']} : {total_demande - nb_lignes} ligne(s) "
-                "de plus que la feuille"
-            )
-        # Plus de la moitié des lignes prévues sont vides : un texte plus grand
-        # se lit mieux depuis le pied du lit, et la place ne manque pas.
-        taux_remplissage[nom_liste] = len(rendues) / nb_lignes if nb_lignes else 1.0
-        while len(rendues) < nb_lignes:
-            rendues.append(_ligne_vide(str(len(rendues) + 1)))
-        blocs[nom_liste] = rendues
-    return {"blocs": blocs, "debordements": debordements, "taux_remplissage": taux_remplissage}
+        bloc = list(lignes_synthetiques.get(voie, []))[:nb_lignes]
+        for ligne in par_voie.get(voie, []):
+            if len(bloc) < nb_lignes:
+                bloc.append(_ligne_rendue(dossier, voie, ligne, avant, emprunt=False))
+            else:
+                en_trop.append((voie, ligne))
+        rendues[nom_liste] = bloc
+
+    # 2. Ce qui dépasse va dans les lignes libres des autres blocs, dans
+    #    l'ordre de HOTES_PRISES (HOTES_DEBITS pour ce qui coule).
+    for voie, ligne in en_trop:
+        ordre = HOTES_DEBITS if voie in ("PSE", "ENTREES") else HOTES_PRISES
+        hote = next(
+            (LIGNES_PAR_VOIE[v][0] for v in ordre
+             if v != voie and len(rendues[LIGNES_PAR_VOIE[v][0]]) < LIGNES_PAR_VOIE[v][1]),
+            None,
+        )
+        if hote is None:
+            debordements.append(voie)
+            continue
+        rendues[hote].append(_ligne_rendue(dossier, voie, ligne, avant, emprunt=True))
+
+    blocs: dict[str, list] = {}
+    taux_remplissage: dict[str, float] = {}
+    for voie, (nom_liste, nb_lignes) in LIGNES_PAR_VOIE.items():
+        bloc = rendues[nom_liste]
+        # Plus de la moitié des lignes prévues sont vides : un texte plus
+        # grand se lit mieux depuis le pied du lit.
+        taux_remplissage[nom_liste] = len(bloc) / nb_lignes if nb_lignes else 1.0
+        for rang, ligne in enumerate(bloc):
+            ligne.setdefault("numero", str(rang + 1))
+            ligne["numero"] = str(rang + 1)
+        while len(bloc) < nb_lignes:
+            bloc.append(_ligne_vide(str(len(bloc) + 1)))
+        blocs[nom_liste] = bloc
+
+    messages = []
+    for voie in dict.fromkeys(debordements):
+        n = debordements.count(voie)
+        messages.append(f"{listes.VOIES[voie]['titre']} : {n} ligne(s) de plus que la feuille")
+    return {"blocs": blocs, "debordements": messages, "taux_remplissage": taux_remplissage}
 
 
 def _dose(ligne: dict) -> str:
@@ -1392,6 +1451,8 @@ _PALIERS_REMPLISSAGE = ((0.34, 15), (0.6, 13))
 #: Taille de base des lignes de traitement, alignee sur le style en ligne de
 #: la maquette. Un bloc a moitie vide grossit au-dela (paliers ci-dessus).
 _TAILLE_DEFAUT = 11
+#: Taille maximale du texte de la colonne dose, même dans un bloc peu rempli.
+TAILLE_DOSE_MAX = 13
 
 
 def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
@@ -1408,9 +1469,11 @@ def _style_remplissage(taux_remplissage: dict[str, float]) -> Brut:
             # cellule, et un style en ligne l'emporte sur une regle de classe
             # sans cette marque — l'agrandissement des blocs vides resterait
             # sans effet.
+            # La colonne dose est étroite (90 px) : au-delà de 13 px, une
+            # dilution « 8 mg/50 mL » passait à la ligne et se faisait couper.
             regles.append(
-                f".txt-produit-{slug},.txt-dose-{slug}"
-                f"{{font-size:{taille}px !important}}"
+                f".txt-produit-{slug}{{font-size:{taille}px !important}}"
+                f".txt-dose-{slug}{{font-size:{min(taille, TAILLE_DOSE_MAX)}px !important}}"
             )
     return Brut("".join(regles))
 
