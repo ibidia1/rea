@@ -212,6 +212,12 @@ def charger(base: Base) -> str:
         "hb": 9.6, "hte": 30, "plq": 88, "gb": 14.6, "na": 144, "k": 4.2,
         "creat": 152, "uree": 14.2, "crp": 210, "glycemie": 9.1,
     })
+    # Le bilan du matin, déjà saisi : il s'imprime dans la colonne du jour.
+    bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=f"{AUJ}T06:00", valeurs={
+        "hb": 9.4, "hte": 29, "plq": 102, "gb": 12.8, "tp": 72, "inr": 1.3,
+        "na": 141, "k": 3.9, "cl": 106, "creat": 131, "uree": 11.6, "crp": 150,
+        "mg": 0.74,
+    })
     for heure, gaz in [
         (f"{J2}T06:00", dict(ph=7.28, pao2=64, paco2=52, hco3=19, lactate=4.2,
                              fio2=80, pep=10, fr=22, spo2=91, sao2=90, vt=420, ai=14)),
@@ -241,8 +247,12 @@ def charger(base: Base) -> str:
     )
 
     # Bilans cochés pour aujourd'hui et pour demain.
+    # Aujourd'hui : le bilan de 8 h, et des examens à d'autres heures — ils
+    # s'écrivent à leur heure sur la bande « Bilans & examens à faire ».
     prescriptions.definir_bilans_demandes(
-        base, sid, AUJ, [("nfs", "08:00"), ("ionogramme", "08:00")])
+        base, sid, AUJ,
+        [("nfs", "08:00"), ("ionogramme", "08:00"), ("rx_thorax", "10:00"),
+         ("gds", "14:00"), ("crp", "20:00"), ("hemoculture", "02:00")])
     prescriptions.definir_bilans_demandes(
         base, sid, DEMAIN,
         [("nfs", "08:00"), ("ionogramme", "08:00"), ("crp", "08:00"),
@@ -287,10 +297,18 @@ def charger(base: Base) -> str:
                       nom=nom, grade=grade, texte=texte)
 
     # Actes : une transfusion, une radio détaillée, une péridurale qui coule.
+    # La transfusion tombe entre l'Hb de 18 h (7,9) et celle du lendemain
+    # matin (9,6) : c'est là que la feuille pose sa flèche « 2 CGR ➜ ».
     explorations.enregistrer(
-        base, sejour_id=sid, date_heure=f"{J1}T14:30", type_="transfusion",
+        base, sejour_id=sid, date_heure=f"{J2}T22:00", type_="transfusion",
         valeurs={"produit": "CGR (culot globulaire)", "nb_poches": 2,
-                 "complication": "Absent"},
+                 "statut": "Transfusé", "complication": "Absent"},
+        operateur="Garde",
+    )
+    explorations.enregistrer(
+        base, sejour_id=sid, date_heure=f"{J2}T22:00", type_="transfusion",
+        valeurs={"produit": "PFC (plasma frais congelé)", "nb_poches": 2,
+                 "statut": "Transfusé", "complication": "Absent"},
         operateur="Garde",
     )
     explorations.enregistrer(
