@@ -9,7 +9,7 @@ Puis ouvrir le logiciel sur cette même base, aller dans Prescrit, cliquer
 A3, paysage, marges nulles, sans mise à l'échelle.
 
 Ce que ce patient a de particulier : il remplit tout. Un polytraumatisé à son
-sixième jour — trente lignes de prescription, des seringues dont la vitesse
+sixième jour — trente lignes de prescription, chacune dans son bloc, des seringues dont la vitesse
 change, neuf bilans et neuf gaz du sang sur six jours, des transfusions
 encadrées par leurs hémoglobines, huit avis spécialisés, des dispositifs posés,
 retirés et reposés (une extubation accidentelle, une épuration extra-rénale),
@@ -44,10 +44,11 @@ J4 = (date.today() - timedelta(days=4)).isoformat()
 J5 = (date.today() - timedelta(days=5)).isoformat()   # jour de l'admission
 DEMAIN = (date.today() + timedelta(days=1)).isoformat()
 
-# Trente lignes pour trente emplacements, mais pas là où la feuille les
-# attend : dix IV pour huit lignes, six PO pour cinq. Les trois en trop
-# prennent les lignes libres des aérosols, de la kiné et des soins locaux,
-# leur voie écrite en couleur vive — c'est ce que la démonstration montre.
+# Trente lignes pour trente emplacements, chacune dans son bloc : huit IV pour
+# huit lignes, cinq PO pour cinq, deux aérosols, deux soins locaux, deux kinés.
+# Aucune ligne n'emprunte la place d'un autre bloc — la feuille se lit comme
+# le service la remplit. (Le partage des lignes entre blocs, quand un bloc
+# déborde, est éprouvé par tests/test_feuille.py.)
 PRESCRIPTIONS = [
     # (voie, produit, dose, unité, rythme, durée prévue)
     ("IV", "Imipénème", 1, "g", "x3/j", 7),
@@ -57,20 +58,20 @@ PRESCRIPTIONS = [
     ("IV", "Paracétamol", 1, "g", "x4/j", None),
     ("IV", "Néfopam", 20, "mg", "x4/j", None),
     ("IV", "Oméprazole", 40, "mg", "x1/j", None),
-    ("IV", "Furosémide", 40, "mg", "x3/j", None),
     ("IV", "Hydrocortisone", 50, "mg", "x4/j", 5),
-    ("IV", "Métoclopramide", 10, "mg", "x3/j", None),
     ("PO", "Kardégic", 75, "mg", "x1/j", None),
     ("PO", "Atorvastatine", 40, "mg", "x1/j", None),
     ("PO", "Lévétiracétam", 500, "mg", "x2/j", None),
     ("PO", "Bisoprolol", 2.5, "mg", "x1/j", None),
     ("PO", "Amlodipine", 5, "mg", "x1/j", None),
-    ("PO", "Metformine", 850, "mg", "x2/j", None),
     ("SC", "Enoxaparine 4000 UI", None, None, "x1/j", None),
     ("SC", "Insuline rapide", 6, "UI", "x3/j", None),
     ("AEROSOL", "Salbutamol", 5, "mg", "x4/j", None),
+    ("AEROSOL", "Ipratropium", 0.5, "mg", "x4/j", None),
     ("SOINS", "Pansement du drain thoracique", None, None, "x1/j", None),
+    ("SOINS", "Pansement de l'escarre sacrée", None, None, "x1/j", None),
     ("KINE", "Kinésithérapie respiratoire", None, None, "x2/j", None),
+    ("KINE", "Kinésithérapie motrice", None, None, "x1/j", None),
 ]
 
 # Le produit, son indication : les deux tiers de l'identité d'un épisode.
@@ -88,8 +89,8 @@ INDICATIONS = {
 # en dépendent. Par défaut le lendemain de l'admission.
 DEBUTS = {
     "Imipénème": J3, "Amikacine": J3, "Vancomycine": J4, "Métronidazole": J5,
-    "Hydrocortisone": J3, "Lévétiracétam": J5, "Furosémide": J1,
-    "Métoclopramide": J2, "Salbutamol": J2, "Metformine": J1, "Insuline rapide": J1,
+    "Hydrocortisone": J3, "Lévétiracétam": J5, "Salbutamol": J2, "Ipratropium": J2,
+    "Insuline rapide": J1, "Pansement de l'escarre sacrée": J2,
 }
 
 # Une posologie adaptée en cours de route, pour éprouver les deux niveaux.
