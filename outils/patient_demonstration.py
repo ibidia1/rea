@@ -212,15 +212,17 @@ def charger(base: Base) -> str:
         "na": 141, "k": 3.9, "cl": 106, "creat": 131, "uree": 11.6, "crp": 150,
         "mg": 0.74,
     })
-    for heure, gaz in [
-        (f"{J2}T06:00", dict(ph=7.28, pao2=64, paco2=52, hco3=19, lactate=4.2,
-                             fio2=80, pep=10, fr=22, spo2=91, sao2=90, vt=420, ai=14)),
-        (f"{J2}T14:00", dict(ph=7.31, pao2=72, paco2=48, hco3=21, lactate=3.1,
-                             fio2=70, pep=10, fr=20, spo2=93)),
-        (f"{J1}T06:00", dict(ph=7.38, pao2=88, paco2=42, hco3=24, lactate=1.8,
-                             fio2=50, pep=8, fr=18, spo2=96, sao2=96, vt=440, ai=12)),
+    # VAC les deux premiers jours, puis VS-AI au sevrage : chaque mode n'imprime
+    # que ses paramètres, et la FiO₂ du rapport PaO₂/FiO₂ est toujours écrite.
+    for heure, mode, gaz in [
+        (f"{J2}T06:00", "vac", dict(ph=7.28, pao2=64, paco2=52, hco3=19, lactate=4.2,
+                                    fio2=80, pep=10, fr=22, spo2=91, sao2=90, vt=420)),
+        (f"{J2}T14:00", "vac", dict(ph=7.31, pao2=72, paco2=48, hco3=21, lactate=3.1,
+                                    fio2=70, pep=10, fr=20, spo2=93, vt=420)),
+        (f"{J1}T06:00", "vs_ai", dict(ph=7.38, pao2=88, paco2=42, hco3=24, lactate=1.8,
+                                      fio2=50, pep=8, spo2=96, sao2=96, vt=440, ai=12)),
     ]:
-        bilans.enregistrer_gaz_du_sang(base, sid, heure, mode_ventilatoire="VAC", **gaz)
+        bilans.enregistrer_gaz_du_sang(base, sid, heure, mode_ventilatoire=mode, **gaz)
 
     # Microbiologie : un résultat rendu avec antibiogramme, un en attente.
     mid = microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J2,

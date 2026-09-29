@@ -10,6 +10,7 @@ approché à partir de ce qu'on a sous la main.
 
 from __future__ import annotations
 
+from .. import listes
 from ..models import definitions as dom
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service
@@ -27,11 +28,12 @@ def _dispositif_en_place(base, sejour_id: str, date_jour: str, type_: str) -> bo
 def sdra(base, sejour_id: str, date_jour: str) -> dom.Verdict:
     gaz = bilans_service.dernier_gaz_du_sang(base, sejour_id, date_jour)
     pao2_fio2 = (
-        bilans_service.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2")) if gaz else None
+        bilans_service.rapport_pao2_fio2(gaz.get("pao2"), listes.fio2_du_gaz(gaz))
+        if gaz else None
     )
     return dom.sdra_berlin(
         pao2_fio2=pao2_fio2,
-        peep=(gaz or {}).get("pep"),
+        peep=listes.parametre_ventilatoire(gaz, "pep") if gaz else None,
         ventile=_dispositif_en_place(base, sejour_id, date_jour, "intubation"),
     )
 

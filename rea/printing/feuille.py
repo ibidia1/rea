@@ -678,11 +678,6 @@ def _valeurs_biologie(
     return lignes
 
 
-#: Ce qui dépend du mode ventilatoire, par opposition au gaz du sang lui-même :
-#: une seringue de sang artériel se lit pareil qu'on soit ventilé ou non.
-_PARAMETRES_VENTILATOIRES = ("fio2", "pep", "fr", "vt", "ai", "debit_o2")
-
-
 def _creneaux_du_jour(
     dossier, jour: str, code: str, source: str, colonnes: int
 ) -> list[str]:
@@ -715,13 +710,7 @@ def _creneaux_du_jour(
             # Un paramètre qui n'a pas de sens pour ce mode-là n'est pas
             # imprimé même s'il traîne en base : une PEP sous air ambiant
             # viendrait forcément d'une saisie antérieure au filtrage.
-            valeurs = [
-                _nombre(g.get(code))
-                if code not in _PARAMETRES_VENTILATOIRES
-                or code in listes.parametres_du_mode(g.get("mode_ventilatoire"))
-                else ""
-                for g in lignes
-            ]
+            valeurs = [_nombre(listes.parametre_ventilatoire(g, code)) for g in lignes]
     valeurs = [v for v in valeurs if v]
     return (valeurs + [""] * colonnes)[:colonnes]
 
@@ -758,6 +747,8 @@ def _rapport_pf(dossier, repartition: list[dict]) -> Brut:
 
     Il n'est écrit que là où les deux ingrédients existent : une case vide dit
     « pas de gaz du sang », jamais « rapport normal ».
+    La FiO₂ est celle de la ligne FiO₂ juste au-dessus, lue par la même règle :
+    pas de rapport sans la FiO₂ imprimée qui permet de le vérifier.
     """
     cellules: list[str] = []
     for groupe in repartition:
@@ -769,7 +760,7 @@ def _rapport_pf(dossier, repartition: list[dict]) -> Brut:
         for gaz in dossier.gaz_du_sang:
             if not (gaz["date_heure"] or "").startswith(groupe["jour"]):
                 continue
-            rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), gaz.get("fio2"))
+            rapport = calculs.rapport_pao2_fio2(gaz.get("pao2"), listes.fio2_du_gaz(gaz))
             if rapport.disponible:
                 valeurs.append(_nombre(rapport.valeur))
         cellules.extend((valeurs + [""] * colonnes)[:colonnes])

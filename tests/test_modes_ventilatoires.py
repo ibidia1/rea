@@ -134,3 +134,56 @@ def test_un_mode_enregistre_sous_son_libelle_est_traduit(base, sejour):
     ligne = base.une_ligne("SELECT mode_ventilatoire FROM gaz_du_sang WHERE id = ?",
                            (identifiant,))
     assert ligne["mode_ventilatoire"] == "vac"
+
+
+
+# -- la FiO₂ et le rapport PaO₂/FiO₂ ne se contredisent jamais --------------
+# Démonstration du 29 septembre : un gaz enregistré sous « VAC », code inconnu,
+# ne déclarait aucun paramètre. La ligne FiO₂ restait vide, et la ligne
+# PaO₂/FiO₂ juste en dessous imprimait 80, 103, 176 — calculés avec elle.
+
+def _fio2_et_pf(base, sejour) -> tuple[list[str], list[str]]:
+    contexte = feuille.contexte(feuille_dossier.rassembler(base, sejour, AUJ))
+    fio2 = next(l for l in contexte["gdsGaz"] if l["libelle"] == "FiO₂")
+    pf = re.findall(r">([^<>]*)</div>", contexte["pfRow"].html)
+    return [c for c in _cellules(fio2) if c], [c for c in pf if c]
+
+
+def test_un_mode_inconnu_est_refuse(base, sejour):
+    with pytest.raises(ValueError):
+        bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T08:00",
+                                       mode_ventilatoire="VNI-X", pao2=80, fio2=50)
+
+
+def test_un_ancien_libelle_est_enregistre_sous_son_code(base, sejour):
+    bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T08:00",
+                                   mode_ventilatoire="VAC", pao2=80, fio2=50)
+    ligne = base.une_ligne("SELECT mode_ventilatoire FROM gaz_du_sang")
+    assert ligne["mode_ventilatoire"] == "vac"
+    assert _fio2_et_pf(base, sejour) == (["50"], ["160"])
+
+
+def test_ce_que_le_mode_ne_declare_pas_n_est_pas_enregistre(base, sejour):
+    bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T08:00", mode_ventilatoire="lunette",
+                                   debit_o2=3, fio2=40, pep=5, pao2=70)
+    ligne = base.une_ligne("SELECT * FROM gaz_du_sang")
+    assert ligne["debit_o2"] == 3 and ligne["pao2"] == 70
+    assert ligne["fio2"] is None and ligne["pep"] is None
+
+
+def test_pas_de_rapport_pf_sans_la_fio2_imprimee(base, sejour):
+    """Une FiO₂ restée en base sous lunettes (saisie antérieure au filtrage) :
+    ni imprimée, ni utilisée — sur la feuille comme dans l'observation."""
+    identifiant = bilans.enregistrer_gaz_du_sang(
+        base, sejour, f"{J1}T08:00", mode_ventilatoire="lunette", debit_o2=3, pao2=70)
+    base.executer("UPDATE gaz_du_sang SET fio2 = 40 WHERE id = ?", (identifiant,))
+    assert _fio2_et_pf(base, sejour) == ([], [])
+    assert "PaO₂/FiO₂" not in bilans.texte_genere(base, sejour, J1)
+
+
+def test_chaque_rapport_pf_a_sa_fio2_au_dessus(base, sejour):
+    bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T06:00",
+                                   mode_ventilatoire="vac", pao2=80, fio2=50, pep=6)
+    bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T14:00",
+                                   mode_ventilatoire="optiflow", pao2=90, fio2=60, debit_o2=50)
+    assert _fio2_et_pf(base, sejour) == (["50", "60"], ["160", "150"])
