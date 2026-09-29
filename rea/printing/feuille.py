@@ -30,6 +30,7 @@ from pathlib import Path
 from .. import analytes, config, listes, referentiels
 from ..models import avis as dom_avis
 from ..models import calculs, prescription as dom
+from ..models import dispositifs as dom_dispositifs
 from ..models.dates import age_ans, format_date_fr, jour_hospitalisation, parse_date
 from .gabarit import Brut, rendre
 
@@ -1263,14 +1264,32 @@ def _abords(dossier) -> list[dict]:
 
     Le compteur est calculé, jamais recopié : c'est la seule ligne de la
     feuille qu'un interne ne peut pas se tromper en reportant.
+
+    Un dispositif retiré s'écrit sous son nom d'après — « Extubé J2 »,
+    « Redon retiré J3 » — et non plus sous celui de la pose, qui laissait lire
+    « Intubé J2 » grisé pour un patient extubé depuis deux jours. La sédation
+    arrêtée s'écrit « J2 d'AS », en gras : c'est elle qu'on suit à la visite
+    (demande du service, 29 septembre). Une intubation restée ouverte sous une
+    trachéotomie est marquée en rouge, avec le rappel de la retirer.
     """
-    etats = dossier.etats_dispositifs
+    etats = dom_dispositifs.etats_affiches(list(dossier.etats_dispositifs))
+    a_retirer = dom_dispositifs.intubation_a_retirer(etats)
     lignes = []
     for etat in etats:
-        coche = "☑" if etat.en_place else "☐"
-        style = ("font-weight:600;color:#16201f" if etat.en_place
-                 else "color:#6d7c7b")
-        lignes.append({"texte": f"{coche} {_texte_abrege_dispositif(etat)}", "style": style})
+        if etat.en_place:
+            texte = f"☑ {_texte_abrege_dispositif(etat)}"
+            style = "font-weight:600;color:#16201f"
+            if a_retirer is not None and etat.id == a_retirer.id:
+                texte += " ⚠ à retirer (trachéo)"
+                style = f"font-weight:700;color:{COULEUR_FIN_DE_CURE}"
+        elif etat.type == "sedation":
+            texte = f"☐ {etat.texte.split(' (')[0]}"
+            style = "font-weight:700;color:#16201f"
+        else:
+            config = listes.TYPES_DISPOSITIF.get(etat.type, {})
+            texte = f"☐ {config.get('apres', etat.type)} J{etat.jour}"
+            style = "color:#6d7c7b"
+        lignes.append({"texte": texte, "style": style})
     if not lignes:
         lignes.append({"texte": "☐ Aucun dispositif enregistré",
                        "style": "color:#6d7c7b"})

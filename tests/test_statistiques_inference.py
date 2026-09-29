@@ -90,6 +90,21 @@ def test_extubation_accidentelle_et_echec_d_extubation(base):
     assert v["taux_non_programmees"].valeur == pytest.approx(100 / 9)
 
 
+def test_le_relais_par_trachéotomie_n_est_pas_une_extubation(base):
+    """Intubé du 10 au 16, canule du 16 au 25 : 15 jours de ventilation, et
+    aucune extubation — ni programmée, ni accidentelle, ni échouée."""
+    sid = _sejour(base, 2, sortie="2026-03-30")
+    i1 = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose="2026-03-10")
+    dispositifs.retirer(base, i1, date_retrait="2026-03-16", motif_retrait="tracheotomie")
+    t = dispositifs.poser(base, sejour_id=sid, type_="tracheotomie", date_pose="2026-03-16")
+    dispositifs.retirer(base, t, date_retrait="2026-03-25")
+    v = stats.indicateurs_ventilation(base, stats.cohorte(base))
+    assert v["extubations_programmees"] == 0
+    assert v["extubations_non_programmees"] == 0
+    assert v["echecs_extubation"] == 0
+    assert v["jours_vm"] == 15
+
+
 def test_mortalite_porte_son_intervalle(base):
     for n in range(10):
         _sejour(base, n, sortie="2026-03-20", mode="deces" if n < 3 else "domicile")

@@ -162,3 +162,19 @@ def test_la_demonstration_tient_dans_ses_blocs(service, base):
     html = feuille.generer(dossier)
     assert feuille.COULEUR_VOIE_EMPRUNTEE not in html
     assert "⚠" not in feuille.contexte(dossier)["pied"]
+
+
+def test_le_rappel_intubation_s_affiche_avec_son_bouton(service):
+    """La démonstration pose une trachéotomie sur un patient encore intubé :
+    l'écran Explorations et actes affiche le rappel, et le bouton qui clôt
+    l'intubation au jour de la canule (motif « relais par trachéotomie »).
+
+    Le clic lui-même n'est pas rejoué ici : le moteur de test de Streamlit ne
+    sait pas resérialiser une liste déroulante à `format_func` (le motif de
+    retrait) — l'effet du retrait est éprouvé dans tests/test_dispositifs.py."""
+    comptes, sid = service
+    at = _ouvrir(comptes, "admin", accueil_pose=True, ecran="", sejour_id=sid,
+                 **{f"ecran_{sid}": "Explorations et actes",
+                    f"segments_ecran_{sid}": "Explorations et actes"})
+    assert any("retirer l'intubation" in e.value for e in at.error)
+    assert any(b.label.startswith("Retirer l'intubation au") for b in at.button)

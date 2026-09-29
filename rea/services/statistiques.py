@@ -23,6 +23,7 @@ from datetime import date, timedelta
 from .. import referentiels
 from ..database import Base
 from ..models import devenir as dom_devenir
+from ..models import dispositifs as dom_dispositifs
 from ..models import inference
 from ..models.dates import age_ans, parse_date
 from . import dispositifs as dispositifs_service
@@ -457,6 +458,10 @@ def indicateurs_ventilation(base: Base, sejours: list[dict]) -> dict:
                 continue
             if d.get("motif_retrait") == "accidentelle":
                 non_programmees += 1
+                continue
+            if d.get("motif_retrait") == dom_dispositifs.RELAIS_TRACHEOTOMIE:
+                # Relais par une canule : la ventilation continue, ce n'est
+                # ni une extubation ni, a fortiori, un échec d'extubation.
                 continue
             programmees += 1
             suivante = intubations[rang + 1] if rang + 1 < len(intubations) else None

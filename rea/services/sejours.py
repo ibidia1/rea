@@ -757,11 +757,13 @@ def compte_rendu_sortie(base: Base, sejour_id: str) -> str:
     from . import dispositifs as dispositifs_service
 
     intubations = [
-        d for d in dispositifs_service.du_sejour(base, sejour_id) if d["type"] == "intubation"
+        d for d in dispositifs_service.du_sejour(base, sejour_id)
+        if d["type"] in ("intubation", "tracheotomie")
     ]
     for v in reversed(intubations):
         fin = format_date_fr(v["date_retrait"]) if v["date_retrait"] else "en cours"
-        lignes.append(f"Ventilation du {format_date_fr(v['date_pose'])} au {fin}")
+        par = " (trachéotomie)" if v["type"] == "tracheotomie" else ""
+        lignes.append(f"Ventilation{par} du {format_date_fr(v['date_pose'])} au {fin}")
     if intubations:
         total = dispositifs_service.duree_ventilation_jours(base, sejour_id)
         lignes.append(f"Durée totale de ventilation : {total} jours")

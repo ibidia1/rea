@@ -100,11 +100,12 @@ CHANGEMENTS_DE_DOSE = {
 }
 
 SERINGUES = [
-    # (produit, dilution, vitesse de départ, changements [(heure, vitesse)])
-    ("Noradrénaline", "0,5 mg/cc", 25, [(12, 18), (16, 15), (22, 8)]),
-    ("Midazolam", "1 mg/cc", 6, [(14, 4)]),
-    ("Sufentanil", "10 µg/cc", 4, [(14, 3)]),
-    ("Insuline", "1 UI/cc", 2, [(10, 3), (18, 2)]),
+    # (produit, dilution, vitesse de départ, changements [(heure, vitesse)],
+    #  date d'arrêt) — la sédation est arrêtée hier : « J1 d'AS » sur la feuille.
+    ("Noradrénaline", "0,5 mg/cc", 25, [(12, 18), (16, 15), (22, 8)], None),
+    ("Midazolam", "1 mg/cc", 6, [], J1),
+    ("Sufentanil", "10 µg/cc", 4, [], J1),
+    ("Insuline", "1 UI/cc", 2, [(10, 3), (18, 2)], None),
 ]
 
 ENTREES = [
@@ -192,7 +193,7 @@ def charger(base: Base) -> str:
         prescriptions.arreter_ligne(base, ligne, date_arret=J3,
                                     motif_arret="relais par imipénème + amikacine")
 
-    for produit, dilution, vitesse, changements in SERINGUES:
+    for produit, dilution, vitesse, changements, arret in SERINGUES:
         ligne = prescriptions.ajouter_ligne(
             base, sejour_id=sid, voie="PSE", produit=produit, date_debut=J5,
             dilution=dilution, vitesse=vitesse, rythme="continu",
@@ -200,6 +201,9 @@ def charger(base: Base) -> str:
         for heure, nouvelle in changements:
             vitesses.regler(base, cible=vitesses.LIGNE, cible_id=ligne,
                             date_heure=f"{AUJ}T{heure:02d}:00", vitesse=nouvelle)
+        if arret:
+            prescriptions.arreter_ligne(base, ligne, date_arret=arret,
+                                        motif_arret="arrêt de la sédation")
 
     for sous_type, produit, vitesse, volume, additifs in ENTREES:
         prescriptions.ajouter_ligne(
@@ -218,7 +222,7 @@ def charger(base: Base) -> str:
                                  site=site, details=details)
 
     tube = poser("intubation", J5, taille_sonde=7.5, reperage_cm=22)
-    poser("sedation", J5, molecules="Midazolam + Sufentanil", vitesse=6)
+    sedation = poser("sedation", J5, molecules="Midazolam + Sufentanil", vitesse=6)
     poser("kt_central", J5, "Jugulaire interne droite", nb_voies=3)
     kta = poser("kta", J5, "Radiale gauche")
     poser("sonde_urinaire", J5, taille_sonde=16)
@@ -237,6 +241,12 @@ def charger(base: Base) -> str:
     # Extubation accidentelle au nursing, réintubé dans l'heure.
     dispositifs.retirer(base, tube, date_retrait=J2, motif_retrait="accidentelle")
     poser("intubation", J2, taille_sonde=7.5, reperage_cm=23)
+    # Sédation arrêtée hier : la feuille écrit « J1 d'AS ».
+    dispositifs.retirer(base, sedation, date_retrait=J1)
+    # Trachéotomie percutanée ce matin — et l'intubation laissée ouverte, pour
+    # montrer le rappel : « Intubé … ⚠ à retirer (trachéo) » sur la feuille,
+    # un bandeau rouge et un bouton de correction à l'écran.
+    poser("tracheotomie", AUJ, taille_sonde=8)
     # Le KTA radial ne donnait plus de courbe : retiré, reposé de l'autre côté.
     dispositifs.retirer(base, kta, date_retrait=J1)
     poser("kta", J1, "Radiale droite")
@@ -352,9 +362,11 @@ def charger(base: Base) -> str:
     evolution.enregistrer_journee(
         base, sid, AUJ, elements=mesures,
         textes={
-            "plan_neurologique": "Fenêtre de sédation, RASS −2. TDM de contrôle stable.",
+            "plan_neurologique": "Sédation arrêtée hier (J1 d'AS), RASS −2, réveil en "
+                                 "cours. TDM de contrôle stable.",
             "plan_respiratoire": "Réintubé à J4 après extubation accidentelle. "
-                                 "VS-AI, FiO₂ 40 %. Sevrage en cours.",
+                                 "Trachéotomie percutanée ce jour (canule n° 8) pour "
+                                 "sevrage prolongé. VS-AI, FiO₂ 40 %.",
             "plan_hemodynamique": "Choc septique en régression, noradrénaline à 8 cc/h. "
                                   "IRA KDIGO 3 sous CVVHDF depuis J3, créatinine en baisse.",
             "plan_infectieux": "PAVM et bactériémie à Klebsiella BLSE, "

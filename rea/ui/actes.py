@@ -85,6 +85,25 @@ def _nature_de_drain(etiquette: str) -> str:
     return f"{nom} — {precision}" if precision else nom
 
 
+def _rappel_intubation(etats) -> None:
+    """Intubation et canule de trachéotomie ouvertes ensemble : un rappel en
+    tête d'écran, et le geste qui corrige en un clic (demande du service,
+    29 septembre)."""
+    intubation = dom_dispositifs.intubation_a_retirer(etats)
+    if intubation is None:
+        return
+    canule = next(e for e in etats if e.en_place and e.type == "tracheotomie")
+    st.error("⚠ " + dom_dispositifs.RAPPEL_INTUBATION)
+    if st.button(f"Retirer l'intubation au {format_date_fr(canule.date_pose)} "
+                 "(relais par trachéotomie)", key=f"relais_{intubation.id}"):
+        dispositifs_service.retirer(
+            contexte.base(), intubation.id, date_retrait=canule.date_pose,
+            motif_retrait=dom_dispositifs.RELAIS_TRACHEOTOMIE,
+            utilisateur_id=contexte.utilisateur_id(),
+        )
+        st.rerun()
+
+
 def onglet_actes(sejour: dict) -> None:
     lignes = dispositifs_service.du_sejour(contexte.base(), sejour["id"])
     etats = dispositifs_service.etats(contexte.base(), sejour["id"])
@@ -93,6 +112,7 @@ def onglet_actes(sejour: dict) -> None:
     retires = [e for e in etats if not e.en_place]
 
     lignes_en_place = [l for l in lignes if not l["date_retrait"]]
+    _rappel_intubation(etats)
     if not en_place:
         st.caption("Aucun dispositif en place.")
     else:
@@ -192,8 +212,19 @@ def onglet_actes(sejour: dict) -> None:
                 "l'évolution, plan hémodynamique — il entre alors dans le "
                 "bilan hydrique."
             )
+        # Une canule posée chez un patient intubé relaie la sonde : on propose
+        # de clore l'intubation dans le même geste, coché d'office — sinon le
+        # dossier porte les deux, et le rappel s'affiche jusqu'à correction.
+        intubation = next((e for e in en_place if e.type == "intubation"), None)
         with st.form(f"pose_{type_}"):
             date_pose = st.date_input("Date de pose", value=date.today())
+            relais = False
+            if type_ == "tracheotomie" and intubation is not None:
+                relais = st.checkbox(
+                    f"Retirer l'intubation en même temps ({intubation.texte.split(' (')[0]}) "
+                    "— relais par trachéotomie",
+                    value=True,
+                )
             site = None
             if config_type["sites"]:
                 site = st.selectbox("Site", config_type["sites"])
@@ -221,6 +252,12 @@ def onglet_actes(sejour: dict) -> None:
                     site=site, details={k: v for k, v in details.items() if v},
                     commentaire=commentaire or None, utilisateur_id=contexte.utilisateur_id(),
                 )
+                if relais:
+                    dispositifs_service.retirer(
+                        contexte.base(), intubation.id, date_retrait=str(date_pose),
+                        motif_retrait=dom_dispositifs.RELAIS_TRACHEOTOMIE,
+                        utilisateur_id=contexte.utilisateur_id(),
+                    )
                 st.rerun()
 
     st.divider()
