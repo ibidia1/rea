@@ -590,6 +590,55 @@ def etiquette_jour(ligne: dict, a_la_date: str | date) -> EtiquetteJour:
     )
 
 
+@dataclass
+class CureTerminee:
+    """Une cure menée à son terme — « 10 J Imipénème » (demande du service,
+    29 septembre)."""
+
+    produit: str
+    jours: int
+    debut: str
+    fin: str
+
+
+def est_une_cure(ligne: dict, fragments_antibiotiques) -> bool:
+    """Un antibiotique, ou tout traitement prescrit pour une durée prévue.
+
+    C'est ce qui se compte en jours et dont la durée totale se relit après
+    coup — « combien de jours d'imipénème a-t-il eus ? ». Un paracétamol
+    arrêté n'est pas une cure : le noter encombrerait la case pour rien.
+    """
+    if ligne.get("duree_prevue_jours"):
+        return True
+    produit = _sans_accent(ligne.get("produit") or "")
+    return any(_sans_accent(f) in produit for f in fragments_antibiotiques)
+
+
+def cures_terminees(episodes: list[dict], date_jour: str | date,
+                    fragments_antibiotiques) -> list[CureTerminee]:
+    """Les cures arrêtées avant ce jour, de la plus ancienne à la plus récente.
+
+    Le dernier jour d'une cure, la ligne est encore sur la grille avec son
+    compteur ; elle passe ici à partir du lendemain. La durée compte les jours
+    où la ligne était en vigueur, date de début et date d'arrêt comprises —
+    le même compte que le compteur « J » de la feuille.
+    """
+    jour = parse_date(date_jour)
+    cures = []
+    for ligne in episodes:
+        arret = parse_date(ligne.get("date_arret"))
+        if (ligne.get("statut") != "arretee" or arret is None or arret >= jour
+                or not est_une_cure(ligne, fragments_antibiotiques)):
+            continue
+        cures.append(CureTerminee(
+            produit=ligne.get("produit") or "",
+            jours=jour_traitement(ligne["date_debut"], arret),
+            debut=ligne["date_debut"],
+            fin=ligne["date_arret"],
+        ))
+    return sorted(cures, key=lambda c: (c.fin, c.debut))
+
+
 def dose_affichee(posologie: dict) -> str:
     """« 1g x3/j », « 25 cc/h » — la posologie seule, sans le compteur ni le
     produit. Sert à comparer deux versions d'un même traitement, là où répéter

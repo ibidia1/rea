@@ -167,7 +167,34 @@ def _cellules_valeurs(
 
 
 def _ligne_vide(numero: str = "") -> dict:
-    return {"numero": numero, "produit": "", "dose": "", "grille": Brut("")}
+    return {"numero": numero, "jour": "", "produit": "", "dose": "", "grille": Brut("")}
+
+
+#: Couleur du compteur le dernier jour prévu d'une cure, et au-delà : c'est ce
+#: jour-là qu'il faut se demander si on arrête.
+COULEUR_FIN_DE_CURE = "#c0392b"
+
+
+def _compteur(texte: str, *, alerte: bool = False) -> Brut | str:
+    """« J4 » ou « J4/7 » devant le nom du traitement : combien de jours il a
+    reçus (demande du service, 29 septembre). Le même compte que l'écran
+    Visite. En rouge le dernier jour prévu et au-delà."""
+    if not texte:
+        return ""
+    couleur = COULEUR_FIN_DE_CURE if alerte else "#5e6d6c"
+    return Brut(
+        f'<span style="flex:none;margin-right:5px;font-size:9px;font-weight:700;'
+        f'color:{couleur};white-space:nowrap">{html.escape(texte)}</span>'
+    )
+
+
+def _compteur_ligne(ligne: dict, date_jour: str) -> Brut | str:
+    if not ligne.get("date_debut"):
+        return ""
+    etiquette = dom.etiquette_jour(ligne, date_jour)
+    texte = (f"J{etiquette.jour}/{etiquette.duree_prevue}" if etiquette.duree_prevue
+             else f"J{max(etiquette.jour, 1)}")
+    return _compteur(texte, alerte=etiquette.dernier_jour or etiquette.echue)
 
 
 def _nombre(valeur) -> str:
@@ -220,6 +247,7 @@ def _lignes_dispositifs_pse(dossier) -> list[dict]:
         par_heure = dossier.vitesses.get(etat.id) or {}
         lignes.append({
             "numero": str(len(lignes) + 1),
+            "jour": _compteur(f"J{etat.jour}") if etat.jour else "",
             "produit": Brut(
                 f'{html.escape(produit)} <span style="font-size:7.5px;color:#5e6d6c">'
                 f"— {html.escape(suffixe)}</span>"
@@ -282,6 +310,7 @@ def _ligne_rendue(dossier, voie: str, ligne: dict, avant, *, emprunt: bool) -> d
     # fixe porte un rond : deux consignes différentes, deux écritures.
     par_heure = {} if arretee else (dossier.vitesses.get(ligne["id"]) or {})
     return {
+        "jour": _compteur_ligne(ligne, dossier.date_jour),
         # Du texte simple quand il n'y a rien à mettre en forme : le gabarit
         # l'échappe lui-même. Sinon un seul <span> : la case est une boîte
         # flexible, qui mangerait l'espace entre le nom et la voie.
@@ -1167,6 +1196,39 @@ def _transfusions_box(dossier) -> Brut:
     )
 
 
+#: Combien de cures terminées la case garde au plus : les plus récentes.
+LIGNES_CURES = 4
+
+
+def _cures_box(dossier) -> Brut:
+    """Les cures terminées, au bas de la case « Évolution », juste au-dessus
+    des transfusions : « 10 J Imipénème (19/09 → 28/09) » (demande du service,
+    29 septembre).
+
+    Arrêtée, une cure quitte la grille du prescrit — et avec elle le compteur
+    qui disait combien de jours elle avait duré. Or c'est la question qu'on se
+    pose à chaque nouvelle infection : qu'a-t-il déjà reçu, et combien de
+    temps ?
+    """
+    cures = dossier.cures_terminees[-LIGNES_CURES:]
+    if not cures:
+        return Brut("")
+    corps = "".join(
+        '<div style="font-size:9.5px;line-height:1.4">'
+        f'<b>{c.jours} J</b> {html.escape(c.produit)} '
+        f'<span style="color:#5e6d6c">({format_date_fr(c.debut)[:5]} → '
+        f"{format_date_fr(c.fin)[:5]})</span></div>"
+        for c in cures
+    )
+    return Brut(
+        '<div style="flex:none;border-top:1px solid #a9b6b5;padding:2px 5px;'
+        'background:#e8eef6">'
+        '<div style="font-size:8px;font-weight:700;letter-spacing:.08em;'
+        'text-transform:uppercase;color:#1749a8">Cures terminées</div>'
+        f"{corps}</div>"
+    )
+
+
 def _escarres_box(dossier) -> Brut:
     """Les escarres, en rouge pastel, sur la première ligne de la case
     « Évolution » (demande du service, 29 septembre).
@@ -1404,6 +1466,7 @@ def contexte(dossier) -> dict:
         "scores": dossier.scores,
         "motifTransportAtcd": _motif_transport_atcd(dossier),
         "avisRows": _avis_specialises(dossier),
+        "cures": _cures_box(dossier),
         "transfusions": _transfusions_box(dossier),
         "escarres": _escarres_box(dossier),
         "abords": _abords(dossier),

@@ -177,6 +177,21 @@ def charger(base: Base) -> str:
                 dose=nouvelle, unite=unite_nouvelle, motif=motif,
             )
 
+    # Des cures déjà terminées : l'antibioprophylaxie de la fracture ouverte
+    # (clindamycine + gentamicine, le patient est allergique à la pénicilline),
+    # relayée à J3 par imipénème + amikacine sur la Klebsiella BLSE. Arrêtées,
+    # elles quittent la grille et s'écrivent « 3 J Clindamycine » dans la case
+    # « Cures terminées », au-dessus des transfusions.
+    for produit, dose, unite, rythme in (("Clindamycine", 600, "mg", "x3/j"),
+                                         ("Gentamicine", 400, "mg", "x1/j")):
+        ligne = prescriptions.ajouter_ligne(
+            base, sejour_id=sid, voie="IV", produit=produit, date_debut=J5,
+            dose=dose, unite=unite, rythme=rythme,
+            indication="antibioprophylaxie, fracture ouverte du fémur",
+        )
+        prescriptions.arreter_ligne(base, ligne, date_arret=J3,
+                                    motif_arret="relais par imipénème + amikacine")
+
     for produit, dilution, vitesse, changements in SERINGUES:
         ligne = prescriptions.ajouter_ligne(
             base, sejour_id=sid, voie="PSE", produit=produit, date_debut=J5,
