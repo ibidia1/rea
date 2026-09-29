@@ -262,10 +262,16 @@ def _etat_du_jour(sejour: dict, date_jour_str: str) -> None:
         # identiques — « Redon J1 (abdomen) » deux fois — alors que ce sont
         # deux drains, deux volumes et parfois deux conduites.
         numeros = dom_dispositifs.numeros_distincts(en_place)
+        lignes_abords = [html.escape(_avec_numero(e, numeros)) for e in en_place]
+        arret = dom_dispositifs.arret_sedation(etats)
+        if arret is not None:
+            lignes_abords.append(f"<b>{html.escape(arret.texte.split(' (')[0])}</b>")
+        if dom_dispositifs.intubation_a_retirer(etats) is not None:
+            lignes_abords.insert(0, f'<b style="color:{theme.ROUGE}">⚠ '
+                                    f"{html.escape(dom_dispositifs.RAPPEL_INTUBATION)}</b>")
         _bloc("Abords et dispositifs",
-              "".join(f'<div class="rea-v-ligne"><span class="rea-v-produit">'
-                      f"{html.escape(_avec_numero(e, numeros))}</span></div>"
-                      for e in en_place),
+              "".join(f'<div class="rea-v-ligne"><span class="rea-v-produit">{l}</span></div>'
+                      for l in lignes_abords),
               theme.VIOLET)
 
 

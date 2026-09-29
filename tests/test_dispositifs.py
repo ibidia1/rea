@@ -45,7 +45,9 @@ def test_etat_apres_extubation():
 def test_etat_apres_arret_sedation():
     ligne = {"type": "sedation", "date_pose": "2026-08-29", "date_retrait": "2026-09-01",
              "site": None, "details": None}
-    assert dom.etat(ligne, "2026-09-02").texte == "Arrêt sédation J1"
+    # « J1 d'AS » : jours depuis l'arrêt de la sédation, sous la forme que le
+    # service emploie (demande du 29 septembre).
+    assert dom.etat(ligne, "2026-09-02").texte == "J1 d'AS"
 
 
 def test_etat_kt_avec_site_et_voies():
@@ -247,3 +249,49 @@ def test_le_repere_anatomique_garde_ses_majuscules_dans_le_texte(base):
     assert dom_disp.site_en_incise("Droit") == "droit"
     assert dom_disp.site_en_incise("Jugulaire interne droite") == "jugulaire interne droite"
     assert dom_disp.site_en_incise("") == ""
+
+
+# -- arrêt de sédation, relais par trachéotomie (demande du 29 septembre) ----
+
+def _l(type_, pose, retrait=None, motif=None, id_=None):
+    return {"id": id_ or f"{type_}-{pose}", "type": type_, "date_pose": pose,
+            "date_retrait": retrait, "motif_retrait": motif, "site": None, "details": None}
+
+
+def test_l_arret_de_sedation_se_compte_en_jours_d_as():
+    etats = dom.etats([_l("sedation", "2026-09-01", "2026-09-05")], "2026-09-07")
+    assert dom.arret_sedation(etats).texte == "J2 d'AS"
+
+
+def test_une_sedation_reprise_efface_l_arret():
+    etats = dom.etats([_l("sedation", "2026-09-01", "2026-09-05"),
+                       _l("sedation", "2026-09-06")], "2026-09-07")
+    assert dom.arret_sedation(etats) is None
+
+
+def test_intubation_ouverte_sous_trachéotomie_est_signalee():
+    etats = dom.etats([_l("intubation", "2026-09-01"), _l("tracheotomie", "2026-09-06")],
+                      "2026-09-07")
+    assert dom.intubation_a_retirer(etats).type == "intubation"
+    relayee = dom.etats([_l("intubation", "2026-09-01", "2026-09-06", "tracheotomie"),
+                         _l("tracheotomie", "2026-09-06")], "2026-09-07")
+    assert dom.intubation_a_retirer(relayee) is None
+    # Relayée, l'intubation ne s'affiche pas en « Extubé » : ce n'en est pas une.
+    assert [e.type for e in dom.etats_affiches(relayee)] == ["tracheotomie"]
+
+
+def test_un_dispositif_remplace_ne_s_affiche_plus_retire():
+    etats = dom.etats([_l("intubation", "2026-09-01", "2026-09-04", "accidentelle"),
+                       _l("intubation", "2026-09-04")], "2026-09-07")
+    affiches = dom.etats_affiches(etats)
+    assert len(affiches) == 1 and affiches[0].en_place
+
+
+def test_la_ventilation_continue_sous_trachéotomie_sans_double_compte():
+    # Intubé du 1er au 6, canule depuis le 6 : 5 + 4 = 9 jours au 10.
+    lignes = [_l("intubation", "2026-09-01", "2026-09-06", "tracheotomie"),
+              _l("tracheotomie", "2026-09-06")]
+    assert dom.duree_ventilation_jours(lignes, "2026-09-10") == 9
+    # Les deux oubliées ouvertes ensemble : les jours communs ne comptent qu'une fois.
+    ouvertes = [_l("intubation", "2026-09-01"), _l("tracheotomie", "2026-09-06")]
+    assert dom.duree_ventilation_jours(ouvertes, "2026-09-10") == 9

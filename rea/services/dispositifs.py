@@ -147,8 +147,9 @@ def dernier_du_type(base: Base, sejour_id: str, type_: str) -> dict | None:
 
 def duree_ventilation_jours(base: Base, sejour_id: str, a_la_date: str | None = None) -> int:
     """Durée totale de ventilation invasive — variable du socle de recherche
-    (SPEC §9.2), calculée depuis les épisodes d'intubation."""
-    return dom.duree_totale_jours(du_sejour(base, sejour_id), "intubation", a_la_date)
+    (SPEC §9.2), calculée depuis les épisodes d'intubation et de
+    trachéotomie qui les relaient."""
+    return dom.duree_ventilation_jours(du_sejour(base, sejour_id), a_la_date)
 
 
 def duree_epuration_jours(base: Base, sejour_id: str, a_la_date: str | None = None) -> int:

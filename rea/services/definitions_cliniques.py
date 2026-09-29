@@ -34,7 +34,9 @@ def sdra(base, sejour_id: str, date_jour: str) -> dom.Verdict:
     return dom.sdra_berlin(
         pao2_fio2=pao2_fio2,
         peep=listes.parametre_ventilatoire(gaz, "pep") if gaz else None,
-        ventile=_dispositif_en_place(base, sejour_id, date_jour, "intubation"),
+        # Une canule de trachéotomie ventile autant qu'une sonde d'intubation.
+        ventile=(_dispositif_en_place(base, sejour_id, date_jour, "intubation")
+                 or _dispositif_en_place(base, sejour_id, date_jour, "tracheotomie")),
     )
 
 

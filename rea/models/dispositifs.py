@@ -144,7 +144,10 @@ def etat(ligne: dict, a_la_date: str | date | None = None, rang: int = 1) -> Eta
     if ligne.get("date_retrait"):
         jour = jours_depuis(ligne["date_retrait"], a_la_date)
         base = config.get("apres", ligne["type"])
-        texte = f"{base} J{jour}"
+        # « J2 d'AS » : la sédation arrêtée se compte en jours depuis l'arrêt,
+        # sous la forme que le service emploie (demande du 29 septembre).
+        texte = (config["apres_format"].format(jour=jour) if config.get("apres_format")
+                 else f"{base} J{jour}")
         en_place = False
     else:
         jour = jour_en_cours(ligne["date_pose"], a_la_date)
@@ -204,6 +207,83 @@ def etats(lignes: list[dict], a_la_date: str | date | None = None) -> list[EtatD
         etat(ligne, a_la_date, rang)
         for ligne, rang in zip(lignes, rangs(lignes))
     ]
+
+
+#: Motif de retrait d'une intubation relayée par une canule de trachéotomie.
+RELAIS_TRACHEOTOMIE = "tracheotomie"
+
+#: Ce qui fait qu'un patient est ventilé par une prothèse : la sonde, puis la
+#: canule qui la relaie.
+TYPES_VENTILATION = ("intubation", "tracheotomie")
+
+
+def intubation_a_retirer(etats_: list[EtatDispositif]) -> EtatDispositif | None:
+    """L'intubation encore ouverte alors qu'une canule de trachéotomie est en
+    place : un patient ne porte pas les deux. C'est un oubli de saisie — le
+    rappel reste affiché, à l'écran comme sur la feuille, tant que
+    l'intubation n'est pas retirée (demande du service, 29 septembre)."""
+    if not any(e.en_place and e.type == "tracheotomie" for e in etats_):
+        return None
+    return next((e for e in etats_ if e.en_place and e.type == "intubation"), None)
+
+
+def arret_sedation(etats_: list[EtatDispositif]) -> EtatDispositif | None:
+    """La dernière sédation arrêtée — « J2 d'AS » — si aucune n'a repris."""
+    if any(e.en_place and e.type == "sedation" for e in etats_):
+        return None
+    arretees = [e for e in etats_ if e.type == "sedation" and not e.en_place]
+    return max(arretees, key=lambda e: e.date_retrait or "", default=None)
+
+
+#: Le rappel, mot pour mot, partout où il s'affiche.
+RAPPEL_INTUBATION = ("Trachéotomie en place : retirer l'intubation "
+                     "(motif « Relais par trachéotomie »)")
+
+
+def etats_affiches(etats_: list[EtatDispositif]) -> list[EtatDispositif]:
+    """Ce qu'on garde à la lecture : tout ce qui est en place, et ce qui a
+    été retiré **sans avoir été remplacé**.
+
+    « Extubé J2 » à côté de « Réintubé J2 » se contredisent à première lecture,
+    et l'intubation relayée par une trachéotomie n'est pas une extubation : le
+    dispositif en place dit déjà tout. Une sédation arrêtée reste, elle, tant
+    qu'aucune autre n'a repris : « J2 d'AS » est ce qu'on regarde à la visite.
+    """
+    en_place = {e.type for e in etats_ if e.en_place}
+    gardes = []
+    for e in etats_:
+        if not e.en_place:
+            if e.type in en_place:
+                continue
+            if (e.type == "intubation" and e.motif_retrait == RELAIS_TRACHEOTOMIE):
+                continue
+        gardes.append(e)
+    return gardes
+
+
+def duree_ventilation_jours(lignes: list[dict], a_la_date: str | date | None = None) -> int:
+    """Jours de ventilation sur prothèse : sonde d'intubation puis canule de
+    trachéotomie, **sans compter deux fois** les jours où les deux se
+    chevauchent. Retirer l'intubation au relais par la trachéotomie ne doit
+    pas arrêter le compteur de ventilation du socle de recherche.
+
+    Limite connue : un trachéotomisé sevré du respirateur, canule en place,
+    continue d'être compté — le logiciel ne sait pas s'il est branché.
+    """
+    reference = parse_date(a_la_date) or date.today()
+    intervalles = sorted(
+        (parse_date(l["date_pose"]), parse_date(l.get("date_retrait")) or reference)
+        for l in lignes
+        if l["type"] in TYPES_VENTILATION and parse_date(l.get("date_pose"))
+    )
+    total, fin_courante = 0, None
+    for debut, fin in intervalles:
+        if fin_courante is not None and debut < fin_courante:
+            debut = fin_courante
+        if fin > debut:
+            total += (fin - debut).days
+        fin_courante = max(fin_courante or fin, fin)
+    return total
 
 
 def pose_le_jour(ligne: dict, a_la_date: str | date | None = None) -> bool:

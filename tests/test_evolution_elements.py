@@ -88,7 +88,7 @@ def test_arret_sedation_apparait_dans_le_plan_neurologique(base):
     texte = ev.texte_genere(base, sid, "2026-09-03")
     lignes = texte.split("\n")
     index_neuro = lignes.index("Sur le plan Neurologique :")
-    assert "Arrêt sédation J4" in lignes[index_neuro + 1]
+    assert "J4 d'AS" in lignes[index_neuro + 1]    # jours depuis l'arrêt de la sédation
 
 
 def test_intubation_apparait_dans_le_plan_respiratoire(base):

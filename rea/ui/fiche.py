@@ -31,8 +31,8 @@ def bandeau_etat(sejour: dict) -> None:
     )
     if sejour["traumatique"] and sejours_service.est_polytraumatise(contexte.base(), sejour["id"]):
         pastilles.append(("Polytraumatisé", "attention"))
-    en_place = [e for e in dispositifs_service.etats(contexte.base(), sejour["id"])
-                if e.en_place]
+    etats = dispositifs_service.etats(contexte.base(), sejour["id"])
+    en_place = [e for e in etats if e.en_place]
     # Deux redons dans le même abdomen faisaient deux pastilles identiques,
     # dans la première ligne qu'on lit de la fiche.
     numeros = dom_dispositifs.numeros_distincts(en_place)
@@ -40,6 +40,13 @@ def bandeau_etat(sejour: dict) -> None:
         style = "attention" if e.type in ("intubation", "sedation", "eer") else "neutre"
         numero = numeros.get(e.id)
         pastilles.append((e.texte if numero is None else f"{e.texte} {numero}", style))
+    # « J2 d'AS » : l'arrêt de la sédation se suit jour après jour (réveil,
+    # examen neurologique), et se lit en tête de fiche comme le reste.
+    arret = dom_dispositifs.arret_sedation(etats)
+    if arret is not None:
+        pastilles.append((arret.texte.split(" (")[0], "attention"))
+    if dom_dispositifs.intubation_a_retirer(etats) is not None:
+        pastilles.append(("⚠ " + dom_dispositifs.RAPPEL_INTUBATION, "alerte"))
     theme.chips(pastilles)
 
 

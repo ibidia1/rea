@@ -1558,3 +1558,36 @@ def test_une_cure_arretee_ce_jour_reste_sur_la_grille(base, dossier):
     prescriptions.arreter_ligne(base, ligne, date_arret=AUJ)
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     assert contexte["cures"].html == ""
+
+
+
+# -- abords : arrêt de sédation, extubé, intubation sous trachéotomie ---------
+
+def test_la_sedation_arretee_s_ecrit_en_jours_d_as(base, dossier):
+    _pid, sid = dossier
+    sed = dispositifs.poser(base, sejour_id=sid, type_="sedation", date_pose=J2)
+    dispositifs.retirer(base, sed, date_retrait=J1)
+    abords = feuille.contexte(_dossier(base, sid, AUJ))["abords"]
+    ligne = next(a for a in abords if "AS" in a["texte"])
+    assert ligne["texte"] == "☐ J1 d'AS"
+    assert "font-weight:700" in ligne["style"]
+
+
+def test_un_patient_extube_se_lit_extube(base, dossier):
+    """Avant : « Intubé J1 » grisé — le nom de la pose, avec le compteur du
+    retrait."""
+    _pid, sid = dossier
+    tube = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose=J2)
+    dispositifs.retirer(base, tube, date_retrait=J1, motif_retrait="programmee")
+    textes = [a["texte"] for a in feuille.contexte(_dossier(base, sid, AUJ))["abords"]]
+    assert textes == ["☐ Extubé J1"]
+
+
+def test_l_intubation_ouverte_sous_trachéo_porte_le_rappel(base, dossier):
+    _pid, sid = dossier
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose=J2)
+    dispositifs.poser(base, sejour_id=sid, type_="tracheotomie", date_pose=AUJ)
+    abords = feuille.contexte(_dossier(base, sid, AUJ))["abords"]
+    intube = next(a for a in abords if "Intubé" in a["texte"])
+    assert "à retirer" in intube["texte"]
+    assert feuille.COULEUR_FIN_DE_CURE in intube["style"]
