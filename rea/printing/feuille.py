@@ -539,6 +539,10 @@ def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
     créatinine sur une semaine, c'est ce qui fait voir une insuffisance rénale
     qui s'installe.
 
+    Un jour qui ne tient pas en entier n'est pas montré du tout : une date
+    au-dessus d'une partie seulement de ses prélèvements se lirait comme le
+    jour complet.
+
     Un jour sans aucun prélèvement ne prend aucune colonne : il n'aurait rien
     à y écrire, et sa place sert à montrer un jour plus ancien qui, lui, a des
     valeurs. Si le séjour est trop court pour remplir les huit, les colonnes
@@ -558,10 +562,16 @@ def _repartition_biologie(dossier, date_jour: str, source: str) -> list[dict]:
         nombre = _nb_prelevements_du_jour(dossier, jour.isoformat(), source)
         if nombre == 0:
             continue
-        colonnes = min(nombre, restant)
-        passes.append({"jour": jour.isoformat(), "colonnes": colonnes,
+        if nombre > restant:
+            # Un jour s'imprime en entier ou pas du tout. Coupé, il perdait ses
+            # derniers prélèvements sans rien dire, sous une date qui laissait
+            # croire qu'il n'y en avait pas eu d'autre ce jour-là (démonstration
+            # du 29 septembre : le gaz de 22 h du jour d'admission avait
+            # disparu). Les colonnes restantes vont au jour en cours.
+            break
+        passes.append({"jour": jour.isoformat(), "colonnes": nombre,
                        "en_cours": False})
-        restant -= colonnes
+        restant -= nombre
 
     repartition = list(reversed(passes))          # du plus ancien au plus récent
     # Ce qui reste — séjour trop court, ou pas encore de bilan — va au jour en
@@ -836,11 +846,18 @@ def _ligne_transfusions(dossier, repartition: list[dict]) -> dict | None:
             cote = "left:0"
         else:
             cote = f"right:{(NB_COLONNES_BIOLOGIE - borne) / NB_COLONNES_BIOLOGIE * 100:.4f}%"
+        # Jamais plus large que les colonnes à sa gauche : « 4 CGR + 4 PFC +
+        # 1 CUP » posé après la première colonne débordait sur le libellé
+        # « Transfusion » (démonstration du 29 septembre). Trop long, il
+        # revient à la ligne dans la hauteur de la case.
+        largeur = max(borne, 1) / NB_COLONNES_BIOLOGIE * 100
         fleches.append(
             f'<div style="position:absolute;top:1px;bottom:1px;{cote};display:flex;'
-            'align-items:center;background:#f6efda;border:1px solid #b9922e;'
-            'border-radius:2px;padding:0 2px;font-size:7.5px;font-weight:700;'
-            f'color:#8c3a2b;white-space:nowrap;line-height:1">{html.escape(texte)} ➜</div>'
+            f'align-items:center;max-width:{largeur:.4f}%;box-sizing:border-box;'
+            'background:#f6efda;border:1px solid #b9922e;border-radius:2px;'
+            'padding:0 2px;font-size:7.5px;font-weight:700;color:#8c3a2b;'
+            f'white-space:normal;text-align:right;line-height:1">'
+            f'{html.escape(texte)} ➜</div>'
         )
     return {
         "libelle": "Transfusion",
@@ -857,7 +874,9 @@ def _codes_des_lignes(*sections) -> set[str]:
 
 
 #: Combien de lignes le report automatique prend au plus dans « Autres bilans
-#: / examens » : le reste du cadre reste réglé pour l'écriture à la main.
+#: / examens » : le reste du cadre reste réglé pour l'écriture à la main. Des
+#: lignes de 18 px, pour que les cinq tiennent dans les 94 px du cadre — à
+#: 21 px, la cinquième était coupée (démonstration du 29 septembre).
 LIGNES_AUTRES_BILANS = 5
 
 
@@ -885,7 +904,7 @@ def _autres_bilans(dossier, repartition: list[dict], deja_imprimes: set[str]) ->
             for code, v in par_jour[jour].items()
         )
         lignes.append(
-            '<div style="font-size:9px;line-height:20px;height:21px;padding:0 6px;'
+            '<div style="font-size:9px;line-height:17px;height:18px;padding:0 6px;'
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
             f"<b>{html.escape(format_date_fr(jour)[:5])}</b> : {html.escape(valeurs)}</div>"
         )
@@ -904,6 +923,11 @@ def _texte_abrege_dispositif(etat) -> str:
     abrev_types = referentiels.charger("feuille_abreviations", "types")
     abrev_sites = referentiels.charger("feuille_abreviations", "sites")
     nom = abrev_types.get(etat.type, listes.libelle_dispositif(etat.type))
+    config = listes.TYPES_DISPOSITIF.get(etat.type, {})
+    if etat.en_place and etat.rang > 1 and config.get("en_cours_repete"):
+        # « Réintubé », pas « Intubé » : après une extubation accidentelle,
+        # c'est la première chose que la garde doit savoir du tube en place.
+        nom = config["en_cours_repete"]
     site = abrev_sites.get(etat.site, etat.site) if etat.site else None
     details = etat.details or {}
 

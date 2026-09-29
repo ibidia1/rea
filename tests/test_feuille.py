@@ -1074,6 +1074,18 @@ def test_le_jour_en_cours_garde_ses_quatre_colonnes_meme_charge(base, dossier):
     assert contexte["days"][-1]["libelle"] == "05/09"
 
 
+def test_un_jour_qui_ne_tient_pas_en_entier_n_est_pas_coupe(base, dossier):
+    """Neuf gaz sur deux jours pour huit colonnes : l'avant-veille n'en aurait
+    reçu que quatre sur cinq, et son dernier gaz disparaissait sous une date
+    qui laissait croire qu'il n'y en avait eu que quatre ce jour-là."""
+    _pid, sid = dossier
+    for jour, heures in ((J1, (2, 8, 14, 20)), (J2, (2, 6, 10, 14, 22))):
+        for heure in heures:
+            bilans.enregistrer_gaz_du_sang(base, sid, f"{jour}T{heure:02d}:00", ph=7.40)
+    colonnes = feuille.contexte(_dossier(base, sid, AUJ))["daysGaz"]
+    assert [(j["libelle"], j["poids"]) for j in colonnes] == [("04/09", "4"), ("05/09", "8")]
+
+
 def test_les_colonnes_sans_emploi_reviennent_au_jour_en_cours(base, dossier):
     """Séjour trop court pour remplir les huit : le reste va au jour en cours,
     seul à avoir de vraies raisons d'avoir des cases libres. Un bloc sans date
@@ -1479,3 +1491,16 @@ def test_l_avis_est_en_surbrillance_sobre_sur_la_feuille(base, dossier):
     html_avis = ctx["avisRows"].html
     assert "background:#f6efda" in html_avis     # surbrillance sobre
     assert "font-size:10.5px" in html_avis       # un peu plus grande
+
+
+def test_la_barre_des_abords_ecrit_reintube(base, dossier):
+    """Après une extubation accidentelle, le tube en place est une
+    réintubation : la barre le dit, comme l'écran."""
+    _pid, sid = dossier
+    tube = dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose=J2,
+                             details={"taille_sonde": 7.5})
+    dispositifs.retirer(base, tube, date_retrait=J1, motif_retrait="accidentelle")
+    dispositifs.poser(base, sejour_id=sid, type_="intubation", date_pose=J1,
+                      details={"taille_sonde": 7.5})
+    abords = [a["texte"] for a in feuille.contexte(_dossier(base, sid, AUJ))["abords"]]
+    assert any(t.startswith("☑ Réintubé") for t in abords), abords
