@@ -22,6 +22,7 @@ from ..models.dates import parse_date
 from . import avis as avis_service
 from . import bilans as bilans_service
 from . import dispositifs as dispositifs_service
+from . import evolution as evolution_service
 from . import explorations as explorations_service
 from . import microbiologie as micro_service
 from . import prescriptions as prescriptions_service
@@ -56,6 +57,8 @@ class DossierFeuille:
     antecedents: list = field(default_factory=list)
     avis: list = field(default_factory=list)
     transfusions: list = field(default_factory=list)
+    # Escarres présentes ce jour-là (localisation, grade, date de constat).
+    escarres: list = field(default_factory=list)
     etat_antecedents: str = "non_renseigne"
     # Vitesse heure par heure de tout ce qui coule ce jour-là, par identifiant
     # de ligne de prescription ou de dispositif : {id: {heure: vitesse}}.
@@ -119,6 +122,7 @@ def rassembler(base: Base, sejour_id: str, date_jour: str) -> DossierFeuille:
         microbiologie=list(micro_service.du_sejour(base, sejour_id)),
         avis=list(avis_service.du_sejour(base, sejour_id)),
         transfusions=list(explorations_service.transfusions_du_sejour(base, sejour_id)),
+        escarres=list(evolution_service.escarres_au(base, sejour_id, date_jour)),
         allergies=list(sejours_service.allergies_du_patient(base, sejour["patient_id"])),
         # Les scores sont déjà du texte : ce sont eux que la feuille imprime,
         # et le rendu n'a pas à savoir comment ils se calculent.

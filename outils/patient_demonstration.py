@@ -133,16 +133,16 @@ def charger(base: Base) -> str:
                            motifs_associes=["sdra", "choc_septique"])
 
     # Allergies et antécédents — la ligne rouge en tête de feuille.
-    for categorie, libelle in [
-        ("allergie", "Pénicilline (œdème de Quincke)"),
-        ("allergie", "Produits de contraste iodés"),
-        ("personnel", "Diabète type 2"),
-        ("personnel", "HTA"),
-        ("personnel", "BPCO stade II"),
-        ("chirurgical", "Cholécystectomie 2019"),
+    for categorie, libelle, precision in [
+        ("allergie", "Pénicilline (œdème de Quincke)", None),
+        ("allergie", "Produits de contraste iodés", None),
+        ("personnel", "Diabète type 2", "sous insuline"),
+        ("personnel", "HTA", "sous trithérapie"),
+        ("personnel", "BPCO stade II", None),
+        ("chirurgical", "Cholécystectomie 2019", None),
     ]:
         sejours.ajouter_antecedent(base, patient_id=pid, categorie=categorie,
-                                   libelle=libelle)
+                                   libelle=libelle, precision=precision)
     sejours.ajouter_antecedent(base, patient_id=pid, categorie="habitude",
                                libelle="Tabagisme", code="tabagisme",
                                quantification_valeur=40,

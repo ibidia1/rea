@@ -895,10 +895,16 @@ def _lignes_atcd(dossier) -> list[str]:
     lignes = []
     for a in dossier.antecedents:
         texte = a["libelle"]
+        details = []
         if a.get("quantification_valeur") is not None:
-            texte += f" ({_nombre(a['quantification_valeur'])} {a.get('quantification_unite') or ''})"
-        elif a.get("precision"):
-            texte += f" ({a['precision']})"
+            details.append(f"{_nombre(a['quantification_valeur'])} "
+                           f"{a.get('quantification_unite') or ''}".strip())
+        if a.get("precision"):
+            # « Diabète (sous insuline) » : le commentaire qualifie l'antécédent
+            # (demande du service, 29 septembre).
+            details.append(a["precision"].strip())
+        if details:
+            texte += f" ({', '.join(details)})"
         lignes.append(texte)
     return lignes
 
@@ -963,7 +969,10 @@ def _motif_transport_atcd(dossier) -> Brut:
     def ligne(titre: str, valeur: str) -> str:
         return f'<div style="margin-bottom:2px"><b>{html.escape(titre)} :</b> {html.escape(valeur)}</div>'
 
-    corps = bloc("Antécédents", _lignes_atcd(dossier))
+    # Les antécédents sur une ligne, séparés par « / » — « Diabète (sous
+    # insuline) / HTA / BPCO » se lit d'un trait, une liste verticale prenait
+    # toute la case (demande du service, 29 septembre).
+    corps = ligne("Antécédents", " / ".join(_lignes_atcd(dossier)))
     circonstances = _circonstances_texte(dossier)
     if circonstances:
         corps += ligne("Circonstances", circonstances)
@@ -1081,6 +1090,35 @@ def _transfusions_box(dossier) -> Brut:
         '<div style="font-size:8px;font-weight:700;letter-spacing:.08em;'
         'text-transform:uppercase;color:#8a6d1f">Transfusions</div>'
         f"{corps}</div>"
+    )
+
+
+def _escarres_box(dossier) -> Brut:
+    """Les escarres, en rouge pastel, sur la première ligne de la case
+    « Évolution » (demande du service, 29 septembre).
+
+    Une escarre engage les soins de chaque garde — retournements, pansement,
+    matelas : elle se lit en tête de case, d'un coup d'œil, pas au détour du
+    texte d'évolution. Le compteur de jours part de la date du constat.
+    """
+    if not dossier.escarres:
+        return Brut("")
+    morceaux = []
+    for e in dossier.escarres:
+        texte = e["localisation"]
+        if e.get("grade"):
+            texte += f" stade {e['grade']}"
+        constat = parse_date(e.get("date_constat"))
+        jour = parse_date(dossier.date_jour)
+        if constat and jour:
+            texte += f" (J{(jour - constat).days + 1})"
+        morceaux.append(html.escape(texte))
+    return Brut(
+        '<div style="flex:none;min-height:20px;box-sizing:border-box;padding:2px 6px;'
+        'background:#f8dcd7;border-bottom:1px solid #e3a99f;font-size:10.5px;'
+        'line-height:1.35;color:#8c2f22;overflow-wrap:anywhere">'
+        '<b style="letter-spacing:.04em">Escarre'
+        f'{"s" if len(morceaux) > 1 else ""} :</b> ' + " · ".join(morceaux) + "</div>"
     )
 
 
@@ -1293,6 +1331,7 @@ def contexte(dossier) -> dict:
         "motifTransportAtcd": _motif_transport_atcd(dossier),
         "avisRows": _avis_specialises(dossier),
         "transfusions": _transfusions_box(dossier),
+        "escarres": _escarres_box(dossier),
         "abords": _abords(dossier),
         "hours": [str(h) for h in ORDRE_HEURES],
         # Prescription
