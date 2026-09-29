@@ -145,3 +145,20 @@ def test_la_sortie_s_enregistre_avec_les_selecteurs_de_date(service, base):
     sortie = base.une_ligne("SELECT date_sortie FROM sejour WHERE id = ?", (sid,))
     assert sortie["date_sortie"] and len(sortie["date_sortie"]) == 16
     assert sortie["date_sortie"][10] == "T"
+
+
+def test_la_demonstration_tient_dans_ses_blocs(service, base):
+    """La démonstration montre une feuille remplie comme le service la
+    remplit : trente lignes, chacune dans le bloc de sa voie — aucune n'est
+    rangée dans un autre bloc (voie écrite en orange), aucune ne déborde."""
+    from rea.printing import feuille
+    from rea.services import feuille_dossier
+
+    _comptes, sid = service
+    sys.path.insert(0, str(RACINE / "outils"))
+    import patient_demonstration
+
+    dossier = feuille_dossier.rassembler(base, sid, patient_demonstration.AUJ)
+    html = feuille.generer(dossier)
+    assert feuille.COULEUR_VOIE_EMPRUNTEE not in html
+    assert "⚠" not in feuille.contexte(dossier)["pied"]
