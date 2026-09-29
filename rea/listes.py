@@ -235,6 +235,57 @@ def libelle_mode_court(code: str | None) -> str:
     return code or ""
 
 
+#: Ce qui dépend du mode ventilatoire, par opposition au gaz du sang lui-même :
+#: une seringue de sang artériel se lit pareil qu'on soit ventilé ou non. Tout
+#: paramètre qu'au moins un mode déclare — déduit du référentiel, pas recopié.
+PARAMETRES_VENTILATOIRES = frozenset(
+    parametre for entree in MODES_VENTILATOIRES
+    for parametre in (entree[2] if len(entree) > 2 else ())
+)
+
+
+def code_mode_ventilatoire(valeur: str | None) -> str | None:
+    """Le code d'un mode, qu'on le donne par son code ou par son ancien libellé.
+
+    « VAC », « VS AI », « Air ambiant » : l'ancienne façon de l'écrire. Un mode
+    que le référentiel ne connaît pas est refusé — enregistré tel quel, il ne
+    déclarait aucun paramètre, et la feuille cachait la FiO₂ tout en imprimant
+    le PaO₂/FiO₂ calculé avec elle (démonstration du 29 septembre).
+    """
+    if valeur is None or not str(valeur).strip():
+        return None
+    codes = [entree[0] for entree in MODES_VENTILATOIRES]
+    if valeur in codes:
+        return valeur
+    normalise = str(valeur).strip().lower().replace(" ", "_").replace("-", "_")
+    if normalise in codes:
+        return normalise
+    raise ValueError(f"Mode ventilatoire inconnu : {valeur!r}")
+
+
+def parametre_ventilatoire(gaz: dict, code: str):
+    """La valeur de `code` pour ce gaz du sang — si elle a un sens pour son mode.
+
+    Une PEP sous air ambiant, une FiO₂ sous lunettes : des valeurs que personne
+    n'a mesurées, qu'on n'affiche pas et avec lesquelles on ne calcule rien.
+    Tout ce qui lit une FiO₂ passe par ici, pour que la case FiO₂ et le rapport
+    PaO₂/FiO₂ ne puissent jamais se contredire. Un gaz sans mode connu garde ce
+    qui a été saisi : rien ne permet alors de dire que la valeur est fausse.
+    """
+    valeur = gaz.get(code)
+    mode = gaz.get("mode_ventilatoire")
+    if (code in PARAMETRES_VENTILATOIRES
+            and any(entree[0] == mode for entree in MODES_VENTILATOIRES)
+            and code not in parametres_du_mode(mode)):
+        return None
+    return valeur
+
+
+def fio2_du_gaz(gaz: dict):
+    """La FiO₂ (en %) qui compte pour ce gaz du sang — celle qu'on imprime."""
+    return parametre_ventilatoire(gaz, "fio2")
+
+
 def parametres_du_mode(code: str | None) -> tuple[str, ...]:
     """Les paramètres qui ont un sens pour ce mode ventilatoire.
 

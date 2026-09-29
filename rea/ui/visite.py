@@ -307,7 +307,7 @@ def _gaz_du_sang(sejour: dict, date_jour_str: str) -> None:
         ("PaO₂", lambda g: _nombre(g.get("pao2"))),
         ("PaCO₂", lambda g: _nombre(g.get("paco2"))),
         ("P/F", lambda g: _nombre(bilans_service.rapport_pao2_fio2(
-            g.get("pao2"), g.get("fio2")))),
+            g.get("pao2"), listes.fio2_du_gaz(g)))),
         ("HCO₃⁻", lambda g: _nombre(g.get("hco3"))),
         ("Lactates", lambda g: _nombre(g.get("lactate"))),
     ):

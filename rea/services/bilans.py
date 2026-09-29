@@ -121,6 +121,17 @@ def enregistrer_gaz_du_sang(
     ai: float | None = None,
     utilisateur_id: str | None = None,
 ) -> str:
+    # Un mode inconnu est refusé ; ce que le mode ne déclare pas n'est pas
+    # enregistré (referentiels/modes_ventilatoires.json).
+    mode_ventilatoire = listes.code_mode_ventilatoire(mode_ventilatoire)
+    ventilation = {"debit_o2": debit_o2, "fio2": fio2, "pep": pep, "fr": fr,
+                   "vt": vt, "ai": ai}
+    if mode_ventilatoire is not None:
+        ventilation = {cle: listes.parametre_ventilatoire(
+            {**ventilation, "mode_ventilatoire": mode_ventilatoire}, cle)
+            for cle in ventilation}
+    debit_o2, fio2, pep, fr, vt, ai = (ventilation[c] for c in
+                                       ("debit_o2", "fio2", "pep", "fr", "vt", "ai"))
     return base.inserer(
         "gaz_du_sang",
         {
@@ -324,7 +335,7 @@ def texte_genere(base: Base, sejour_id: str, date_jour: str) -> str:
         ])
         if vent:
             lignes.append(vent)
-        ratio = rapport_pao2_fio2(gds["pao2"], gds["fio2"])
+        ratio = rapport_pao2_fio2(gds["pao2"], listes.fio2_du_gaz(gds))
         gaz = _ligne("Gaz du sang", [
             ("pH", gds["ph"], ""), ("PaO₂", gds["pao2"], "mmHg"), ("PaCO₂", gds["paco2"], "mmHg"),
             ("HCO₃⁻", gds["hco3"], "mmol/L"), ("Lactates", gds["lactate"], "mmol/L"),

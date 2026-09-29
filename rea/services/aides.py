@@ -15,7 +15,7 @@ import unicodedata
 from datetime import date
 
 from .. import aides as fichiers_regles
-from .. import referentiels
+from .. import listes, referentiels
 from ..database import Base
 from ..models import calculs, regles as moteur
 from ..models.dates import age_ans, parse_date
@@ -115,6 +115,9 @@ def faits(base: Base, sejour_id: str, date_jour: str | None = None) -> dict:
         f["jours_depuis_bilan"] = None
 
     gaz = bilans_service.dernier_gaz_du_sang(base, sejour_id) or {}
+    if gaz:
+        # La FiO₂ qu'on imprime, pas celle qui traînerait sous un masque.
+        gaz = {**gaz, "fio2": listes.fio2_du_gaz(gaz)}
     calculees = {
         v.cle: v.valeur
         for v in calculs.toutes_les_valeurs(
