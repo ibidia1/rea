@@ -389,12 +389,51 @@ def test_deux_pages_a3_paysage(base, dossier):
     assert "size: A3 landscape" in html
 
 
-def test_un_debordement_de_lignes_est_signale(base, dossier):
-    """La feuille a un nombre de lignes fixe. Si la prescription déborde, il
-    faut le dire — sinon une ligne prescrite n'est simplement pas imprimée."""
+def test_un_traitement_en_trop_prend_une_ligne_libre_avec_sa_voie(base, dossier):
+    """Quatre S/C pour deux lignes : les deux en trop vont dans les lignes
+    libres d'un autre bloc, la voie écrite entre parenthèses en couleur vive
+    (demande du service, 29 septembre). Avant, ils n'étaient pas imprimés."""
     _pid, sid = dossier
     for i in range(4):
         prescriptions.ajouter_ligne(base, sejour_id=sid, voie="SC",
+                                    produit=f"Produit {i}", dose=1, unite="mg",
+                                    rythme="x1/j", date_debut=J2)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    assert "⚠" not in contexte["pied"]
+    tout = "".join(
+        (l["produit"].html if hasattr(l["produit"], "html") else str(l["produit"]))
+        for nom, _n in feuille.LIGNES_PAR_VOIE.values() for l in contexte[nom]
+    )
+    for i in range(4):
+        assert f"Produit {i}" in tout
+    assert tout.count("(SC)") == 2
+    assert feuille.COULEUR_VOIE_EMPRUNTEE in tout
+    # Rien d'emprunté dans le bloc S/C lui-même.
+    assert "(SC)" not in "".join(str(l["produit"]) for l in contexte["scRows"])
+
+
+def test_les_iv_en_trop_vont_sous_sc_et_jamais_parmi_les_debits(base, dossier):
+    """Un rond d'antibiotique se range d'abord sous S/C (prises horaires),
+    jamais au milieu des seringues dont les cases portent un débit."""
+    _pid, sid = dossier
+    for i in range(10):
+        prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
+                                    produit=f"Antibio {i}", dose=1, unite="g",
+                                    rythme="x3/j", date_debut=J2)
+    contexte = feuille.contexte(_dossier(base, sid, AUJ))
+    sc = " ".join(str(getattr(l["produit"], "html", l["produit"])) for l in contexte["scRows"])
+    pse = " ".join(str(getattr(l["produit"], "html", l["produit"])) for l in contexte["pseRows"])
+    assert "Antibio 8" in sc and "Antibio 9" in sc and "(IV)" in sc
+    assert "(IV)" not in pse
+
+
+def test_au_dela_des_trente_lignes_le_debordement_est_signale(base, dossier):
+    """Quand toutes les lignes de la feuille sont prises, ce qui reste est
+    signalé en pied de page — jamais passé sous silence."""
+    _pid, sid = dossier
+    total = sum(n for _nom, n in feuille.LIGNES_PAR_VOIE.values())
+    for i in range(total + 2):
+        prescriptions.ajouter_ligne(base, sejour_id=sid, voie="IV",
                                     produit=f"Produit {i}", dose=1, unite="mg",
                                     rythme="x1/j", date_debut=J2)
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
@@ -556,7 +595,11 @@ def test_sedation_partage_le_quota_de_lignes_pse(base, dossier):
         )
     contexte = feuille.contexte(_dossier(base, sid, AUJ))
     assert len(contexte["pseRows"]) == 6
-    assert "⚠" in contexte["pied"]
+    # La sixième seringue prend une ligne libre ailleurs, marquée « (PSE) ».
+    ailleurs = "".join(str(getattr(l["produit"], "html", l["produit"]))
+                       for l in contexte["ivRows"] + contexte["entRows"]
+                       + contexte["poRows"])
+    assert "(PSE)" in ailleurs
 
 
 def test_bloc_peu_rempli_recoit_un_texte_plus_grand(base, dossier):
