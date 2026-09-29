@@ -38,7 +38,10 @@ J1 = (date.today() - timedelta(days=1)).isoformat()
 J2 = (date.today() - timedelta(days=2)).isoformat()
 DEMAIN = (date.today() + timedelta(days=1)).isoformat()
 
-# Quarante lignes pour trente emplacements : le débordement est voulu.
+# Trente lignes pour trente emplacements, mais pas là où la feuille les
+# attend : dix IV pour huit lignes, six PO pour cinq. Les trois en trop
+# prennent les lignes libres des aérosols, de la kiné et des soins locaux,
+# leur voie écrite en couleur vive — c'est ce que la démonstration montre.
 PRESCRIPTIONS = [
     # (voie, produit, dose, unité, rythme, durée prévue)
     ("IV", "Imipénème", 1, "g", "x3/j", 7),
@@ -49,26 +52,19 @@ PRESCRIPTIONS = [
     ("IV", "Néfopam", 20, "mg", "x4/j", None),
     ("IV", "Oméprazole", 40, "mg", "x1/j", None),
     ("IV", "Furosémide", 40, "mg", "x3/j", None),
+    ("IV", "Hydrocortisone", 50, "mg", "x4/j", 5),
+    ("IV", "Métoclopramide", 10, "mg", "x3/j", None),
     ("PO", "Kardégic", 75, "mg", "x1/j", None),
     ("PO", "Atorvastatine", 40, "mg", "x1/j", None),
     ("PO", "Lévétiracétam", 500, "mg", "x2/j", None),
     ("PO", "Bisoprolol", 2.5, "mg", "x1/j", None),
     ("PO", "Amlodipine", 5, "mg", "x1/j", None),
     ("PO", "Metformine", 850, "mg", "x2/j", None),
-    ("PO", "Vitamine D", 100000, "UI", "1j/2", None),
     ("SC", "Enoxaparine 4000 UI", None, None, "x1/j", None),
     ("SC", "Insuline rapide", 6, "UI", "x3/j", None),
-    ("SC", "Insuline lente", 18, "UI", "x1/j", None),
     ("AEROSOL", "Salbutamol", 5, "mg", "x4/j", None),
-    ("AEROSOL", "Ipratropium", 0.5, "mg", "x3/j", None),
-    ("AEROSOL", "Sérum salé hypertonique", None, None, "x3/j", None),
     ("SOINS", "Pansement du drain thoracique", None, None, "x1/j", None),
-    ("SOINS", "Soins de trachéotomie", None, None, "x2/j", None),
-    ("SOINS", "Soins de bouche", None, None, "x6/j", None),
-    ("SOINS", "Prévention d'escarre — changement de position", None, None, "x6/j", None),
     ("KINE", "Kinésithérapie respiratoire", None, None, "x2/j", None),
-    ("KINE", "Mobilisation passive des quatre membres", None, None, "x2/j", None),
-    ("KINE", "Verticalisation au fauteuil", None, None, "x1/j", None),
 ]
 
 # Le produit, son indication : les deux tiers de l'identité d'un épisode.
@@ -94,7 +90,6 @@ SERINGUES = [
     ("Midazolam", "1 mg/cc", 6, [(14, 4)]),
     ("Sufentanil", "10 µg/cc", 4, [(14, 3)]),
     ("Insuline", "1 UI/cc", 2, [(10, 3), (18, 2)]),
-    ("Amiodarone", "15 mg/cc", 1, []),
 ]
 
 ENTREES = [
@@ -103,7 +98,6 @@ ENTREES = [
     ("perfusion", "Ringer Lactate", 60, None, [("KCl", 3)]),
     ("perfusion", "Sérum glucosé 5 %", 40, None, [("NaCl", 1), ("KCl", 2)]),
     ("nutrition_parenterale", "SmofKabiven", None, 1500, [("Cernevit", 1)]),
-    ("nutrition_enterale", "Fresubin", None, 1000, None),
 ]
 
 
