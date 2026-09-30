@@ -51,6 +51,13 @@ def _entete_accueil(base: Base) -> None:
         # barre latérale » n'a pas de réponse tant qu'on ignore quelle
         # version tourne sur le poste (11 septembre).
         st.caption(f"Version {config.VERSION}")
+        if config.DEMONSTRATION:
+            st.warning(
+                "**BASE DE DÉMONSTRATION** — patients fictifs. Un compte par "
+                "rôle, tous avec le code **demo2026** : « Démo — Senior », "
+                "« Démo — Interne », « Démo — Infirmière de jour »…",
+                icon="🎓",
+            )
     with droite:
         if not utilisateurs_service.administrateurs(base):
             return

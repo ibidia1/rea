@@ -15,13 +15,27 @@ from __future__ import annotations
 
 import streamlit as st
 
+from .. import config
 from ..models import droits as dom_droits
 from . import contexte
 from . import utilisateur as utilisateur_ui
 
 
+def bandeau_demonstration() -> None:
+    """« Base de démonstration » en tête de chaque écran, sans exception :
+    c'est la seule chose qui distingue cette base de celle du service."""
+    if config.DEMONSTRATION:
+        st.warning(
+            "**BASE DE DÉMONSTRATION** — patients fictifs, refaite chaque jour. "
+            "Ne pas y admettre un vrai patient : la base du service s'ouvre par "
+            "l'icône « Réanimation - Local » ou « Réanimation - Serveur ».",
+            icon="🎓",
+        )
+
+
 def haut_de_page() -> None:
     """L'accès Admin à droite, et le rappel d'essai s'il y en a un."""
+    bandeau_demonstration()
     if not (utilisateur_ui.peut("comptes") or utilisateur_ui.role_essaye()):
         return
 

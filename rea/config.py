@@ -30,6 +30,12 @@ DOSSIER_EXPORTS = RACINE / "exports"
 DOSSIER_PANCARTES = RACINE / "pancartes"
 FICHIER_BASE = DOSSIER_DONNEES / "rea.db"
 
+# Base de démonstration (icône « Réanimation - Démonstration ») : posé par son
+# lanceur, qui pointe aussi REA_DIR vers un dossier à part. Il ne sert qu'à
+# l'annoncer en tête de chaque écran — personne ne doit y admettre un vrai
+# patient en croyant être dans la base du service.
+DEMONSTRATION = os.environ.get("REA_DEMONSTRATION") == "1"
+
 # Dossier des protocoles, livré avec le code (versionné, signé — SPEC §4.5)
 DOSSIER_PROTOCOLES = Path(__file__).resolve().parent.parent / "protocoles"
 
