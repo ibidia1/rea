@@ -1,4 +1,12 @@
 @echo off
+rem Relance dans une fenetre qui RESTE OUVERTE (cmd /k). Lance d'un double
+rem clic, un fichier .bat qui rencontre une erreur de syntaxe ferme sa fenetre
+rem sans rien afficher : c'est ce qui est arrive le 30 septembre, sur un
+rem dossier nomme "rea-main (1)". Ici, le message reste lisible.
+if /i "%~1"=="/fenetre" goto :debut
+cmd /k call "%~f0" /fenetre
+exit /b
+:debut
 setlocal EnableExtensions
 title Installation - Logiciel de reanimation
 color 07
@@ -88,7 +96,7 @@ echo  [2/4] Installation du programme...
 if not exist "%PROGRAMME%" mkdir "%PROGRAMME%" 2>nul
 if not exist "%PROGRAMME%" (
     echo.
-    echo  [ECHEC] Impossible de creer %PROGRAMME%
+    echo  [ECHEC] Impossible de creer "%PROGRAMME%"
     echo  Choisir un autre emplacement, ou relancer ce fichier en tant
     echo  qu'administrateur ^(clic droit / Executer en tant qu'administrateur^).
     echo.
@@ -102,7 +110,7 @@ if /i "%SOURCE%"=="%PROGRAMME%" (
 )
 if not exist "%PROGRAMME%\rea_app.py" (
     echo.
-    echo  [ECHEC] rea_app.py est introuvable dans %PROGRAMME%
+    echo  [ECHEC] rea_app.py est introuvable dans "%PROGRAMME%"
     echo  Ce fichier a-t-il bien ete lance depuis le dossier du logiciel ?
     echo.
     goto :fin_erreur
@@ -147,8 +155,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%PROGRAMME%\outils\raccourc
 if errorlevel 1 (
     echo        [Avertissement] Les icones n'ont pas pu etre creees.
     echo        Le logiciel s'ouvre quand meme par
-    echo        %PROGRAMME%\lancer_reanimation_local.bat   (ce poste)
-    echo        %PROGRAMME%\lancer_reanimation_serveur.bat (serveur reseau)
+    echo        "%PROGRAMME%\lancer_reanimation_local.bat"   ^(ce poste^)
+    echo        "%PROGRAMME%\lancer_reanimation_serveur.bat" ^(serveur reseau^)
 ) else (
     echo        Icones "Reanimation - Local" et "Reanimation - Serveur" posees.
 )
@@ -176,6 +184,8 @@ echo.
 set "LANCER="
 set /p "LANCER=Ouvrir le logiciel maintenant (mode local) ? (O/n) : "
 if /i not "%LANCER%"=="n" start "" "%PROGRAMME%\lancer_reanimation_local.bat"
+echo.
+echo  Cette fenetre peut etre fermee.
 endlocal
 exit /b 0
 
@@ -216,8 +226,8 @@ robocopy "%SOURCE%\rea" "%PROGRAMME%\rea" /E /PURGE /NFL /NDL /NJH /NJS /NP /XD 
 if errorlevel 8 (
     echo.
     echo  [ECHEC] La mise a jour du dossier du code a echoue.
-    echo        Source      : %SOURCE%\rea
-    echo        Destination : %PROGRAMME%\rea
+    echo        Source      : "%SOURCE%\rea"
+    echo        Destination : "%PROGRAMME%\rea"
     echo.
     exit /b 1
 )
