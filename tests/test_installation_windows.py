@@ -108,6 +108,20 @@ def test_l_installateur_lit_le_compte_de_robocopy():
     assert premier.group(1) == "8"
 
 
+def test_les_chemins_batis_sur_source_ont_leur_barre():
+    """SOURCE est privé de sa barre finale en tête de l'installateur : tout
+    chemin construit dessus doit donc en remettre une. « %SOURCE%rea »
+    désignait « ...\\rea-mainrea », qui n'existe pas — l'installation
+    s'arrêtait à l'étape 2 (30 septembre). Et chaque sous-dossier nommé
+    ainsi doit exister dans le dépôt, puisque c'est lui qui est copié."""
+    texte = lire(RACINE / "installer.bat")
+    assert 'if "%SOURCE:~-1%"=="\\" set "SOURCE=%SOURCE:~0,-1%"' in texte
+    collés = re.findall(r"%SOURCE%([^\\\"%\s])", texte)
+    assert not collés, f"chemin collé à %SOURCE% sans barre : {collés}"
+    for sous_dossier in re.findall(r"%SOURCE%\\([^\"\s]+)", texte):
+        assert (RACINE / sous_dossier).exists(), sous_dossier
+
+
 def test_la_copie_epargne_le_dossier_des_patients():
     """Une reinstallation ne doit jamais ecraser `donnees`."""
     exclusions = ligne_robocopy().split("/XD", 1)[1]

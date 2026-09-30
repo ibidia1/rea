@@ -209,10 +209,15 @@ rem un module supprime ou renomme dans une nouvelle version restait sinon sur
 rem le poste, et masquait une erreur d'import que le poste suivant, installe
 rem de neuf, aurait rencontree (audit du 27 septembre). Seul "rea" est purge :
 rem regles et protocoles peuvent porter des modifications faites sur place.
-robocopy "%SOURCE%rea" "%PROGRAMME%\rea" /E /PURGE /NFL /NDL /NJH /NJS /NP /XD "__pycache__" >nul
+rem SOURCE n'a plus de barre finale (voir le debut du fichier) : le chemin
+rem s'ecrit donc "%SOURCE%\rea". Sans cette barre, il designait un
+rem dossier "...\rea-mainrea" qui n'existe pas (echec du 30 septembre).
+robocopy "%SOURCE%\rea" "%PROGRAMME%\rea" /E /PURGE /NFL /NDL /NJH /NJS /NP /XD "__pycache__" >nul
 if errorlevel 8 (
     echo.
     echo  [ECHEC] La mise a jour du dossier du code a echoue.
+    echo        Source      : %SOURCE%\rea
+    echo        Destination : %PROGRAMME%\rea
     echo.
     exit /b 1
 )
