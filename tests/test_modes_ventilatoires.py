@@ -187,3 +187,14 @@ def test_chaque_rapport_pf_a_sa_fio2_au_dessus(base, sejour):
     bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T14:00",
                                    mode_ventilatoire="optiflow", pao2=90, fio2=60, debit_o2=50)
     assert _fio2_et_pf(base, sejour) == (["50", "60"], ["160", "150"])
+
+
+
+def test_sous_oxygene_le_mode_porte_son_debit(base, sejour):
+    """« Masque 6L » : sans le débit, un masque ne dit rien de l'oxygène
+    reçu — et ce gaz-là n'a pas de FiO₂ pour le dire à sa place."""
+    bilans.enregistrer_gaz_du_sang(base, sejour, f"{J1}T08:00",
+                                   mode_ventilatoire="masque", debit_o2=6, pao2=80)
+    contexte = feuille.contexte(feuille_dossier.rassembler(base, sejour, AUJ))
+    mode = next(l for l in contexte["gdsVent"] if l["libelle"] == "Mode")
+    assert "Masque 6L" in _cellules(mode)
