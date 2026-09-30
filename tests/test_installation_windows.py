@@ -122,6 +122,65 @@ def test_les_chemins_batis_sur_source_ont_leur_barre():
         assert (RACINE / sous_dossier).exists(), sous_dossier
 
 
+#: Variables qui portent un chemin choisi ailleurs — le dossier où le ZIP a
+#: été décompressé, l'emplacement tapé à l'installation. Elles peuvent
+#: contenir une parenthèse : « rea-main (1) », « C:\Program Files (x86) ».
+VARIABLES_CHEMIN = ("SOURCE", "PROGRAMME", "RACINE", "CHOIX", "PY", "VENV",
+                    "INSTALLATEUR", "~dp0", "~f0", "~1")
+
+
+def _lignes_dans_un_bloc(texte: str):
+    """Les lignes situées entre les parenthèses d'un `if (…)` ou d'un
+    `for … do (…)` — celles que cmd lit d'un seul tenant, AVANT d'exécuter
+    quoi que ce soit, et où une parenthèse de trop casse tout le fichier."""
+    profondeur = 0
+    for numero, brute in enumerate(texte.splitlines(), 1):
+        ligne = brute.strip()
+        if not ligne or ligne.lower().startswith(("rem", "::")):
+            continue
+        if ligne.startswith(")"):
+            profondeur -= 1
+        elif profondeur > 0:
+            yield numero, ligne
+        if ligne.endswith("("):
+            profondeur += 1
+
+
+def _hors_guillemets(ligne: str) -> str:
+    return "".join(ligne.split('"')[0::2])
+
+
+@pytest.mark.parametrize("chemin", BATCHS, ids=lambda c: c.name)
+def test_aucune_parenthese_nue_dans_un_bloc(chemin):
+    """Dans un bloc `( … )`, une parenthèse fermante non protégée — écrite
+    « (ce poste) », ou apportée par un chemin « rea-main (1) » développé
+    hors guillemets — ferme le bloc trop tôt. cmd abandonne alors le fichier
+    et, lancé d'un double clic, ferme sa fenêtre sans rien afficher : c'est
+    ce qu'a vu le service le 30 septembre. Les chemins s'écrivent entre
+    guillemets, les parenthèses du texte s'échappent en ^( ^)."""
+    fautes = []
+    for numero, ligne in _lignes_dans_un_bloc(lire(chemin)):
+        dehors = _hors_guillemets(ligne).replace("^(", "").replace("^)", "")
+        if ligne.endswith("(") or "%%" in ligne:
+            continue      # ouverture d'un bloc imbriqué, ou boucle for
+        if "(" in dehors or ")" in dehors:
+            fautes.append(f"{numero}: {ligne}")
+        for nom in VARIABLES_CHEMIN:
+            if f"%{nom}" in dehors:
+                fautes.append(f"{numero}: %{nom}% hors guillemets : {ligne}")
+    assert not fautes, "\n".join(fautes)
+
+
+def test_la_fenetre_de_l_installateur_reste_ouverte():
+    """Quoi qu'il arrive, le message reste à l'écran : l'installateur se
+    relance dans une fenêtre `cmd /k`, qui ne se ferme pas d'elle-même."""
+    lignes = [l.strip() for l in lire(RACINE / "installer.bat").splitlines()]
+    assert lignes[0] == "@echo off"
+    code = [l for l in lignes if l and not l.lower().startswith("rem")]
+    assert code[1] == 'if /i "%~1"=="/fenetre" goto :debut'
+    assert code[2] == 'cmd /k call "%~f0" /fenetre'
+
+
 def test_la_copie_epargne_le_dossier_des_patients():
     """Une reinstallation ne doit jamais ecraser `donnees`."""
     exclusions = ligne_robocopy().split("/XD", 1)[1]
