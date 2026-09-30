@@ -81,7 +81,7 @@ def test_texte_genere_masque_avec_debit(base):
     )
     texte = bilans.texte_genere(base, sid, "2026-09-01")
     # Le sigle court sur la ligne d'observation, et le débit avec lui.
-    assert "Mode = Masque à oxygène 6L" in texte
+    assert "Mode = Masque 6L" in texte
     # Un masque n'a ni PEP ni AI : ces cases n'existent pas pour ce mode.
     assert "PEP" not in texte and "AI =" not in texte
 

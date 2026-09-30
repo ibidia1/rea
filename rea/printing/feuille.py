@@ -744,8 +744,10 @@ def _creneaux_du_jour(
         ]
         if code == "mode_ventilatoire":
             # Le mode est enregistré sous son code : la feuille imprime le
-            # sigle que le service emploie, pas « vs_ai ».
-            valeurs = [listes.libelle_mode_court(g.get(code)) for g in lignes]
+            # sigle que le service emploie, pas « vs_ai ». Sous oxygène, le
+            # débit le suit — « Masque 6L » : un masque ne se lit pas sans lui
+            # (démonstration du 30 septembre).
+            valeurs = [_mode_et_debit(g) for g in lignes]
         else:
             # Un paramètre qui n'a pas de sens pour ce mode-là n'est pas
             # imprimé même s'il traîne en base : une PEP sous air ambiant
@@ -753,6 +755,14 @@ def _creneaux_du_jour(
             valeurs = [_nombre(listes.parametre_ventilatoire(g, code)) for g in lignes]
     valeurs = [v for v in valeurs if v]
     return (valeurs + [""] * colonnes)[:colonnes]
+
+
+def _mode_et_debit(gaz: dict) -> str:
+    mode = listes.libelle_mode_court(gaz.get("mode_ventilatoire"))
+    debit = listes.parametre_ventilatoire(gaz, "debit_o2")
+    if debit and "fio2" not in listes.parametres_du_mode(gaz.get("mode_ventilatoire")):
+        return f"{mode} {_nombre(debit)}L"
+    return mode
 
 
 def _creatinine_avec_clairance(dossier, ligne: dict) -> str:
