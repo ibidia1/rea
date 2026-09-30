@@ -45,10 +45,18 @@ par un double-clic, depuis le dossier du logiciel :
 1. il cherche Python — et **l'installe** s'il manque, sans rien demander ;
 2. il copie le programme dans **`C:\ReaService\programme`** ;
 3. il installe les composants (cette étape a besoin d'Internet) ;
-4. il pose **deux icônes** sur le Bureau :
+4. il pose **trois icônes** sur le Bureau :
    - **Réanimation - Local** — le poste pour lui seul (`127.0.0.1`) ;
    - **Réanimation - Serveur** — ce poste sert la réanimation au réseau
      (détection automatique de l'adresse ; voir §2) ;
+   - **Réanimation - Démonstration** — des patients fictifs dans une base
+     **à part** (`C:\ReaService\demonstration`, port 8502), pour montrer le
+     logiciel ou s'entraîner sans toucher aux vrais dossiers ni à la
+     Recherche. Deux patients hospitalisés (un polytraumatisé, une patiente
+     en post-partum), le service du jour, neuf mois de séjours clos ; un compte
+     par rôle (« Démo — Senior », « Démo — Infirmière de jour »…), tous avec
+     le code **demo2026**. La base est refaite chaque jour ; un bandeau
+     « BASE DE DÉMONSTRATION » reste en tête de chaque écran ;
 5. il ouvre le logiciel en mode local.
 
 Ensuite, au quotidien : **l'icône du Bureau**. Un poste isolé se sert de

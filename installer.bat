@@ -158,7 +158,8 @@ if errorlevel 1 (
     echo        "%PROGRAMME%\lancer_reanimation_local.bat"   ^(ce poste^)
     echo        "%PROGRAMME%\lancer_reanimation_serveur.bat" ^(serveur reseau^)
 ) else (
-    echo        Icones "Reanimation - Local" et "Reanimation - Serveur" posees.
+    echo        Icones "Reanimation - Local", "Reanimation - Serveur" et
+    echo        "Reanimation - Demonstration" posees.
 )
 echo.
 
@@ -177,6 +178,9 @@ echo    Au quotidien, deux icones sur le Bureau :
 echo      - "Reanimation - Local"   : ce poste uniquement (isole) ;
 echo      - "Reanimation - Serveur" : ce poste sert la reanimation au
 echo                                  reseau (auto-detection de l'adresse).
+echo    Et pour montrer ou s'entrainer, sans toucher aux vrais dossiers :
+echo      - "Reanimation - Demonstration" : patients fictifs, base a part,
+echo                                  comptes "Demo - ...", code demo2026.
 echo.
 echo    A la premiere ouverture, le logiciel propose le compte
 echo    administrateur Slah - qui reclamera aussitot un vrai code.

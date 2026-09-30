@@ -178,3 +178,67 @@ def test_le_rappel_intubation_s_affiche_avec_son_bouton(service):
                     f"segments_ecran_{sid}": "Explorations et actes"})
     assert any("retirer l'intubation" in e.value for e in at.error)
     assert any(b.label.startswith("Retirer l'intubation au") for b in at.button)
+
+
+# -- la base de démonstration complète ------------------------------------------
+
+@pytest.fixture()
+def demonstration(base):
+    """La base que charge l'icône « Réanimation - Démonstration »."""
+    import rea.database as db
+
+    sys.path.insert(0, str(RACINE / "outils"))
+    import base_demonstration
+
+    db._BASE = base
+    ids = base_demonstration.construire(base)
+    yield ids
+    db._BASE = None
+
+
+def _ouvrir_demo(ids, nom: str, role: str, **etat) -> "AppTest":
+    at = AppTest.from_file(str(APP), default_timeout=90)
+    at.session_state["utilisateur_id"] = ids["comptes"][nom]
+    at.session_state["utilisateur_nom"] = nom
+    at.session_state["utilisateur_role"] = role
+    for cle, valeur in etat.items():
+        at.session_state[cle] = valeur
+    at.run()
+    erreurs = [str(e.value) for e in at.exception]
+    assert not erreurs, f"{nom} / {etat} : {erreurs}"
+    return at
+
+
+@pytest.mark.parametrize("onglet", ONGLETS_FICHE)
+def test_chaque_onglet_de_la_patiente_s_ouvre(demonstration, onglet):
+    sid = demonstration["patiente"]
+    _ouvrir_demo(demonstration, "Démo — Senior", "senior", accueil_pose=True, ecran="",
+                 sejour_id=sid, **{f"ecran_{sid}": onglet, f"segments_ecran_{sid}": onglet})
+
+
+@pytest.mark.parametrize("nom,role,ecran", [
+    ("Démo — Infirmière de jour", "infirmier", "poste"),
+    ("Démo — Surveillant", "surveillant", "supervision"),
+    ("Démo — Administrateur", "admin", "administration"),
+])
+def test_les_ecrans_de_service_de_la_demonstration(demonstration, nom, role, ecran):
+    _ouvrir_demo(demonstration, nom, role, accueil_pose=True, ecran=ecran)
+
+
+@pytest.mark.parametrize("vue", VUES_RECHERCHE)
+def test_la_recherche_de_la_demonstration(demonstration, vue):
+    _ouvrir_demo(demonstration, "Démo — Senior", "senior", accueil_pose=True,
+                 ecran="recherche", vue_recherche=vue, segments_recherche=vue)
+
+
+def test_la_demonstration_s_annonce(demonstration, monkeypatch):
+    """Sur chaque écran, et dès l'ouverture avec les comptes et leur code."""
+    from rea import config
+
+    monkeypatch.setattr(config, "DEMONSTRATION", True)
+    at = AppTest.from_file(str(APP), default_timeout=90)
+    at.run()
+    assert any("BASE DE DÉMONSTRATION" in w.value and "demo2026" in w.value
+               for w in at.warning)
+    at = _ouvrir_demo(demonstration, "Démo — Senior", "senior")
+    assert any("BASE DE DÉMONSTRATION" in w.value for w in at.warning)

@@ -29,6 +29,7 @@ def test_il_y_a_bien_les_fichiers_attendus():
     assert noms == {
         "installer.bat",
         "lancer_reanimation.bat",
+        "lancer_reanimation_demonstration.bat",
         "lancer_reanimation_local.bat",
         "lancer_reanimation_serveur.bat",
     }
@@ -356,3 +357,25 @@ def test_les_raccourcis_exposent_les_deux_modes():
     assert "Reanimation - Serveur" in script
     assert "lancer_reanimation_local.bat" in script
     assert "lancer_reanimation_serveur.bat" in script
+
+
+# --------------------------------------------------------------------------
+# La démonstration : une base à part, jamais celle du service
+# --------------------------------------------------------------------------
+
+def test_la_demonstration_ecrit_dans_son_propre_dossier():
+    """Des patients fictifs dans la vraie base fausseraient la Recherche : le
+    lanceur pointe REA_DIR ailleurs, s'annonce, et prend un autre port pour
+    pouvoir tourner à côté de la vraie base."""
+    lanceur = lire(RACINE / "lancer_reanimation_demonstration.bat")
+    assert 'set "REA_DIR=%~dp0..\\demonstration"' in lanceur
+    assert 'set "REA_DEMONSTRATION=1"' in lanceur
+    assert 'set "REA_PORT=8502"' in lanceur and "--server.port 8502" in lanceur
+    # La base est préparée AVANT que l'application ne l'ouvre.
+    assert lanceur.index("base_demonstration.py") < lanceur.index("streamlit run")
+
+
+def test_la_demonstration_a_son_icone():
+    script = lire(RACINE / "outils" / "raccourcis.ps1")
+    assert "'Reanimation - Demonstration'" in script
+    assert "'lancer_reanimation_demonstration.bat'" in script

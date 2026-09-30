@@ -32,8 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from rea.database import Base  # noqa: E402
 from rea.models import prescription as dom_prescription  # noqa: E402
 from rea.services import (  # noqa: E402
-    avis, bilans, dispositifs, evolution, explorations, microbiologie,
-    prescriptions, sejours, vitesses,
+    administrations, avis, bilans, constantes, dispositifs, evolution,
+    explorations, microbiologie, prescriptions, sejours, vitesses,
 )
 
 AUJ = date.today().isoformat()
@@ -132,12 +132,12 @@ def charger(base: Base) -> str:
         maladie_chronique_igs2="aucune",
     )
     sejours.definir_regions_traumatiques(
-        base, sid, ["cranien", "thoracique", "abdominal", "membres"],
+        base, sid, ["cranien", "thoracique", "abdominal", "peripherique"],
         precisions={
             "cranien": "hématome sous-dural aigu, Glasgow 7 à l'arrivée",
             "thoracique": "volet costal droit, contusion pulmonaire bilatérale",
             "abdominal": "fracture de rate grade III, laparotomie d'hémostase",
-            "membres": "fracture ouverte du fémur gauche",
+            "peripherique": "fracture ouverte du fémur gauche",
         },
     )
     sejours.definir_motifs(base, sid, motif_principal=None,
@@ -486,6 +486,326 @@ def charger(base: Base) -> str:
         explorations.enregistrer(base, sejour_id=sid, date_heure=date_heure, type_=type_,
                                  valeurs=valeurs, conclusion=conclusion)
     return sid
+
+
+# ===========================================================================
+# La patiente : ce que le polytraumatisé ne montre pas
+# ===========================================================================
+#
+# Une femme de 32 ans, HELLP syndrome : césarienne en urgence, hémorragie du
+# post-partum, hystérectomie d'hémostase. Elle arrive du bloc à 2 h 30, est
+# extubée à J2, puis fait une pyélonéphrite sur sonde. Sur elle se lisent :
+# une admission chirurgicale non programmée venue du bloc, avec ses
+# interventions ; une extubation programmée (« Extubé ») et l'arrêt de la
+# sédation (« J2 d'AS ») ; l'oxygène à haut débit puis au masque et aux
+# lunettes — des gaz sans PaO₂/FiO₂ ; une réaction transfusionnelle ; une
+# infection urinaire nosocomiale ; une cure de sulfate de magnésium terminée ;
+# un bloc TAP ; les relevés heure par heure et les prises de l'infirmière.
+
+PRESCRIPTIONS_PATIENTE = [
+    # (voie, produit, dose, unité, rythme, durée prévue, début)
+    ("IV", "Céfotaxime", 1, "g", "x3/j", 10, J1),
+    ("IV", "Paracétamol", 1, "g", "x4/j", None, J3),
+    ("IV", "Néfopam", 20, "mg", "x4/j", None, J3),
+    ("IV", "Oméprazole", 40, "mg", "x1/j", None, J3),
+    ("IV", "Furosémide", 20, "mg", "x2/j", None, J2),
+    ("IV", "Fer injectable", 200, "mg", "x1/j", 3, J1),
+    ("PO", "Labétalol", 200, "mg", "x2/j", None, J2),
+    ("PO", "Nifédipine", 20, "mg", "x2/j", None, J1),
+    ("SC", "Enoxaparine 4000 UI", None, None, "x1/j", None, J2),
+    ("AEROSOL", "Salbutamol", 5, "mg", "x3/j", None, J3),
+    ("KINE", "Kinésithérapie respiratoire", None, None, "x2/j", None, J2),
+    ("SOINS", "Pansement de la cicatrice", None, None, "x1/j", None, J3),
+    ("SOINS", "Soins de sonde urinaire", None, None, "x2/j", None, J3),
+]
+
+
+def charger_patiente(base: Base, lit: int = 2) -> str:
+    pid = sejours.creer_patient(
+        base, matricule="DEMO-2026-002", nom_affichage="Patiente DÉMONSTRATION",
+        date_naissance="1994-06-03", sexe="F", groupe_sanguin="O-",
+    )
+    sid = sejours.creer_sejour(
+        base, patient_id=pid, date_admission=J3, heure_admission="02:30",
+        lit_admission=lit, poids_kg=68, taille_cm=162, provenance_type="bloc",
+        provenance_detail="Maternité — césarienne en urgence",
+        traumatique=False, type_admission="chirurgie_non_programmee",
+        creatinine_base=60, glasgow_initial=15, maladie_chronique_igs2="aucune",
+    )
+    sejours.definir_motifs(base, sid, motif_principal="hemorragie_post_partum",
+                           motifs_associes=["hellp", "choc_hemorragique"])
+    sejours.ajouter_intervention(base, sejour_id=sid, date_acte=J4, geste="cesarienne",
+                                 geste_detail="césarienne en urgence à 34 SA, HELLP")
+    sejours.ajouter_intervention(base, sejour_id=sid, date_acte=J3,
+                                 geste="hysterectomie_hemostase", est_reprise=True,
+                                 geste_detail="atonie utérine rebelle aux utérotoniques")
+    for categorie, libelle, precision in [
+        ("allergie", "Latex", "urticaire géante"),
+        ("personnel", "Asthme", "sous salbutamol à la demande"),
+        ("personnel", "Prééclampsie", "grossesse précédente, 2021"),
+        ("chirurgical", "Appendicectomie 2010", None),
+    ]:
+        sejours.ajouter_antecedent(base, patient_id=pid, categorie=categorie,
+                                   libelle=libelle, precision=precision)
+
+    lignes = {}
+    for voie, produit, dose, unite, rythme, duree, debut in PRESCRIPTIONS_PATIENTE:
+        lignes[produit] = prescriptions.ajouter_ligne(
+            base, sejour_id=sid, voie=voie, produit=produit, date_debut=debut,
+            dose=dose, unite=unite, rythme=rythme, duree_prevue_jours=duree,
+            indication="pyélonéphrite sur sonde à E. coli" if produit == "Céfotaxime" else None,
+            horaires_override=",".join(
+                str(h) for h in dom_prescription.horaires_par_defaut(produit, rythme)
+            ) or None,
+        )
+    # Cures terminées : l'antibioprophylaxie de l'hystérectomie, et le sulfate
+    # de magnésium des 24 premières heures du HELLP.
+    ligne = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="IV", produit="Amoxicilline-acide clavulanique",
+        date_debut=J3, dose=1, unite="g", rythme="x3/j",
+        indication="antibioprophylaxie, hystérectomie")
+    prescriptions.arreter_ligne(base, ligne, date_arret=J2, motif_arret="fin de prophylaxie")
+    ligne = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Sulfate de magnésium",
+        date_debut=J3, dilution="1 g/10 cc", vitesse=10, rythme="continu",
+        duree_prevue_jours=2, indication="prévention de l'éclampsie")
+    prescriptions.arreter_ligne(base, ligne, date_arret=J2, motif_arret="24 h révolues")
+    # L'HTA du HELLP, à la seringue : la vitesse suit la pression.
+    nicardipine = prescriptions.ajouter_ligne(
+        base, sejour_id=sid, voie="PSE", produit="Nicardipine", date_debut=J3,
+        dilution="1 mg/cc", vitesse=3, rythme="continu")
+    for heure, vitesse in ((12, 2), (18, 1)):
+        vitesses.regler(base, cible=vitesses.LIGNE, cible_id=nicardipine,
+                        date_heure=f"{AUJ}T{heure:02d}:00", vitesse=vitesse)
+    for produit, vitesse, additifs in (("Ringer Lactate", 40, []),
+                                       ("Sérum glucosé 5 %", 20, [("KCl", 2)])):
+        prescriptions.ajouter_ligne(
+            base, sejour_id=sid, voie="ENTREES", produit=produit, date_debut=J3,
+            sous_type="perfusion", vitesse=vitesse, rythme="continu",
+            additifs=dom_prescription.texte_additifs(additifs))
+
+    # Dispositifs : extubée à J2 (programmée), sédation arrêtée le même jour.
+    def poser(type_, jour, site=None, **details):
+        return dispositifs.poser(base, sejour_id=sid, type_=type_, date_pose=jour,
+                                 site=site, details=details)
+    tube = poser("intubation", J3, taille_sonde=7, reperage_cm=21)
+    sedation = poser("sedation", J3, molecules="Propofol + Rémifentanil", vitesse=8)
+    dispositifs.retirer(base, tube, date_retrait=J2, motif_retrait="programmee")
+    dispositifs.retirer(base, sedation, date_retrait=J2)
+    poser("kt_central", J3, "Sous-clavière droite", nb_voies=3)
+    poser("kta", J3, "Radiale droite")
+    poser("sonde_urinaire", J3, taille_sonde=14)
+    poser("drain_abdominal", J3, "Pelvis", nature_drain="Douglas")
+    poser("redon", J3, "Site opératoire", nature_drain="Pariétal (sous-cutané)")
+    poser("voie_peripherique", J3, "Membre supérieur gauche")
+
+    # Bilans du HELLP : plaquettes et transaminases qui remontent, une IRA
+    # fonctionnelle qui se corrige, la CRP de la pyélonéphrite, la magnésémie
+    # du sulfate de magnésium.
+    for date_heure, valeurs in [
+        (f"{J3}T02:45", {"hb": 6.2, "hte": 19, "plq": 42, "gb": 18.6, "tp": 45, "inr": 1.8,
+                         "tca": 52, "na": 136, "k": 5.1, "cl": 109, "creat": 110, "uree": 7.2,
+                         "asat": 420, "alat": 310, "bili": 42, "albumine": 21,
+                         "glycemie": 7.8, "mg": 2.4}),
+        (f"{J3}T10:00", {"hb": 8.8, "hte": 27, "plq": 68, "tp": 62, "inr": 1.4, "k": 4.6}),
+        (f"{J2}T06:00", {"hb": 8.4, "hte": 26, "plq": 71, "gb": 15.2, "na": 138, "k": 4.2,
+                         "cl": 106, "creat": 145, "uree": 10.8, "asat": 280, "alat": 240,
+                         "bili": 30, "mg": 2.1}),
+        (f"{J1}T06:00", {"hb": 8.9, "hte": 27, "plq": 96, "gb": 14.1, "na": 139, "k": 3.8,
+                         "creat": 132, "uree": 9.4, "crp": 180, "pct": 3.2,
+                         "asat": 150, "alat": 170}),
+        (f"{AUJ}T06:00", {"hb": 9.2, "hte": 28, "plq": 134, "gb": 11.3, "tp": 82, "inr": 1.1,
+                          "na": 140, "k": 3.9, "cl": 104, "creat": 98, "uree": 7.1,
+                          "crp": 120, "pct": 1.4, "asat": 72, "alat": 95, "bili": 18}),
+    ]:
+        bilans.enregistrer_resultats(base, sejour_id=sid, date_heure=date_heure, valeurs=valeurs)
+    # VAC au bloc, Optiflow après l'extubation, puis masque et lunettes : les
+    # deux derniers n'ont ni FiO₂ ni rapport PaO₂/FiO₂ — la feuille le respecte.
+    for heure, mode, gaz in [
+        (f"{J3}T03:00", "vac", dict(ph=7.26, pao2=182, paco2=38, hco3=17, lactate=4.8,
+                                    fio2=60, pep=6, fr=16, vt=420, sao2=99)),
+        (f"{J2}T08:00", "optiflow", dict(ph=7.38, pao2=74, paco2=36, hco3=21, lactate=1.9,
+                                         fio2=50, debit_o2=50, sao2=94)),
+        (f"{J1}T07:00", "masque", dict(ph=7.41, pao2=81, paco2=37, hco3=23, lactate=1.2,
+                                       debit_o2=6, sao2=96)),
+        (f"{AUJ}T06:30", "lunette", dict(ph=7.42, pao2=86, paco2=38, hco3=24, lactate=0.9,
+                                         debit_o2=2, sao2=97)),
+    ]:
+        bilans.enregistrer_gaz_du_sang(base, sid, heure, mode_ventilatoire=mode, **gaz)
+
+    # Microbiologie : ECBU positif sur sonde, hémocultures stériles.
+    ecbu = microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
+                                     type_prelevement="ecbu")
+    microbiologie.completer(base, ecbu, {
+        "resultat": "positif", "germe": "Escherichia coli",
+        "antibiogramme": microbiologie.texte_antibiogramme(
+            sensibles=["cefotaxime", "ceftriaxone", "amikacine", "imipeneme"],
+            intermediaires=[], resistants=["amox_clav", "cotrimoxazole"],
+        ),
+    })
+    hemoc = microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=J1,
+                                      type_prelevement="hemoculture")
+    microbiologie.completer(base, hemoc, {"resultat": "sterile"})
+    microbiologie.enregistrer(base, sejour_id=sid, date_prelevement=AUJ,
+                              type_prelevement="ecbu")
+    microbiologie.declarer_infection_nosocomiale(
+        base, sejour_id=sid, type_="iu", date_diagnostic=J1, germe="Escherichia coli")
+
+    # Transfusions : massive au bloc, puis un culot à J2 avec une réaction
+    # fébrile — la complication se note, avec ce qu'elle a été.
+    for date_heure, produit, poches, statut, complication, detail in [
+        (f"{J3}T03:00", "CGR (culot globulaire)", 4, "Transfusé", "Absent", None),
+        (f"{J3}T03:00", "PFC (plasma frais congelé)", 4, "Transfusé", "Absent", None),
+        (f"{J3}T04:00", "CUP (concentré plaquettaire)", 2, "Transfusé", "Absent", None),
+        (f"{J2}T14:00", "CGR (culot globulaire)", 1, "Transfusé", "Présent",
+         "frissons et fièvre à 38,6 °C — réaction fébrile non hémolytique"),
+        (f"{AUJ}T09:00", "CGR (culot globulaire)", 1, "Réserve envoyée", None, None),
+    ]:
+        explorations.enregistrer(
+            base, sejour_id=sid, date_heure=date_heure, type_="transfusion",
+            valeurs={"produit": produit, "nb_poches": poches, "statut": statut,
+                     "complication": complication, "complication_detail": detail},
+            operateur="Garde")
+
+    for date_heure, type_, valeurs, conclusion in [
+        (f"{J3}T03:15", "ecg", {"rythme": "Sinusal", "fc": 124, "qtc": 430,
+                                "trouble_repolarisation": "Absent"}, "Tachycardie sinusale"),
+        (f"{J3}T03:30", "ett", {"fevg": 65, "itv_sa": 14, "vci": 8, "vci_compliance": "Présent",
+                                "epanchement": "Absent"}, "Hypovolémie, cœur normal"),
+        (f"{J3}T05:00", "alr", {"technique": "Bloc TAP", "cote": "Bilatéral",
+                                "anesthesique": "Ropivacaïne 0,375 %", "volume": 40,
+                                "catheter": "Absent"}, "Analgésie pariétale"),
+        (f"{J2}T09:00", "echo_pleuro_pulmonaire", {"epanchement_droit": "Présent",
+                                                    "epanchement_gauche": "Présent",
+                                                    "lignes_b": "Présent",
+                                                    "condensation": "Absent"},
+         "Surcharge : lignes B diffuses, épanchements bilatéraux"),
+        (f"{J2}T10:00", "radio_thorax", {"syndrome": "Syndrome interstitiel",
+                                         "localisation": "Bilatéral", "foyer": "Absent"},
+         "Œdème pulmonaire de surcharge"),
+        (f"{AUJ}T08:30", "radio_thorax", {"syndrome": "Normale", "foyer": "Absent"},
+         "Régression de la surcharge"),
+    ]:
+        explorations.enregistrer(base, sejour_id=sid, date_heure=date_heure, type_=type_,
+                                 valeurs=valeurs, conclusion=conclusion)
+
+    for jour, specialite, nom, grade, texte in (
+        (J3, "gyneco_obstetrique", "Kallel", "senior",
+         "Hystérectomie d'hémostase, surveillance du drain pelvien, pas de reprise prévue"),
+        (J2, "hematologie", "Mahjoub", "senior",
+         "HELLP sans CIVD : surveillance des plaquettes, pas de plasmaphérèse"),
+        (J1, "nephrologie", "Hamdi", "resident",
+         "IRA fonctionnelle post-hémorragique, pas d'indication d'épuration"),
+        (AUJ, "urologie", "Zouari", "senior",
+         "Échographie rénale sans dilatation : pyélonéphrite simple, sonde à changer"),
+    ):
+        avis.demander(base, sejour_id=sid, specialite=specialite, date_avis=jour,
+                      nom=nom, grade=grade, texte=texte)
+
+    prescriptions.definir_bilans_demandes(
+        base, sid, AUJ, [("nfs", "08:00"), ("ionogramme", "08:00"), ("crp", "20:00")])
+    prescriptions.definir_bilans_demandes(
+        base, sid, DEMAIN, [("nfs", "08:00"), ("ionogramme", "08:00"), ("ecbu", "08:00")])
+
+    drains = evolution.drains_du_jour(base, sid, AUJ)
+    mesures = {
+        "rass": 0, "glasgow": 15, "pupilles": "egales_reactives",
+        "fr_clinique": 18, "spo2_clinique": 97, "tete_de_lit": "oui",
+        "fc": 96, "pas": 138, "pad": 84, "pam": 102,
+        "diurese_24h": 2100, "diurese_conservee": "oui",
+        "temperature": 38.3, "frissons": "absent",
+    }
+    for drain, volume in zip(drains, (60, 20)):
+        mesures[drain["cle"]] = volume
+    evolution.enregistrer_journee(
+        base, sid, AUJ, elements=mesures,
+        textes={
+            "plan_neurologique": "Consciente, orientée, EVA 3. Pas de signe d'éclampsie.",
+            "plan_respiratoire": "Extubée à J2. Lunettes 2 L/min, surcharge en régression.",
+            "plan_hemodynamique": "HTA contrôlée, nicardipine en décroissance. "
+                                  "Créatinine revenue à 98.",
+            "plan_infectieux": "Pyélonéphrite sur sonde à E. coli, J2 de céfotaxime.",
+            "conduite": "Changer la sonde urinaire. Relais oral de l'antihypertenseur.",
+        },
+        version_attendue=evolution.obtenir_ou_creer(base, sid, AUJ)["version"],
+    )
+    return sid
+
+
+# --------------------------------------------------------------------------
+# Ce que l'infirmière relève : constantes heure par heure, et les prises
+# --------------------------------------------------------------------------
+
+def _heures_du_jour(date_jour: str) -> list[int]:
+    """Les heures déjà passées de ce jour de service (8 h → 8 h)."""
+    from datetime import datetime
+
+    heures = list(range(8, 24)) + list(range(0, 8))
+    if date_jour != AUJ:
+        return heures
+    maintenant = datetime.now().hour
+    return [h for h in range(8, 24) if h <= maintenant] if maintenant >= 8 else []
+
+
+def surveillance_infirmiere(base: Base, sid: str, *, profil: dict) -> None:
+    """Deux jours de relevés horaires — la veille entière et ce jour jusqu'à
+    l'heure qu'il est : constantes, niveau du sac de diurèse (vidé à 6 h),
+    drains, pupilles, état du drain thoracique."""
+    import math
+
+    drains_ids = [d["id"] for d in dispositifs.du_sejour(base, sid)
+                  if not d["date_retrait"]
+                  and d["type"] in ("drain_thoracique", "drain_abdominal", "redon")]
+    thoracique = next((d["id"] for d in dispositifs.du_sejour(base, sid)
+                       if d["type"] == "drain_thoracique" and not d["date_retrait"]), None)
+    for jour in (J1, AUJ):
+        sac = 0
+        for rang, heure in enumerate(_heures_du_jour(jour)):
+            onde = math.sin(rang / 3)
+            valeurs = {
+                "fc": round(profil["fc"] + 6 * onde),
+                "pas": round(profil["pas"] + 8 * onde),
+                "pad": round(profil["pad"] + 5 * onde),
+                "fr": profil["fr"],
+                "spo2": profil["spo2"],
+                "temperature": round(profil["temperature"] + 0.4 * math.sin(rang / 5), 1),
+            }
+            if heure % 4 == 0:
+                valeurs["glasgow"] = profil["glasgow"]
+                valeurs["dextro"] = profil["dextro"]
+            sac += profil["diurese_h"]
+            valeurs["diurese"] = sac
+            for i, drain in enumerate(drains_ids):
+                valeurs[constantes.cle_drain(drain)] = (rang + 1) * (8 - 2 * i)
+            textes = {
+                f"{constantes.PREFIXE_PUPILLE}d": constantes.etat_pupille(*profil["pupilles"]),
+                f"{constantes.PREFIXE_PUPILLE}g": constantes.etat_pupille(*profil["pupilles"]),
+            }
+            if thoracique:
+                textes[constantes.cle_etat_drain(thoracique)] = constantes.etat_drain(
+                    "siphonnage" if heure != 14 else "aspiration", heure == 14)
+            jete = {"diurese"} if heure == 6 else set()
+            if jete:
+                sac = 0
+            constantes.enregistrer(base, sid, jour, heure, valeurs, textes=textes,
+                                   sacs_jetes=jete)
+
+
+def prises_de_la_veille(base: Base, sid: str, *, non_donnees: dict) -> None:
+    """Chaque prise de la veille notée « donné », sauf celles de
+    `non_donnees` — {(produit, heure): motif} — notées « non donné » avec
+    leur motif : ce sont elles qui remontent au surveillant."""
+    for ligne in prescriptions.lignes_actives_le(base, sid, J1):
+        if ligne["voie"] in ("PSE", "ENTREES"):
+            continue
+        for heure in dom_prescription.horaires_pour_rythme(
+                ligne.get("rythme"), ligne.get("horaires_override")):
+            motif = non_donnees.get((ligne["produit"], heure % 24))
+            administrations.noter(
+                base, sejour_id=sid, ligne_id=ligne["id"], date_jour=J1,
+                heure_prevue=heure % 24,
+                statut=administrations.NON_DONNE if motif else administrations.DONNE,
+                motif_code=motif)
 
 
 if __name__ == "__main__":

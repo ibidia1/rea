@@ -23,6 +23,9 @@ $ErrorActionPreference = 'Stop'
 #
 #   "Reanimation - Local"    poste isole, joignable de ce PC seulement.
 #   "Reanimation - Serveur"  ce PC sert la reanimation au reseau (auto).
+#   "Reanimation - Demonstration"  patients fictifs, dans une base a part
+#                            (C:\ReaService\demonstration) : pour montrer et
+#                            s'entrainer sans toucher aux vrais dossiers.
 #
 # On ne touche pas au code ni aux donnees : seules les icones different, par
 # le .bat qu'elles appellent.
@@ -33,6 +36,9 @@ $modes = @(
     @{ Nom = 'Reanimation - Serveur'; Bat = 'lancer_reanimation_serveur.bat';
        Desc = 'Reanimation polyvalente - serveur du reseau local';
        Icone = 18 }
+    @{ Nom = 'Reanimation - Demonstration'; Bat = 'lancer_reanimation_demonstration.bat';
+       Desc = 'Reanimation polyvalente - patients fictifs, base separee';
+       Icone = 23 }
 )
 
 foreach ($mode in $modes) {

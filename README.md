@@ -80,7 +80,9 @@ fois. Il fait quatre choses, dans l'ordre, en affichant ce qu'il fait :
    OneDrive : une base SQLite dans un dossier synchronisé se corrompt en
    silence ;
 3. il installe les composants du logiciel (il faut Internet à cette étape) ;
-4. il pose **deux icônes** sur le Bureau, puis ouvre le logiciel :
+4. il pose **trois icônes** sur le Bureau, puis ouvre le logiciel — la
+   troisième, **Réanimation - Démonstration**, ouvre une base à part remplie de
+   patients fictifs (comptes « Démo — … », code `demo2026`) ; les deux autres :
    - **Réanimation - Local** — le poste pour lui seul (`127.0.0.1`), sans code
      d'accès ;
    - **Réanimation - Serveur** — ce poste sert la réanimation au réseau du

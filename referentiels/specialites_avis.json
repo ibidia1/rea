@@ -1,14 +1,15 @@
 {
   "nom": "specialites_avis",
   "libelle": "Spécialités auxquelles un avis peut être demandé",
-  "version": "2026-09-08.1",
-  "date": "2026-09-08",
-  "note": "Les services que la réanimation appelle. L'abréviation est celle qui s'imprime sur la feuille — « Avis CCVT (09/09) » — parce que la ligne est étroite et que c'est le mot que le service emploie à l'oral. Format : [code, abréviation imprimée, nom complet].",
+  "version": "2026-09-30.1",
+  "date": "2026-09-30",
+  "note": "Les services que la réanimation appelle. L'abréviation est celle qui s'imprime sur la feuille — « Avis CCVT (09/09) » — parce que la ligne est étroite et que c'est le mot que le service emploie à l'oral. Format : [code, abréviation imprimée, nom complet]. Gynécologie-obstétrique ajoutée le 30 septembre : le service reçoit les hémorragies du post-partum et les HELLP, et leur avis n'avait pas de case.",
   "valeurs": [
     ["neurochirurgie", "Neurochir", "Neurochirurgie"],
     ["chirurgie_viscerale", "Chir viscérale", "Chirurgie viscérale"],
     ["ccvt", "CCVT", "Chirurgie cardio-vasculaire et thoracique"],
     ["orthopedie", "Orthopédie", "Chirurgie orthopédique et traumatologique"],
+    ["gyneco_obstetrique", "Gynéco", "Gynécologie-obstétrique"],
     ["urologie", "Urologie", "Urologie"],
     ["orl", "ORL", "Oto-rhino-laryngologie"],
     ["ophtalmologie", "Ophtalmo", "Ophtalmologie"],
