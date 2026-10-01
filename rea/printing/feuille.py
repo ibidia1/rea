@@ -536,17 +536,24 @@ def _bande_admission(dossier, largeur_libelles: int) -> Brut:
         'transparent 2px 7px)"></div>'
         if rang > 0 else ""
     )
+    cote_etiquette = ("margin-left:-1px;transform:translateX(-100%) rotate(180deg);"
+                      if rang >= 1 else "margin-left:1px;transform:rotate(180deg);")
     return Brut(
         '<div style="position:absolute;inset:0;pointer-events:none;z-index:2">'
         f"{hachures}"
         f'<div style="position:absolute;top:0;bottom:0;left:{position};'
         'width:0;border-left:2.5px solid #a33b2a"></div>'
         # L'étiquette part sous la ligne des heures : l'heure de la colonne
-        # reste lisible au-dessus d'elle.
-        f'<div style="position:absolute;top:28px;left:{position};margin-left:1px;'
+        # reste lisible au-dessus d'elle. Elle se pose du côté hachuré, où
+        # rien ne s'écrit : du côté de l'arrivée, elle couvrait les vitesses
+        # de la première heure — « 100 » cc/h se lisait « 00 » (exemple
+        # d'admission à 18 h, 1er octobre). Une admission à 8 h, sans heure
+        # hachurée, la garde à droite du trait.
+        f'<div style="position:absolute;top:28px;left:{position};'
+        f'{cote_etiquette}'
         'background:#a33b2a;color:#fff;font-size:9px;font-weight:700;'
         'letter-spacing:.12em;padding:4px 1px;writing-mode:vertical-rl;'
-        'transform:rotate(180deg);white-space:nowrap;line-height:1">'
+        'white-space:nowrap;line-height:1">'
         f"ADMISSION {heure:02d}h{minute:02d}</div>"
         "</div>"
     )
